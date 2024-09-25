@@ -1,5 +1,5 @@
 import argparse, asyncio
-from storage_service.database import UserConn, FileConn, close_all, commit_all
+from storage_service.database import Database
 
 
 
@@ -28,27 +28,23 @@ async def main():
     sp_list = sp.add_parser('list')
     
     args = parser.parse_args()
+    conn = await Database().init()
     
     if args.subparser_name == 'create':
-        conn = await UserConn().init()
-        await conn.create_user(args.username, args.password, args.admin)
+        await conn.user.create_user(args.username, args.password, args.admin)
         print('User created')
     
     if args.subparser_name == 'delete':
-        conn = await UserConn().init()
-        user = await conn.get_user(args.username)
+        user = await conn.user.get_user(args.username)
         if user is None:
             print('User not found')
             exit(1)
         else:
-            file_conn = await FileConn().init()
-            await file_conn.delete_user_files(user.id)
-            await conn.delete_user(user.username)
+            await conn.delete_user(user.id)
         print('User deleted')
     
     if args.subparser_name == 'set':
-        conn = await UserConn().init()
-        user = await conn.get_user(args.username)
+        user = await conn.user.get_user(args.username)
         if user is None:
             print('User not found')
             exit(1)
@@ -56,16 +52,15 @@ async def main():
             user.password = args.password
         if args.admin is not None:
             user.is_admin = args.admin
-        await conn.set_user(user.username, user.password, user.is_admin)
+        await conn.user.set_user(user.username, user.password, user.is_admin)
         print('User updated')
     
     if args.subparser_name == 'list':
-        conn = await UserConn().init()
-        async for user in conn.all():
+        async for user in conn.user.all():
             print(user)
     
-    await commit_all()
-    await close_all()
+    await conn.commit()
+    await conn.close()
 
 if __name__ == '__main__':
     asyncio.run(main())

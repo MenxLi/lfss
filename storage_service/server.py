@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 
 import json
 from .log import get_logger
-from .database import Database, DBUserRecord, DECOY_USER, FileReadPermission
+from .database import Database, DBUserRecord, DECOY_USER, FileReadPermission, DBConnBase
 
 logger = get_logger("server")
 conn = Database()
@@ -18,6 +18,9 @@ async def lifespan(app: FastAPI):
     await conn.init()
     yield
     await conn.close()
+
+    logger.finalize()
+    DBConnBase.logger.finalize()
 
 async def get_current_user(token: HTTPAuthorizationCredentials = Depends(HTTPBearer(auto_error=False))):
     if not token:

@@ -1,5 +1,6 @@
 from .config import DATA_HOME
 from typing import TypeVar, Callable, Literal, Optional
+from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
 import logging, pathlib, asyncio
 from logging import handlers
@@ -34,12 +35,27 @@ class BCOLORS:
     LIGHTMAGENTA = '\033[95m'
     LIGHTCYAN = '\033[96m'
 
+_thread_pool = ThreadPoolExecutor(max_workers=1)
+def thread_wrap(func):
+    def wrapper(*args, **kwargs):
+        _thread_pool.submit(func, *args, **kwargs)
+    return wrapper
+
 class BaseLogger(logging.Logger):
     def finalize(self):
         for handler in self.handlers:
             handler.flush()
             handler.close()
             self.removeHandler(handler)
+    
+    @thread_wrap
+    def debug(self, *args, **kwargs): super().debug(*args, **kwargs)
+    @thread_wrap
+    def info(self, *args, **kwargs): super().info(*args, **kwargs)
+    @thread_wrap
+    def warning(self, *args, **kwargs): super().warning(*args, **kwargs)
+    @thread_wrap
+    def error(self, *args, **kwargs): super().error(*args, **kwargs)
 
 _fh_T = Literal['rotate', 'simple', 'daily']
 
@@ -49,13 +65,12 @@ def get_logger(
     log_home = pathlib.Path(DATA_HOME) / 'logs', 
     level = 'DEBUG',
     file_handler_type: _fh_T = 'rotate', 
-    buffer_size = -1, 
     global_instance = True
-    ):
+    )->BaseLogger:
     if global_instance and name in __g_logger_dict:
         return __g_logger_dict[name]
 
-    def setupLogger(logger: logging.Logger):
+    def setupLogger(logger: BaseLogger):
         logger.setLevel(level)
 
         format_str = BCOLORS.LIGHTMAGENTA + ' %(asctime)s ' +BCOLORS.OKCYAN + '[%(name)s][%(levelname)s] ' + BCOLORS.ENDC + ' %(message)s'
@@ -84,11 +99,6 @@ def get_logger(
                 log_file, maxBytes=1000000, backupCount=5
             )
 
-        if buffer_size > 0:
-            file_handler = handlers.MemoryHandler(
-                capacity=buffer_size, flushLevel=logging.WARNING, target=file_handler
-            )
-        
         file_handler.setFormatter(formatter_plain)
         logger.addHandler(file_handler)
     
@@ -110,7 +120,7 @@ def clear_handlers(logger: logging.Logger):
 FUNCTION_T = TypeVar('FUNCTION_T', bound=Callable)
 def log_access(
     include_args: bool = True,
-    logger: Optional[logging.Logger] = None, 
+    logger: Optional[BaseLogger] = None, 
 ):
     if logger is None:
         logger = get_logger()

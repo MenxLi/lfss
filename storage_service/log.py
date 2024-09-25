@@ -1,6 +1,5 @@
 from .config import DATA_HOME
 from typing import TypeVar, Callable, Literal, Optional
-from io import TextIOWrapper
 from functools import wraps
 import logging, pathlib, asyncio
 from logging import handlers
@@ -87,7 +86,7 @@ def get_logger(
 
         if buffer_size > 0:
             file_handler = handlers.MemoryHandler(
-                capacity=4096, flushLevel=logging.ERROR, target=file_handler
+                capacity=buffer_size, flushLevel=logging.WARNING, target=file_handler
             )
         
         file_handler.setFormatter(formatter_plain)
@@ -107,54 +106,6 @@ def clear_handlers(logger: logging.Logger):
         logger.removeHandler(handler)
     __g_logger_dict.pop(logger.name, None)
     # print(f'Cleared handlers for logger {logger.name}')
-
-def logger_as_textiowrapper(logger: logging.Logger, level: int = logging.INFO):
-
-    def find_file_stream(handler: logging.Handler):
-        if isinstance(handler, logging.FileHandler):
-            return handler.stream
-        if isinstance(handler, handlers.MemoryHandler) and isinstance(handler.target, logging.FileHandler):
-            return handler.target.stream
-        return None
-
-    class Buffer:
-        @property
-        def name(self): 
-            return logger.name
-        @property
-        def closed(self) -> bool: 
-            return False
-
-        def write(self, b: bytes, /) -> object: 
-            logger.log(level, b.decode())
-
-        def flush(self) -> object: 
-            for handler in logger.handlers:
-                handler.flush()
-
-        def fileno(self) -> int:
-            streams = []
-            for handler in logger.handlers:
-                if stream := find_file_stream(handler):
-                    streams.append(stream)
-            if len(streams) == 1:
-                return streams[0].fileno()
-            elif len(streams) == 0:
-                raise RuntimeError('No file handler found in logger')
-            else:
-                raise RuntimeError('Multiple file handlers found in logger')
-
-        def close(self) -> object: ...
-        def seekable(self) -> bool: return False
-        def readable(self) -> bool: return False
-        def writable(self) -> bool: return True
-        def isatty(self) -> int: return False
-
-        def read(self, size: int = 0, /): raise NotImplementedError
-        def truncate(self, size: int, /) -> int: raise NotImplementedError
-
-    return TextIOWrapper(Buffer())
-
 
 FUNCTION_T = TypeVar('FUNCTION_T', bound=Callable)
 def log_access(

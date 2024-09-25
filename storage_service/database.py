@@ -148,6 +148,14 @@ class FileDBRecord:
 
     def __str__(self):
         return f"File {self.url} (user={self.user_id}, created at {self.create_time}, path={self.file_path}, permission={self.permission}, size={self.file_size})"
+
+@dataclasses.dataclass
+class DirectoryRecord:
+    url: str
+    size: int
+
+    def __str__(self):
+        return f"Directory {self.url} (size={self.size})"
     
 class FileConn(DBConnBase):
 
@@ -185,6 +193,44 @@ class FileConn(DBConnBase):
         async with self.conn.execute("SELECT * FROM file WHERE url LIKE ?", (url + '%', )) as cursor:
             res = await cursor.fetchall()
         return [self.parse_record(r) for r in res]
+    
+    async def list_path(self, url: str) -> tuple[list[DirectoryRecord], list[FileDBRecord]]:
+        if not url.endswith('/'):
+            url += '/'
+        async with self.conn.execute("SELECT * FROM file WHERE url LIKE ? AND url NOT LIKE ?", (url + '%', url + '%/%')) as cursor:
+            res = await cursor.fetchall()
+        files = [self.parse_record(r) for r in res]
+
+        # substr indexing starts from 1
+        async with self.conn.execute(
+            """
+            SELECT DISTINCT 
+                SUBSTR(
+                    url, 
+                    1 + LENGTH(?),
+                    INSTR(SUBSTR(url, 1 + LENGTH(?)), '/') - 1
+                ) AS subdir 
+                FROM file WHERE url LIKE ?
+            """, 
+            (url, url, url + '%')
+            ) as cursor:
+            res = await cursor.fetchall()
+        dirs_str = [r[0] for r in res if r[0] != '/']
+        dirs = [DirectoryRecord(url + d, await self.path_size(url + d, include_subpath=True)) for d in dirs_str]
+            
+        return (dirs, files)
+    
+    async def path_size(self, url: str, include_subpath = False) -> int:
+        if not url.endswith('/'):
+            url += '/'
+        if not include_subpath:
+            async with self.conn.execute("SELECT SUM(file_size) FROM file WHERE url LIKE ? AND url NOT LIKE ?", (url + '%', url + '%/%')) as cursor:
+                res = await cursor.fetchone()
+        else:
+            async with self.conn.execute("SELECT SUM(file_size) FROM file WHERE url LIKE ?", (url + '%', )) as cursor:
+                res = await cursor.fetchone()
+        assert res is not None
+        return res[0] or 0
     
     async def set_file_record(self, url: str, user_id: int, file_path: str, permission: Optional[ FileReadPermission ] = None):
         """file_path is relative to FILE_ROOT"""
@@ -231,8 +277,11 @@ async def _remove_files_if_exist(files: list):
             await aiofiles.os.remove(file_path)
     await asyncio.gather(*[remove_file(f) for f in files])
 
-def _validate_url(url: str) -> bool:
-    return not url.startswith('/') and not ('..' in url) and ('/' in url)
+def _validate_url(url: str, is_file = True) -> bool:
+    ret = not url.startswith('/') and not ('..' in url) and ('/' in url)
+    if is_file:
+        ret = ret and not url.endswith('/')
+    return ret
 
 async def get_user(db: "Database", user: int | str) -> Optional[DBUserRecord]:
     if isinstance(user, str):

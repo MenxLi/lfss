@@ -43,6 +43,18 @@ router_fs = APIRouter(prefix="/f")
 
 @router_fs.get("/{path:path}")
 async def get_file(path: str, file = False, user: DBUserRecord = Depends(get_current_user)):
+    if path.endswith("/"):
+        # return file under the path as json
+        if user.id == 0:
+            raise HTTPException(status_code=403, detail="Permission denied, credential required")
+        if not path.startswith(f"{user.username}/") and not user.is_admin:
+            raise HTTPException(status_code=403, detail="Permission denied, path must start with username")
+        dirs, files = await conn.file.list_path(path)
+        return {
+            "dirs": dirs,
+            "files": files
+        }
+
     file_record = await conn.file.get_file_record(path)
     if not file_record:
         raise HTTPException(status_code=404, detail="File not found")

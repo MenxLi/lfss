@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FSS</title>
+    <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+
+    <div class="container header" id="settings">
+        <div class="input-group" style="min-width: 300px;">
+            <label for="endpoint">Endpoint</label>
+            <input type="text" id="endpoint" placeholder="http://localhost:8000" autocomplete="off" value="http://localhost:8000">
+        </div>
+        <div class="input-group" style="min-width: 800px;">
+            <label for="token">Token</label>
+            <input type="text" id="token" placeholder="" autocomplete="off">
+        </div>
+        <div class="input-group">
+            <input type="text" id="path" placeholder="path/to/files/" autocomplete="off">
+        </div>
+    </div>
+
+    <div class="container content" id="view">
+        <table id="files">
+            <thead>
+                <tr>
+                    <th>File</th>
+                    <th>Size</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="files-table-body">
+            </tbody>
+        </table>
+    </div>
+
+    <div class="container footer" id="upload">
+        <div class="input-group">
+            <input type="file" id="file-selector" accept="*">
+            <label for="file-name" id="upload-file-prefix"></label>
+            <input type="text" id="file-name" placeholder="Destination file path" autocomplete="off">
+            <button id="upload-button">Upload</button>
+        </div>
+    </div>
+
+</body>
+
+<script src="./scripts.js" type="module"></script>
+</html>

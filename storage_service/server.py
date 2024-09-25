@@ -1,7 +1,8 @@
+from re import T
 from fastapi import FastAPI, APIRouter, Depends, Request, Response
 from fastapi.exceptions import HTTPException 
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
@@ -39,7 +40,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-router_fs = APIRouter(prefix="/f")
+router_fs = APIRouter(prefix="")
 
 @router_fs.get("/{path:path}")
 async def get_file(path: str, file = False, user: DBUserRecord = Depends(get_current_user)):
@@ -78,7 +79,8 @@ async def get_file(path: str, file = False, user: DBUserRecord = Depends(get_cur
         return StreamingResponse(
             fstream, media_type="application/octet-stream", headers={
                 "Content-Length": str(fsize),
-                "Content-Disposition": f"attachment; filename={fname}"
+                "Content-Disposition": f"attachment; filename={fname}", 
+                "Content-Type": "application/octet-stream"
                 }
             )
     
@@ -93,7 +95,10 @@ async def get_file(path: str, file = False, user: DBUserRecord = Depends(get_cur
     match suffix:
         case "json":
             blob = await conn.read_file(path)
-            return JSONResponse(content=json.loads(blob))
+            try:
+                return JSONResponse(content=json.loads(blob))
+            except json.JSONDecodeError:
+                await send_as_file()
         case "txt":
             blob = await conn.read_file(path)
             return Response(content=blob, media_type="text/plain")
@@ -137,7 +142,14 @@ async def put_file(request: Request, path: str, user: DBUserRecord = Depends(get
     logger.debug(f"Content-Type: {content_type}")
     if content_type == "application/json":
         body = await request.json()
-        await conn.save_file(user.id, path, json.dumps(body))
+        await conn.save_file(user.id, path, json.dumps(body).encode('utf-8'))
+    elif content_type == "application/x-www-form-urlencoded":
+        # may not work...
+        body = await request.form()
+        file = body.get("file")
+        if isinstance(file, str) or file is None:
+            raise HTTPException(status_code=400, detail="Invalid form data, file required")
+        await conn.save_file(user.id, path, await file.read())
     elif content_type == "application/octet-stream":
         body = await request.body()
         await conn.save_file(user.id, path, body)

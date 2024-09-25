@@ -1,0 +1,92 @@
+body{
+    font-family: Arial, sans-serif;
+    background-color: #f1f1f1;
+}
+
+div.container.header, div.container.footer{
+    position: fixed;
+    left: 0;
+    width: 100%;
+    background-color: white;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+div.container.header{
+    top: 0;
+    height: 10rem;
+}
+div.container.footer{
+    bottom: 0;
+    height: 4rem;
+}
+
+div.container.content{
+    width: 100%;
+    margin-top: calc(10rem + 1rem);
+    margin-bottom: 4rem;
+}
+
+input[type=button], button{
+    background-color: #195f8b;
+    color: white;
+    padding: 10px;
+    margin: 0;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+input[type=text], input[type=password]
+{
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    height: 1rem;
+}
+
+.input-group{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+}
+.input-group label{
+    width: 100px;
+}
+
+div#settings {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+label#bucket-label{
+    color: #195f8b;
+}
+
+table#files {
+    margin-top: 20px;
+    width: 100%;
+    border-collapse: collapse;
+}
+table#files th {
+    background-color: #195f8b;
+    color: white;
+}
+table#files th, table#files td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+label#upload-file-prefix{
+    width: 800px;
+    text-align: right;
+}
+
+a{
+    color: #195f8b;
+    text-decoration: none;
+    margin-inline: 0.5rem;
+}

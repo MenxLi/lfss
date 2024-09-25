@@ -94,6 +94,7 @@ class UserConn(DBConnBase):
         return self.parse_record(res)
     
     async def create_user(self, username: str, password: str, is_admin: bool = False) -> int:
+        assert not username.startswith('_'), "Error: reserved username"
         self.logger.debug(f"Creating user {username}")
         credential = hash_credential(username, password)
         assert await self.get_user(username) is None
@@ -103,6 +104,7 @@ class UserConn(DBConnBase):
             return cursor.lastrowid
     
     async def set_user(self, username: str, password: Optional[str] = None, is_admin: Optional[bool] = None):
+        assert not username.startswith('_'), "Error: reserved username"
         if password is not None:
             credential = hash_credential(username, password)
         else:
@@ -256,7 +258,7 @@ class FileConn(DBConnBase):
     async def delete_file_record(self, url: str):
         file_record = await self.get_file_record(url)
         if file_record is None: return
-        self.conn.execute("DELETE FROM file WHERE url = ?", (url, ))
+        await self.conn.execute("DELETE FROM file WHERE url = ?", (url, ))
         self.logger.info(f"Deleted file {url}")
     
     async def delete_user_file_records(self, user_id: int):
@@ -278,7 +280,7 @@ async def _remove_files_if_exist(files: list):
     await asyncio.gather(*[remove_file(f) for f in files])
 
 def _validate_url(url: str, is_file = True) -> bool:
-    ret = not url.startswith('/') and not ('..' in url) and ('/' in url)
+    ret = not url.startswith('/') and not ('..' in url) and ('/' in url) and not ('//' in url)
     if is_file:
         ret = ret and not url.endswith('/')
     return ret
@@ -311,9 +313,10 @@ class Database:
         if _g_conn is not None:
             await _g_conn.close()
 
-    async def save_file(self, u: int | str, url: str, blob: bytes | str):
+    async def save_file(self, u: int | str, url: str, blob: bytes):
         if not _validate_url(url):
             raise ValueError(f"Invalid URL: {url}")
+        assert isinstance(blob, bytes), "blob must be bytes"
 
         user = await get_user(self, u)
         if user is None:
@@ -325,8 +328,6 @@ class Database:
         file_path = FILE_ROOT / url
         await aiofiles.os.makedirs(file_path.parent, exist_ok=True)
 
-        if isinstance(blob, str):
-            blob = blob.encode("utf-8")
         async with aiofiles.open(file_path, 'wb') as f:
             await f.write(blob)
 

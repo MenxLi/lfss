@@ -1,4 +1,5 @@
 
+from genericpath import isfile
 from typing import Optional
 from abc import ABC, abstractmethod
 
@@ -288,9 +289,9 @@ class FileConn(DBConnBase):
     
     async def delete_path_records(self, path: str):
         """Delete all records with url starting with path"""
-        async with self.conn.execute("SELECT * FROM fmeta WHERE file_path LIKE ?", (path + '%', )) as cursor:
+        async with self.conn.execute("SELECT * FROM fmeta WHERE url LIKE ?", (path + '%', )) as cursor:
             res = await cursor.fetchall()
-        await self.conn.execute("DELETE FROM fmeta WHERE file_path LIKE ?", (path + '%', ))
+        await self.conn.execute("DELETE FROM fmeta WHERE url LIKE ?", (path + '%', ))
         self.logger.info(f"Deleted {len(res)} files for path {path}") # type: ignore
     
     async def set_file_blob(self, file_path: str, blob: bytes) -> int:
@@ -308,7 +309,7 @@ class FileConn(DBConnBase):
         await self.conn.execute("DELETE FROM fdata WHERE file_path = ?", (file_path, ))
     
     async def delete_file_blobs(self, file_paths: list[str]):
-        await self.conn.execute("DELETE FROM fdata WHERE file_path IN (?)", (file_paths, ))
+        await self.conn.execute("DELETE FROM fdata WHERE file_path IN ({})".format(','.join(['?'] * len(file_paths))), file_paths)
 
 def _validate_url(url: str, is_file = True) -> bool:
     ret = not url.startswith('/') and not ('..' in url) and ('/' in url) and not ('//' in url) \
@@ -319,6 +320,8 @@ def _validate_url(url: str, is_file = True) -> bool:
     
     if is_file:
         ret = ret and not url.endswith('/')
+    else:
+        ret = ret and url.endswith('/')
     return ret
 
 async def get_user(db: "Database", user: int | str) -> Optional[DBUserRecord]:
@@ -413,13 +416,16 @@ class Database:
             await self.file.delete_file_record(url)
             return r
 
-    async def delete_files(self, url: str):
-        if not _validate_url(url): raise ValueError(f"Invalid URL: {url}")
+    async def delete_path(self, url: str):
+        if not _validate_url(url, is_file=False): raise ValueError(f"Invalid URL: {url}")
 
         async with transaction(self):
             records = await self.file.get_path_records(url)
+            if not records:
+                return None
             await self.file.delete_file_blobs([r.file_path for r in records])
             await self.file.delete_path_records(url)
+            return records
 
     async def delete_user(self, u: str | int):
         user = await get_user(self, u)

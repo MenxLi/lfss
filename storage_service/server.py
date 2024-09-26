@@ -159,7 +159,12 @@ async def delete_file(path: str, user: DBUserRecord = Depends(get_current_user))
         raise HTTPException(status_code=403, detail="Permission denied")
     
     logger.info(f"DELETE {path}, user: {user.username}")
-    res = await conn.delete_file(path)
+
+    if path.endswith("/"):
+        res = await conn.delete_path(path)
+    else:
+        res = await conn.delete_file(path)
+
     if res:
         return Response(status_code=200, content="Deleted")
     else:

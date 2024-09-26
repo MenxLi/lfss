@@ -152,6 +152,23 @@ function refreshFileList(){
                 }
                 {
                     const actTd = document.createElement('td');
+                    const actContainer = document.createElement('div');
+                    actContainer.classList.add('action-container');
+                    const deleteButton = document.createElement('a');
+                    deleteButton.textContent = 'Delete';
+                    deleteButton.href = '#';
+                    deleteButton.addEventListener('click', () => {
+                        const dirurl = dir.url + (dir.url.endsWith('/') ? '' : '/');
+                        if (!confirm('[Important] Are you sure you want to delete path ' + dirurl + '?')){
+                            return;
+                        }
+                        conn.delete(dirurl)
+                            .then(() => {
+                                refreshFileList();
+                            });
+                    });
+                    actContainer.appendChild(deleteButton);
+                    actTd.appendChild(actContainer);
                     tr.appendChild(actTd);
                 }
 

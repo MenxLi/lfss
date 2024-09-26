@@ -153,5 +153,5 @@ def get_dummy_logger() -> BaseLogger:
     return BaseLogger('dummy')
 
 __ALL__ = [
-    'get_logger', 'clear_handlers', 'logger_as_textiowrapper', 'log_access', 'get_dummy_logger'
+    'get_logger', 'clear_handlers', 'log_access', 'get_dummy_logger'
 ]

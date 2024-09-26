@@ -1,8 +1,7 @@
-from re import T
 from fastapi import FastAPI, APIRouter, Depends, Request, Response
 from fastapi.exceptions import HTTPException 
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import StreamingResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
@@ -19,9 +18,6 @@ async def lifespan(app: FastAPI):
     await conn.init()
     yield
     await conn.close()
-
-    logger.finalize()
-    DBConnBase.logger.finalize()
 
 async def get_current_user(token: HTTPAuthorizationCredentials = Depends(HTTPBearer(auto_error=False))):
     if not token:

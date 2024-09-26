@@ -3,9 +3,10 @@ from typing import Optional
 from abc import ABC, abstractmethod
 
 import dataclasses, hashlib, uuid
+from contextlib import asynccontextmanager
+from threading import Lock
 from enum import IntEnum
 
-from venv import logger
 import aiosqlite
 
 from .config import DATA_HOME
@@ -309,6 +310,19 @@ async def get_user(db: "Database", user: int | str) -> Optional[DBUserRecord]:
     else:
         return None
 
+_transaction_lock = Lock()
+@asynccontextmanager
+async def transaction(db: "Database"):
+    try:
+        _transaction_lock.acquire()
+        yield
+        await db.commit()
+    except Exception as e:
+        db.logger.error(f"Error in transaction: {e}")
+        await db.rollback()
+    finally:
+        _transaction_lock.release()
+
 @dataclasses.dataclass(frozen=True)
 class Database:
     user: UserConn = UserConn()
@@ -349,17 +363,10 @@ class Database:
 
         f_id = uuid.uuid4().hex
 
-        try:
+        async with transaction(self):
             file_size = await self.file.set_file_blob(f_id, blob)
             await self.file.set_file_record(url, owner_id=user.id, file_path=f_id, file_size=file_size)
             await self.user.set_active(username)
-            await self.commit()
-        except Exception as e:
-            logger.error(f"Error saving file {url}: {e}")
-            await self.rollback()
-            return None
-
-        return f_id
 
     # async def read_file_stream(self, url: str): ...
     async def read_file(self, url: str) -> bytes:
@@ -378,49 +385,30 @@ class Database:
     async def delete_file(self, url: str) -> Optional[FileDBRecord]:
         if not _validate_url(url): raise ValueError(f"Invalid URL: {url}")
 
-        try:
+        async with transaction(self):
             r = await self.file.get_file_record(url)
             if r is None:
                 return None
             f_id = r.file_path
             await self.file.delete_file_blob(f_id)
             await self.file.delete_file_record(url)
-            await self.commit()
-        except Exception as e:
-            await self.rollback()
-            self.logger.error(f"Error deleting file {url}: {e}")
-            return None
-        return r
+            return r
 
     async def delete_files(self, url: str):
         if not _validate_url(url): raise ValueError(f"Invalid URL: {url}")
 
-        try:
+        async with transaction(self):
             records = await self.file.get_path_records(url)
             await self.file.delete_file_blobs([r.file_path for r in records])
             await self.file.delete_path_records(url)
-            await self.commit()
-        except Exception as e:
-            await self.rollback()
-            self.logger.error(f"Error deleting files under {url}: {e}")
-            return
-        return
 
     async def delete_user(self, u: str | int):
         user = await get_user(self, u)
         if user is None:
             return
         
-        # delete user's files
-        try:
+        async with transaction(self):
             records = await self.file.get_user_file_records(user.id)
             await self.file.delete_file_blobs([r.file_path for r in records])
             await self.file.delete_user_file_records(user.id)
             await self.user.delete_user(user.username)
-            await self.commit()
-        except Exception as e:
-            await self.rollback()
-            self.logger.error(f"Error deleting user {user.username}: {e}")
-            return
-
-        return

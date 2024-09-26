@@ -1,10 +1,12 @@
 import Connector from './api.js';
+import { formatSize } from './utils.js';
 
 const conn = new Connector();
 
 const endpointInput = document.querySelector('input#endpoint');
 const tokenInput = document.querySelector('input#token');
 const pathInput = document.querySelector('input#path');
+const pathBackButton = document.querySelector('span#back-btn');
 const tbody = document.querySelector('#files-table-body');
 const uploadFilePrefixLabel = document.querySelector('#upload-file-prefix');
 const uploadFileSelector = document.querySelector('#file-selector');
@@ -33,6 +35,12 @@ conn.config.token = tokenInput.value;
     maybeRefreshFileList();
 }
 
+function onPathChange(){
+    uploadFilePrefixLabel.textContent = pathInput.value;
+    window.localStorage.setItem('path', pathInput.value);
+    maybeRefreshFileList();
+}
+
 endpointInput.addEventListener('blur', () => {
     conn.config.endpoint = endpointInput.value;
     window.localStorage.setItem('endpoint', endpointInput.value);
@@ -43,11 +51,20 @@ tokenInput.addEventListener('blur', () => {
     window.localStorage.setItem('token', tokenInput.value);
     maybeRefreshFileList();
 });
-pathInput.addEventListener('blur', () => {
-    uploadFilePrefixLabel.textContent = pathInput.value;
-    window.localStorage.setItem('path', pathInput.value);
-    maybeRefreshFileList();
+pathInput.addEventListener('input', () => {
+    onPathChange();
 });
+pathBackButton.addEventListener('click', () => {
+    const path = pathInput.value;
+    if (path.endsWith('/')){
+        pathInput.value = path.split('/').slice(0, -2).join('/') + '/';
+    }
+    else {
+        pathInput.value = path.split('/').slice(0, -1).join('/') + '/';
+    }
+    onPathChange();
+});
+
 uploadFileSelector.addEventListener('change', () => {
     uploadFileNameInput.value = uploadFileSelector.files[0].name;
 });
@@ -76,24 +93,6 @@ function maybeRefreshFileList(){
     }
 }
 
-function formatSize(size){
-    const sizeInKb = size / 1024;
-    const sizeInMb = sizeInKb / 1024;
-    const sizeInGb = sizeInMb / 1024;
-    if (sizeInGb > 1){
-        return sizeInGb.toFixed(2) + ' GB';
-    }
-    else if (sizeInMb > 1){
-        return sizeInMb.toFixed(2) + ' MB';
-    }
-    else if (sizeInKb > 1){
-        return sizeInKb.toFixed(2) + ' KB';
-    }
-    else {
-        return size + ' B';
-    }
-}
-
 function refreshFileList(){
     conn.listPath(pathInput.value)
         .then(data => {
@@ -115,8 +114,7 @@ function refreshFileList(){
                     dirLink.textContent = dirName;
                     dirLink.addEventListener('click', () => {
                         pathInput.value = dir.url + (dir.url.endsWith('/') ? '' : '/');
-                        window.localStorage.setItem('path', pathInput.value);
-                        refreshFileList();
+                        onPathChange();
                     });
                     dirLink.href = '#';
                     nameTd.appendChild(dirLink);

@@ -35,6 +35,25 @@ div.container.footer{
     min-width: 5rem;
 }
 
+span#back-btn{
+    position: absolute;
+    left: 2rem;
+    width: 1rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.5rem;
+    /* border: 1px solid #195f8b; */
+    background-color: rgb(189, 203, 211);
+    cursor: pointer;
+}
+
+span#back-btn:hover{
+    background-color: rgb(169, 183, 191);
+}
+
+input#path{
+    padding-left: 3.5rem;
+}
+
 
 div.container.content{
     width: 100%;

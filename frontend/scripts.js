@@ -7,6 +7,7 @@ const endpointInput = document.querySelector('input#endpoint');
 const tokenInput = document.querySelector('input#token');
 const pathInput = document.querySelector('input#path');
 const pathBackButton = document.querySelector('span#back-btn');
+const pathHintDiv = document.querySelector('#position-hint');
 const tbody = document.querySelector('#files-table-body');
 const uploadFilePrefixLabel = document.querySelector('#upload-file-prefix');
 const uploadFileSelector = document.querySelector('#file-selector');
@@ -102,6 +103,7 @@ function refreshFileList(){
             if (!data.files){ data.files = []; }
 
             tbody.innerHTML = '';
+            pathHintDiv.textContent = pathInput.value;
             data.dirs.forEach(dir => {
                 const tr = document.createElement('tr');
                 {
@@ -153,10 +155,18 @@ function refreshFileList(){
 
                 {
                     const actTd = document.createElement('td');
-                    const downloadButton = document.createElement('a');
-                    downloadButton.textContent = 'Download';
-                    downloadButton.href = conn.config.endpoint + '/' + file.url;
-                    actTd.appendChild(downloadButton);
+                    const actContainer = document.createElement('div');
+                    actContainer.classList.add('action-container');
+
+                    const viewButton = document.createElement('a');
+                    viewButton.textContent = 'View';
+                    viewButton.href = conn.config.endpoint + '/' + file.url;
+                    actContainer.appendChild(viewButton);
+
+                    const downloadBtn = document.createElement('a');
+                    downloadBtn.textContent = 'Download';
+                    downloadBtn.href = conn.config.endpoint + '/' + file.url + '?asfile=true';
+                    actContainer.appendChild(downloadBtn);
 
                     const deleteButton = document.createElement('a');
                     deleteButton.textContent = 'Delete';
@@ -170,8 +180,9 @@ function refreshFileList(){
                                 refreshFileList();
                             });
                     });
-                    actTd.appendChild(deleteButton);
+                    actContainer.appendChild(deleteButton);
 
+                    actTd.appendChild(actContainer);
                     tr.appendChild(actTd);
                 }
 

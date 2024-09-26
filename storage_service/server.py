@@ -43,7 +43,7 @@ app.add_middleware(
 router_fs = APIRouter(prefix="")
 
 @router_fs.get("/{path:path}")
-async def get_file(path: str, file = False, user: DBUserRecord = Depends(get_current_user)):
+async def get_file(path: str, asfile = False, user: DBUserRecord = Depends(get_current_user)):
     if path.endswith("/"):
         # return file under the path as json
         if user.id == 0:
@@ -84,7 +84,7 @@ async def get_file(path: str, file = False, user: DBUserRecord = Depends(get_cur
                 }
             )
     
-    if file:
+    if asfile:
         return await send_as_file()
     
     if not '.' in fname:
@@ -99,10 +99,10 @@ async def get_file(path: str, file = False, user: DBUserRecord = Depends(get_cur
                 return JSONResponse(content=json.loads(blob))
             except json.JSONDecodeError:
                 await send_as_file()
-        case "txt":
+        case "txt" | "log" | "md" | "html" | "htm" | "xml" | "csv" | "tsv" | "yaml" | "yml":
             blob = await conn.read_file(path)
             return Response(content=blob, media_type="text/plain")
-        case "jpg", "jpeg", "png":
+        case "jpg" | "jpeg" | "png":
             fsize, fstream = await conn.read_file_stream(path)
             return StreamingResponse(
                 fstream, media_type=f"image/{suffix}", headers={

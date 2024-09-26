@@ -1,6 +1,9 @@
 body{
     font-family: Arial, sans-serif;
     background-color: #f1f1f1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 div.container.header, div.container.footer{
@@ -22,6 +25,13 @@ div.container.header{
 div.container.footer{
     bottom: 0;
     height: 4rem;
+}
+
+div.container.content{
+    width: 100%;
+    padding-inline: 0.5rem;
+    margin-top: calc(10rem + 1rem);
+    margin-bottom: calc(4rem + 0.5rem);
 }
 
 .input-group{
@@ -54,11 +64,9 @@ input#path{
     padding-left: 3.5rem;
 }
 
-
-div.container.content{
-    width: 100%;
-    margin-top: calc(10rem + 1rem);
-    margin-bottom: 4rem;
+div#position-hint{
+    color: rgb(138, 138, 138);
+    border-radius: 0.5rem;
 }
 
 input[type=button], button{
@@ -91,7 +99,6 @@ label#bucket-label{
 }
 
 table#files {
-    margin-top: 20px;
     width: 100%;
     border-collapse: collapse;
 }
@@ -110,8 +117,25 @@ label#upload-file-prefix{
     text-align: right;
 }
 
+.action-container{
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+}
 a{
     color: #195f8b;
     text-decoration: none;
-    margin-inline: 0.5rem;
+}
+.action-container a{
+    padding: 0.2rem;
+    padding-inline: 0.5rem;
+    border: 1px solid #195f8b;
+    border-radius: 0.25rem;
+    color: #195f8b;
+    transition: all 0.2s;
+}
+.action-container a:hover{
+    background-color: #195f8b;
+    transform: scale(1.1);
+    color: white;
 }

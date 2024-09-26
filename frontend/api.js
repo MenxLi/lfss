@@ -4,12 +4,13 @@
  * @property {string} endpoint - the endpoint of the API
  * @property {string} token - the token to authenticate the user
  * 
- * Incomplete...
+ * Partially complete...
  * @typedef {Object} FileRecord
  * @property {string} url - the url of the file
  * @property {Number} file_size - the size of the file, in bytes
  * @property {string} create_time - the time the file was created
  * 
+ * Partially complete...
  * @typedef {Object} DirectoryRecord
  * @property {string} url - the url of the directory
  * @property {string} size - the size of the directory, in bytes
@@ -34,11 +35,6 @@ export default class Connector {
         }
     }
 
-    /**
-     * @param {string} path - the path to the file
-     * @param {File} file - the file to upload
-     * @returns {Promise} - the promise of the request
-     */
     async put(path, file){
         if (!path.startsWith('/')){ path = '/' + path; }
         const fileBytes = await file.arrayBuffer();
@@ -52,10 +48,6 @@ export default class Connector {
         });
     }
 
-    /**
-     * @param {string} path - the path to the file
-     * @returns {Promise} - the promise of the request
-     */
     async delete(path){
         if (!path.startsWith('/')){ path = '/' + path; }
         return fetch(this.config.endpoint + path, {
@@ -67,7 +59,7 @@ export default class Connector {
     }
 
     /**
-     * @param {string} path - the path to the file directory
+     * @param {string} path - the path to the file directory, should ends with '/'
      * @returns {Promise<PathListResponse>} - the promise of the request
      */
     async listPath(path){

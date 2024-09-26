@@ -2,6 +2,7 @@
 from typing import Optional
 from abc import ABC, abstractmethod
 
+import urllib.parse
 import dataclasses, hashlib, uuid
 from contextlib import asynccontextmanager
 from threading import Lock
@@ -94,6 +95,7 @@ class UserConn(DBConnBase):
     async def create_user(self, username: str, password: str, is_admin: bool = False) -> int:
         assert not username.startswith('_'), "Error: reserved username"
         assert not ('/' in username or len(username) > 255), "Invalid username"
+        assert urllib.parse.quote(username) == username, "Invalid username, must be URL safe"
         self.logger.debug(f"Creating user {username}")
         credential = hash_credential(username, password)
         assert await self.get_user(username) is None, "Duplicate username"
@@ -105,6 +107,7 @@ class UserConn(DBConnBase):
     async def set_user(self, username: str, password: Optional[str] = None, is_admin: Optional[bool] = None):
         assert not username.startswith('_'), "Error: reserved username"
         assert not ('/' in username or len(username) > 255), "Invalid username"
+        assert urllib.parse.quote(username) == username, "Invalid username, must be URL safe"
         if password is not None:
             credential = hash_credential(username, password)
         else:
@@ -308,7 +311,12 @@ class FileConn(DBConnBase):
         await self.conn.execute("DELETE FROM fdata WHERE file_path IN (?)", (file_paths, ))
 
 def _validate_url(url: str, is_file = True) -> bool:
-    ret = not url.startswith('/') and not ('..' in url) and ('/' in url) and not ('//' in url)
+    ret = not url.startswith('/') and not ('..' in url) and ('/' in url) and not ('//' in url) \
+        and not ' ' in url and not url.startswith('\\') and not url.startswith('_') and not url.startswith('.')
+
+    if not ret:
+        return False
+    
     if is_file:
         ret = ret and not url.endswith('/')
     return ret

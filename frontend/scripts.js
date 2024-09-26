@@ -1,5 +1,5 @@
 import Connector from './api.js';
-import { formatSize } from './utils.js';
+import { formatSize, decodePathURI } from './utils.js';
 
 const conn = new Connector();
 
@@ -160,7 +160,8 @@ function refreshFileList(){
                 const tr = document.createElement('tr');
                 {
                     const nameTd = document.createElement('td');
-                    const fileName = file.url.split('/').pop();
+                    const plainUrl = decodePathURI(file.url);
+                    const fileName = plainUrl.split('/').pop();
                     nameTd.textContent = fileName;
                     tr.appendChild(nameTd);
                     tbody.appendChild(tr);

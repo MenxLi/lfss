@@ -25,3 +25,11 @@ export function copyToClipboard(text){
     document.execCommand('copy');
     document.body.removeChild(el);
 }
+
+export function encodePathURI(path){
+    return path.split('/').map(encodeURIComponent).join('/');
+}
+
+export function decodePathURI(path){
+    return path.split('/').map(decodeURIComponent).join('/');
+}

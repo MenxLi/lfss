@@ -4,10 +4,11 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+import urllib.parse
 
 import json
 from .log import get_logger
-from .database import Database, DBUserRecord, DECOY_USER, FileReadPermission, DBConnBase
+from .database import Database, DBUserRecord, DECOY_USER, FileReadPermission
 
 logger = get_logger("server")
 conn = Database()
@@ -27,6 +28,15 @@ async def get_current_user(token: HTTPAuthorizationCredentials = Depends(HTTPBea
         raise HTTPException(status_code=401, detail="Invalid token")
     return user
 
+def encode_uri_compnents(path: str):
+    """
+    Encode the path components to encode the special characters, 
+    also to avoid path traversal attack
+    """
+    path_sp = path.split("/")
+    mapped = map(lambda x: urllib.parse.quote(x), path_sp)
+    return "/".join(mapped)
+
 app = FastAPI(docs_url=None, redoc_url=None, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
@@ -40,6 +50,7 @@ router_fs = APIRouter(prefix="")
 
 @router_fs.get("/{path:path}")
 async def get_file(path: str, asfile = False, user: DBUserRecord = Depends(get_current_user)):
+    path = encode_uri_compnents(path)
     if path == "": path = "/"
     if path.endswith("/"):
         # return file under the path as json
@@ -109,6 +120,7 @@ async def get_file(path: str, asfile = False, user: DBUserRecord = Depends(get_c
 
 @router_fs.put("/{path:path}")
 async def put_file(request: Request, path: str, user: DBUserRecord = Depends(get_current_user)):
+    path = encode_uri_compnents(path)
     if user.id == 0:
         logger.debug("Reject put request from DECOY_USER")
         raise HTTPException(status_code=403, detail="Permission denied")
@@ -152,6 +164,7 @@ async def put_file(request: Request, path: str, user: DBUserRecord = Depends(get
 
 @router_fs.delete("/{path:path}")
 async def delete_file(path: str, user: DBUserRecord = Depends(get_current_user)):
+    path = encode_uri_compnents(path)
     if user.id == 0:
         raise HTTPException(status_code=403, detail="Permission denied")
     if not path.startswith(f"{user.username}/"):

@@ -1,10 +1,15 @@
+from typing import Optional
+
 from fastapi import FastAPI, APIRouter, Depends, Request, Response
 from fastapi.exceptions import HTTPException 
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+import mimesniff
+
 from contextlib import asynccontextmanager
 import urllib.parse
+import mimetypes
 
 import json
 from .log import get_logger
@@ -82,41 +87,24 @@ async def get_file(path: str, asfile = False, user: DBUserRecord = Depends(get_c
         assert perm == FileReadPermission.PUBLIC
     
     fname = path.split("/")[-1]
-    async def send_as(media_type: str = "application/octet-stream", ftype = "attachment"):
+    async def send(media_type: Optional[str] = None, disposition = "attachment"):
         fblob = await conn.read_file(path)
+        if media_type is None:
+            media_type, _ = mimetypes.guess_type(fname)
+        if media_type is None:
+            media_type = mimesniff.what(fblob)
+
         return Response(
             content=fblob, media_type=media_type, headers={
-                "Content-Disposition": f"{ftype}; filename={fname}", 
+                "Content-Disposition": f"{disposition}; filename={fname}", 
                 "Content-Length": str(len(fblob))
             }
         )
     
     if asfile:
-        return await send_as('application/octet-stream')
-    
-    if not '.' in fname:
-        return await send_as('application/octet-stream')
-    
-    # infer content-type
-    blob = await conn.read_file(path)
-    suffix = fname.split(".")[-1].lower()
-    match suffix:
-        case "json":
-            try:
-                return JSONResponse(content=json.loads(blob))
-            except json.JSONDecodeError:
-                await send_as('application/octet-stream')
-        case "txt" | "log" | "md" | "html" | "htm" | "xml" | "csv" | "tsv" | "yaml" | "yml":
-            return await send_as('text/plain', 'inline')
-        case "jpg" | "jpeg":
-            return await send_as('image/jpeg', 'inline')
-        case "png":
-            return await send_as('image/png', 'inline')
-        case "pdf":
-            return await send_as('application/pdf', 'inline')
-        case _:
-            return await send_as('application/octet-stream')
-        
+        return await send('application/octet-stream', "attachment")
+    else:
+        return await send(None, "inline")
 
 @router_fs.put("/{path:path}")
 async def put_file(request: Request, path: str, user: DBUserRecord = Depends(get_current_user)):

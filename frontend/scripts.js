@@ -185,9 +185,18 @@ function refreshFileList(){
                     const actContainer = document.createElement('div');
                     actContainer.classList.add('action-container');
 
+                    const copyButton = document.createElement('a');
+                    copyButton.textContent = 'Copy';
+                    copyButton.href = '#';
+                    copyButton.addEventListener('click', () => {
+                        navigator.clipboard.writeText(conn.config.endpoint + '/' + file.url);
+                    });
+                    actContainer.appendChild(copyButton);
+
                     const viewButton = document.createElement('a');
                     viewButton.textContent = 'View';
                     viewButton.href = conn.config.endpoint + '/' + file.url;
+                    viewButton.target = '_blank';
                     actContainer.appendChild(viewButton);
 
                     const downloadBtn = document.createElement('a');

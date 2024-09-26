@@ -74,50 +74,40 @@ async def get_file(path: str, asfile = False, user: DBUserRecord = Depends(get_c
         assert perm == FileReadPermission.PUBLIC
     
     fname = path.split("/")[-1]
-    async def send_as_file():
-        fsize, fstream = await conn.read_file_stream(path)
-        return StreamingResponse(
-            fstream, media_type="application/octet-stream", headers={
-                "Content-Length": str(fsize),
-                "Content-Disposition": f"attachment; filename={fname}", 
-                "Content-Type": "application/octet-stream"
-                }
-            )
+    async def send_as(media_type: str = "application/octet-stream", ftype = "attachment"):
+        fblob = await conn.read_file(path)
+        return Response(
+            content=fblob, media_type=media_type, headers={
+                "Content-Disposition": f"{ftype}; filename={fname}", 
+                "Content-Length": str(len(fblob))
+            }
+        )
     
     if asfile:
-        return await send_as_file()
+        return await send_as('application/octet-stream')
     
     if not '.' in fname:
-        return await send_as_file()
+        return await send_as('application/octet-stream')
     
     # infer content-type
+    blob = await conn.read_file(path)
     suffix = fname.split(".")[-1].lower()
     match suffix:
         case "json":
-            blob = await conn.read_file(path)
             try:
                 return JSONResponse(content=json.loads(blob))
             except json.JSONDecodeError:
-                await send_as_file()
+                await send_as('application/octet-stream')
         case "txt" | "log" | "md" | "html" | "htm" | "xml" | "csv" | "tsv" | "yaml" | "yml":
-            blob = await conn.read_file(path)
-            return Response(content=blob, media_type="text/plain")
-        case "jpg" | "jpeg" | "png":
-            fsize, fstream = await conn.read_file_stream(path)
-            return StreamingResponse(
-                fstream, media_type=f"image/{suffix}", headers={
-                    "Content-Length": str(fsize),
-                    "Content-Disposition": f"inline; filename={fname}"
-                })
+            return await send_as('text/plain', 'inline')
+        case "jpg" | "jpeg":
+            return await send_as('image/jpeg', 'inline')
+        case "png":
+            return await send_as('image/png', 'inline')
         case "pdf":
-            fsize, fstream = await conn.read_file_stream(path)
-            return StreamingResponse(
-                fstream, media_type="application/pdf", headers={
-                    "Content-Length": str(fsize),
-                    "Content-Disposition": f"inline; filename={fname}"
-                })
+            return await send_as('application/pdf', 'inline')
         case _:
-            return await send_as_file()
+            return await send_as('application/octet-stream')
         
 
 @router_fs.put("/{path:path}")

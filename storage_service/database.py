@@ -2,16 +2,13 @@
 from typing import Optional
 from abc import ABC, abstractmethod
 
-import dataclasses, hashlib
+import dataclasses, hashlib, uuid
 from enum import IntEnum
 
-import asyncio
+from venv import logger
 import aiosqlite
-import aiofiles
-import aiofiles.os
-import aiofiles.ospath
 
-from .config import DATA_HOME, FILE_ROOT
+from .config import DATA_HOME
 from .log import get_logger
 
 _g_conn: Optional[aiosqlite.Connection] = None
@@ -143,7 +140,7 @@ class FileReadPermission(IntEnum):
 class FileDBRecord:
     url: str
     owner_id: int
-    file_path: str      # relative to FILE_ROOT
+    file_path: str      # a virtual path, defines mapping from fmata to fdata
     file_size: int
     create_time: str
     permission: FileReadPermission
@@ -169,14 +166,25 @@ class FileConn(DBConnBase):
         await super().init()
         await self.conn.execute('''
         CREATE TABLE IF NOT EXISTS fmeta (
-            url VARCHAR(255) PRIMARY KEY,
+            url VARCHAR(512) PRIMARY KEY,
             owner_id INTEGER NOT NULL,
-            file_path VARCHAR(255) NOT NULL,
+            file_path VARCHAR(256) NOT NULL,
             file_size INTEGER,
             create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
             permission INTEGER DEFAULT 0
         )
         ''')
+        await self.conn.execute('''
+        CREATE INDEX IF NOT EXISTS idx_fmeta_owner_id ON fmeta(owner_id)
+        ''')
+
+        await self.conn.execute('''
+        CREATE TABLE IF NOT EXISTS fdata (
+            file_path VARCHAR(256) PRIMARY KEY,
+            data BLOB
+        )
+        ''')
+
         return self
     
     async def get_file_record(self, url: str) -> Optional[FileDBRecord]:
@@ -234,14 +242,10 @@ class FileConn(DBConnBase):
         assert res is not None
         return res[0] or 0
     
-    async def set_file_record(self, url: str, owner_id: int, file_path: str, permission: Optional[ FileReadPermission ] = None):
+    async def set_file_record(self, url: str, owner_id: int, file_path: str, file_size: int, permission: Optional[ FileReadPermission ] = None):
         """file_path is relative to FILE_ROOT"""
         self.logger.debug(f"Updating fmeta {url}: user_id={owner_id}, file_path={file_path}")
 
-        abs_file_path = FILE_ROOT / file_path
-        assert await aiofiles.ospath.exists(abs_file_path), f"File {abs_file_path} not found"
-        file_size = (await aiofiles.os.stat(abs_file_path)).st_size
-        
         old = await self.get_file_record(url)
         if old is not None:
             assert old.owner_id == owner_id, f"User mismatch: {old.owner_id} != {owner_id}"
@@ -268,16 +272,28 @@ class FileConn(DBConnBase):
         self.logger.info(f"Deleted {len(res)} files for user {owner_id}") # type: ignore
     
     async def delete_path_records(self, path: str):
+        """Delete all records with url starting with path"""
         async with self.conn.execute("SELECT * FROM fmeta WHERE file_path LIKE ?", (path + '%', )) as cursor:
             res = await cursor.fetchall()
         await self.conn.execute("DELETE FROM fmeta WHERE file_path LIKE ?", (path + '%', ))
         self.logger.info(f"Deleted {len(res)} files for path {path}") # type: ignore
-
-async def _remove_files_if_exist(files: list):
-    async def remove_file(file_path):
-        if await aiofiles.ospath.exists(file_path):
-            await aiofiles.os.remove(file_path)
-    await asyncio.gather(*[remove_file(f) for f in files])
+    
+    async def set_file_blob(self, file_path: str, blob: bytes) -> int:
+        await self.conn.execute("INSERT OR REPLACE INTO fdata (file_path, data) VALUES (?, ?)", (file_path, blob))
+        return len(blob)
+    
+    async def get_file_blob(self, file_path: str) -> Optional[bytes]:
+        async with self.conn.execute("SELECT data FROM fdata WHERE file_path = ?", (file_path, )) as cursor:
+            res = await cursor.fetchone()
+        if res is None:
+            return None
+        return res[0]
+    
+    async def delete_file_blob(self, file_path: str):
+        await self.conn.execute("DELETE FROM fdata WHERE file_path = ?", (file_path, ))
+    
+    async def delete_file_blobs(self, file_paths: list[str]):
+        await self.conn.execute("DELETE FROM fdata WHERE file_path IN (?)", (file_paths, ))
 
 def _validate_url(url: str, is_file = True) -> bool:
     ret = not url.startswith('/') and not ('..' in url) and ('/' in url) and not ('//' in url)
@@ -297,6 +313,7 @@ async def get_user(db: "Database", user: int | str) -> Optional[DBUserRecord]:
 class Database:
     user: UserConn = UserConn()
     file: FileConn = FileConn()
+    logger = get_logger('database', global_instance=True)
 
     async def init(self):
         await self.user.init()
@@ -312,6 +329,11 @@ class Database:
         global _g_conn
         if _g_conn is not None:
             await _g_conn.close()
+    
+    async def rollback(self):
+        global _g_conn
+        if _g_conn is not None:
+            await _g_conn.rollback()
 
     async def save_file(self, u: int | str, url: str, blob: bytes):
         if not _validate_url(url):
@@ -325,59 +347,63 @@ class Database:
         username = user.username
         assert url.startswith(f"{username}/"), f"URL must start with {username}/, get: {url}"
 
-        file_path = FILE_ROOT / url
-        await aiofiles.os.makedirs(file_path.parent, exist_ok=True)
+        f_id = uuid.uuid4().hex
 
-        async with aiofiles.open(file_path, 'wb') as f:
-            await f.write(blob)
+        try:
+            file_size = await self.file.set_file_blob(f_id, blob)
+            await self.file.set_file_record(url, owner_id=user.id, file_path=f_id, file_size=file_size)
+            await self.user.set_active(username)
+            await self.commit()
+        except Exception as e:
+            logger.error(f"Error saving file {url}: {e}")
+            await self.rollback()
+            return None
 
-        rel_path = str(file_path.relative_to(FILE_ROOT))
-        assert _validate_url(rel_path)
+        return f_id
 
-        await self.file.set_file_record(url, user.id, str(rel_path))
-        await self.user.set_active(username)
-        await self.commit()
-
-        return rel_path
-
+    # async def read_file_stream(self, url: str): ...
     async def read_file(self, url: str) -> bytes:
         if not _validate_url(url): raise ValueError(f"Invalid URL: {url}")
 
         r = await self.file.get_file_record(url)
         if r is None:
             raise FileNotFoundError(f"File {url} not found")
-        async with aiofiles.open(FILE_ROOT / r.file_path, 'rb') as f:
-            return await f.read()
-    
-    async def read_file_stream(self, url: str):
-        if not _validate_url(url): raise ValueError(f"Invalid URL: {url}")
 
-        r = await self.file.get_file_record(url)
-        if r is None:
-            raise FileNotFoundError(f"File {url} not found")
-        fpath = FILE_ROOT / r.file_path
-        fsize = (await aiofiles.os.stat(fpath)).st_size
-        return (fsize, await aiofiles.open(fpath, 'rb'))
+        f_id = r.file_path
+        blob = await self.file.get_file_blob(f_id)
+        if blob is None:
+            raise FileNotFoundError(f"File {url} data not found")
+        return blob
 
     async def delete_file(self, url: str) -> Optional[FileDBRecord]:
         if not _validate_url(url): raise ValueError(f"Invalid URL: {url}")
 
-        r = await self.file.get_file_record(url)
-        if r is None:
+        try:
+            r = await self.file.get_file_record(url)
+            if r is None:
+                return None
+            f_id = r.file_path
+            await self.file.delete_file_blob(f_id)
+            await self.file.delete_file_record(url)
+            await self.commit()
+        except Exception as e:
+            await self.rollback()
+            self.logger.error(f"Error deleting file {url}: {e}")
             return None
-        if await aiofiles.ospath.exists(FILE_ROOT / r.file_path):
-            await aiofiles.os.remove(FILE_ROOT / r.file_path)
-        await self.file.delete_file_record(url)
-        await self.commit()
         return r
 
     async def delete_files(self, url: str):
         if not _validate_url(url): raise ValueError(f"Invalid URL: {url}")
 
-        records = await self.file.get_path_records(url)
-        await _remove_files_if_exist([FILE_ROOT / r.file_path for r in records])
-        await self.file.delete_path_records(url)
-        await self.commit()
+        try:
+            records = await self.file.get_path_records(url)
+            await self.file.delete_file_blobs([r.file_path for r in records])
+            await self.file.delete_path_records(url)
+            await self.commit()
+        except Exception as e:
+            await self.rollback()
+            self.logger.error(f"Error deleting files under {url}: {e}")
+            return
         return
 
     async def delete_user(self, u: str | int):
@@ -386,14 +412,15 @@ class Database:
             return
         
         # delete user's files
-        records = await self.file.get_user_file_records(user.id)
-        await _remove_files_if_exist([FILE_ROOT / r.file_path for r in records])
-        await self.file.delete_user_file_records(user.id)
-        await self.user.delete_user(user.username)
-        await self.commit()
-
-        user_root = FILE_ROOT / user.username
-        if await aiofiles.ospath.exists(user_root):
-            await aiofiles.os.rmdir(user_root)
+        try:
+            records = await self.file.get_user_file_records(user.id)
+            await self.file.delete_file_blobs([r.file_path for r in records])
+            await self.file.delete_user_file_records(user.id)
+            await self.user.delete_user(user.username)
+            await self.commit()
+        except Exception as e:
+            await self.rollback()
+            self.logger.error(f"Error deleting user {user.username}: {e}")
+            return
 
         return

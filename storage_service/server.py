@@ -63,7 +63,7 @@ async def get_file(path: str, asfile = False, user: DBUserRecord = Depends(get_c
     # permission check
     perm = file_record.permission
     if perm == FileReadPermission.PRIVATE:
-        if not user.is_admin and user.id != file_record.user_id:
+        if not user.is_admin and user.id != file_record.owner_id:
             raise HTTPException(status_code=403, detail="Permission denied")
         else:
             assert path.startswith(f"{user.username}/")

@@ -156,6 +156,12 @@ function refreshFileList(){
                     const actTd = document.createElement('td');
                     const actContainer = document.createElement('div');
                     actContainer.classList.add('action-container');
+
+                    const downloadButton = document.createElement('a');
+                    downloadButton.textContent = 'Download';
+                    downloadButton.href = conn.config.endpoint + '/_api/bundle?path=' + dir.url + (dir.url.endsWith('/') ? '' : '/');
+                    actContainer.appendChild(downloadButton);
+
                     const deleteButton = document.createElement('a');
                     deleteButton.textContent = 'Delete';
                     deleteButton.href = '#';

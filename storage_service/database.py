@@ -1,6 +1,5 @@
 
-from genericpath import isfile
-from typing import Optional
+from typing import Optional, overload, Literal
 from abc import ABC, abstractmethod
 
 import urllib.parse
@@ -8,11 +7,13 @@ import dataclasses, hashlib, uuid
 from contextlib import asynccontextmanager
 from threading import Lock
 from enum import IntEnum
+import zipfile, io
 
 import aiosqlite
 
 from .config import DATA_HOME
 from .log import get_logger
+from .utils import decode_uri_compnents
 
 _g_conn: Optional[aiosqlite.Connection] = None
 
@@ -201,6 +202,13 @@ class FileConn(DBConnBase):
             return None
         return self.parse_record(res)
     
+    async def get_file_records(self, urls: list[str]) -> list[FileDBRecord]:
+        async with self.conn.execute("SELECT * FROM fmeta WHERE url IN ({})".format(','.join(['?'] * len(urls))), urls) as cursor:
+            res = await cursor.fetchall()
+        if res is None:
+            return []
+        return [self.parse_record(r) for r in res]
+    
     async def get_user_file_records(self, owner_id: int) -> list[FileDBRecord]:
         async with self.conn.execute("SELECT * FROM fmeta WHERE owner_id = ?", (owner_id, )) as cursor:
             res = await cursor.fetchall()
@@ -210,18 +218,39 @@ class FileConn(DBConnBase):
         async with self.conn.execute("SELECT * FROM fmeta WHERE url LIKE ?", (url + '%', )) as cursor:
             res = await cursor.fetchall()
         return [self.parse_record(r) for r in res]
+
+    @overload
+    async def list_path(self, url: str, flat: Literal[True]) -> list[FileDBRecord]:...
+    @overload
+    async def list_path(self, url: str, flat: Literal[False]) -> tuple[list[DirectoryRecord], list[FileDBRecord]]:...
     
-    async def list_path(self, url: str) -> tuple[list[DirectoryRecord], list[FileDBRecord]]:
+    async def list_path(self, url: str, flat: bool = False) -> list[FileDBRecord] | tuple[list[DirectoryRecord], list[FileDBRecord]]:
+        """
+        List all files and directories under the given path, 
+        if flat is True, return a list of FileDBRecord, recursively including all subdirectories. 
+        Otherwise, return a tuple of (dirs, files), where dirs is a list of DirectoryRecord,
+        """
         if not url.endswith('/'):
             url += '/'
         if url == '/':
             # users cannot be queried using '/', because we store them without '/' prefix, 
             # so we need to handle this case separately, 
-            # directly query all usernames is more efficient.
-            async with self.conn.execute("SELECT username FROM user") as cursor:
+            if flat:
+                async with self.conn.execute("SELECT * FROM fmeta") as cursor:
+                    res = await cursor.fetchall()
+                return [self.parse_record(r) for r in res]
+
+            else:
+                # directly query all usernames is more efficient.
+                async with self.conn.execute("SELECT username FROM user") as cursor:
+                    res = await cursor.fetchall()
+                dirs = [DirectoryRecord(u[0], await self.path_size(u[0], include_subpath=True)) for u in res]
+                return (dirs, [])
+        
+        if flat:
+            async with self.conn.execute("SELECT * FROM fmeta WHERE url LIKE ?", (url + '%', )) as cursor:
                 res = await cursor.fetchall()
-            dirs = [DirectoryRecord(u[0], await self.path_size(u[0], include_subpath=True)) for u in res]
-            return (dirs, [])
+            return [self.parse_record(r) for r in res]
 
         async with self.conn.execute("SELECT * FROM fmeta WHERE url LIKE ? AND url NOT LIKE ?", (url + '%', url + '%/%')) as cursor:
             res = await cursor.fetchall()
@@ -437,3 +466,27 @@ class Database:
             await self.file.delete_file_blobs([r.file_path for r in records])
             await self.file.delete_user_file_records(user.id)
             await self.user.delete_user(user.username)
+
+    async def zip_path(self, top_url: str, urls: Optional[list[str]]) -> io.BytesIO:
+        if urls is None:
+            urls = [r.file_path for r in await self.file.list_path(top_url, flat=True)]
+
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, 'w') as zf:
+            for url in urls:
+                if not url.startswith(top_url):
+                    continue
+                r = await self.file.get_file_record(url)
+                if r is None:
+                    continue
+                f_id = r.file_path
+                blob = await self.file.get_file_blob(f_id)
+                if blob is None:
+                    continue
+
+                rel_path = url[len(top_url):]
+                rel_path = decode_uri_compnents(rel_path)
+                zf.writestr(rel_path, blob)
+
+        buffer.seek(0)
+        return buffer

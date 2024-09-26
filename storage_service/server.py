@@ -3,16 +3,15 @@ from typing import Optional
 from fastapi import FastAPI, APIRouter, Depends, Request, Response
 from fastapi.exceptions import HTTPException 
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import mimesniff
 
 from contextlib import asynccontextmanager
-import urllib.parse
 import mimetypes
 
 import json
 from .log import get_logger
+from .utils import encode_uri_compnents
 from .database import Database, DBUserRecord, DECOY_USER, FileReadPermission
 
 logger = get_logger("server")
@@ -32,15 +31,6 @@ async def get_current_user(token: HTTPAuthorizationCredentials = Depends(HTTPBea
     if not user:
         raise HTTPException(status_code=401, detail="Invalid token")
     return user
-
-def encode_uri_compnents(path: str):
-    """
-    Encode the path components to encode the special characters, 
-    also to avoid path traversal attack
-    """
-    path_sp = path.split("/")
-    mapped = map(lambda x: urllib.parse.quote(x), path_sp)
-    return "/".join(mapped)
 
 app = FastAPI(docs_url=None, redoc_url=None, lifespan=lifespan)
 app.add_middleware(
@@ -63,7 +53,7 @@ async def get_file(path: str, asfile = False, user: DBUserRecord = Depends(get_c
             raise HTTPException(status_code=403, detail="Permission denied, credential required")
         if not path.startswith(f"{user.username}/") and not user.is_admin:
             raise HTTPException(status_code=403, detail="Permission denied, path must start with username")
-        dirs, files = await conn.file.list_path(path)
+        dirs, files = await conn.file.list_path(path, flat = False)
         return {
             "dirs": dirs,
             "files": files
@@ -170,4 +160,37 @@ async def delete_file(path: str, user: DBUserRecord = Depends(get_current_user))
     else:
         return Response(status_code=404, content="Not found")
 
+router_api = APIRouter(prefix="/_api")
+
+@router_api.get("/bundle")
+async def bundle_files(path: str, user: DBUserRecord = Depends(get_current_user)):
+    logger.info(f"GET bundle <= {path}, user: {user.username}")
+    MAX_ZIP_BYTES = 128 * 1024 * 1024   # 128MB
+    path = encode_uri_compnents(path)
+    assert path.endswith("/") or path == ""
+
+    if not path == "" and path[0] == "/":   # adapt to both /path and path
+        path = path[1:]
+    
+    # TODO: maybe check permission here...
+
+    # return bundle of files
+    files = await conn.file.list_path(path, flat = True)
+    if len(files) == 0:
+        raise HTTPException(status_code=404, detail="No files found")
+    total_size = sum([f.file_size for f in files])
+    if total_size > MAX_ZIP_BYTES:
+        raise HTTPException(status_code=400, detail="Too large to zip")
+
+    file_paths = [f.url for f in files]
+    zip_buffer = await conn.zip_path(path, file_paths)
+    return Response(
+        content=zip_buffer.getvalue(), media_type="application/zip", headers={
+            "Content-Disposition": f"attachment; filename=bundle.zip", 
+            "Content-Length": str(zip_buffer.getbuffer().nbytes)
+        }
+    )
+
+# order matters
+app.include_router(router_api)
 app.include_router(router_fs)

@@ -27,7 +27,7 @@ async def get_current_user(token: HTTPAuthorizationCredentials = Depends(HTTPBea
         raise HTTPException(status_code=401, detail="Invalid token")
     return user
 
-app = FastAPI(docs_url="/", redoc_url=None, lifespan=lifespan)
+app = FastAPI(docs_url=None, redoc_url=None, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -40,6 +40,7 @@ router_fs = APIRouter(prefix="")
 
 @router_fs.get("/{path:path}")
 async def get_file(path: str, asfile = False, user: DBUserRecord = Depends(get_current_user)):
+    if path == "": path = "/"
     if path.endswith("/"):
         # return file under the path as json
         if user.id == 0:

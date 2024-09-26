@@ -208,6 +208,15 @@ class FileConn(DBConnBase):
     async def list_path(self, url: str) -> tuple[list[DirectoryRecord], list[FileDBRecord]]:
         if not url.endswith('/'):
             url += '/'
+        if url == '/':
+            # users cannot be queried using '/', because we store them without '/' prefix, 
+            # so we need to handle this case separately, 
+            # directly query all usernames is more efficient.
+            async with self.conn.execute("SELECT username FROM user") as cursor:
+                res = await cursor.fetchall()
+            dirs = [DirectoryRecord(u[0], await self.path_size(u[0], include_subpath=True)) for u in res]
+            return (dirs, [])
+
         async with self.conn.execute("SELECT * FROM fmeta WHERE url LIKE ? AND url NOT LIKE ?", (url + '%', url + '%/%')) as cursor:
             res = await cursor.fetchall()
         files = [self.parse_record(r) for r in res]

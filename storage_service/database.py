@@ -93,6 +93,7 @@ class UserConn(DBConnBase):
     
     async def create_user(self, username: str, password: str, is_admin: bool = False) -> int:
         assert not username.startswith('_'), "Error: reserved username"
+        assert not ('/' in username or len(username) > 255), "Invalid username"
         self.logger.debug(f"Creating user {username}")
         credential = hash_credential(username, password)
         assert await self.get_user(username) is None, "Duplicate username"
@@ -103,6 +104,7 @@ class UserConn(DBConnBase):
     
     async def set_user(self, username: str, password: Optional[str] = None, is_admin: Optional[bool] = None):
         assert not username.startswith('_'), "Error: reserved username"
+        assert not ('/' in username or len(username) > 255), "Invalid username"
         if password is not None:
             credential = hash_credential(username, password)
         else:

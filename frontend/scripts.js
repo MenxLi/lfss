@@ -66,6 +66,22 @@ pathBackButton.addEventListener('click', () => {
     onPathChange();
 });
 
+{
+    window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+    });
+    window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const files = e.dataTransfer.files;
+        if (files.length == 1){
+            uploadFileSelector.files = files;
+            uploadFileNameInput.value = files[0].name;
+        }
+    });
+}
+
 uploadFileSelector.addEventListener('change', () => {
     uploadFileNameInput.value = uploadFileSelector.files[0].name;
 });

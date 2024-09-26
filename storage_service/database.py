@@ -148,13 +148,13 @@ class FileReadPermission(IntEnum):
 class FileDBRecord:
     url: str
     owner_id: int
-    file_path: str      # a virtual path, defines mapping from fmata to fdata
+    file_id: str      # defines mapping from fmata to fdata
     file_size: int
     create_time: str
     permission: FileReadPermission
 
     def __str__(self):
-        return f"File {self.url} (owner={self.owner_id}, created at {self.create_time}, path={self.file_path}, permission={self.permission}, size={self.file_size})"
+        return f"File {self.url} (owner={self.owner_id}, created at {self.create_time}, path={self.file_id}, permission={self.permission}, size={self.file_size})"
 
 @dataclasses.dataclass
 class DirectoryRecord:
@@ -176,7 +176,7 @@ class FileConn(DBConnBase):
         CREATE TABLE IF NOT EXISTS fmeta (
             url VARCHAR(512) PRIMARY KEY,
             owner_id INTEGER NOT NULL,
-            file_path VARCHAR(256) NOT NULL,
+            file_id VARCHAR(256) NOT NULL,
             file_size INTEGER,
             create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
             permission INTEGER DEFAULT 0
@@ -188,7 +188,7 @@ class FileConn(DBConnBase):
 
         await self.conn.execute('''
         CREATE TABLE IF NOT EXISTS fdata (
-            file_path VARCHAR(256) PRIMARY KEY,
+            file_id VARCHAR(256) PRIMARY KEY,
             data BLOB
         )
         ''')
@@ -287,21 +287,20 @@ class FileConn(DBConnBase):
         assert res is not None
         return res[0] or 0
     
-    async def set_file_record(self, url: str, owner_id: int, file_path: str, file_size: int, permission: Optional[ FileReadPermission ] = None):
-        """file_path is relative to FILE_ROOT"""
-        self.logger.debug(f"Updating fmeta {url}: user_id={owner_id}, file_path={file_path}")
+    async def set_file_record(self, url: str, owner_id: int, file_id: str, file_size: int, permission: Optional[ FileReadPermission ] = None):
+        self.logger.debug(f"Updating fmeta {url}: user_id={owner_id}, file_id={file_id}")
 
         old = await self.get_file_record(url)
         if old is not None:
             assert old.owner_id == owner_id, f"User mismatch: {old.owner_id} != {owner_id}"
             if permission is None:
                 permission = old.permission
-            await self.conn.execute("UPDATE fmeta SET file_path = ?, file_size = ?, permission = ? WHERE url = ?", (file_path, file_size, permission, url))
+            await self.conn.execute("UPDATE fmeta SET file_id = ?, file_size = ?, permission = ? WHERE url = ?", (file_id, file_size, permission, url))
             self.logger.info(f"File {url} updated")
         else:
             if permission is None:
                 permission = FileReadPermission.PUBLIC
-            await self.conn.execute("INSERT INTO fmeta (url, owner_id, file_path, file_size, permission) VALUES (?, ?, ?, ?, ?)", (url, owner_id, file_path, file_size, permission))
+            await self.conn.execute("INSERT INTO fmeta (url, owner_id, file_id, file_size, permission) VALUES (?, ?, ?, ?, ?)", (url, owner_id, file_id, file_size, permission))
             self.logger.info(f"File {url} created")
     
     async def delete_file_record(self, url: str):
@@ -323,22 +322,22 @@ class FileConn(DBConnBase):
         await self.conn.execute("DELETE FROM fmeta WHERE url LIKE ?", (path + '%', ))
         self.logger.info(f"Deleted {len(res)} files for path {path}") # type: ignore
     
-    async def set_file_blob(self, file_path: str, blob: bytes) -> int:
-        await self.conn.execute("INSERT OR REPLACE INTO fdata (file_path, data) VALUES (?, ?)", (file_path, blob))
+    async def set_file_blob(self, file_id: str, blob: bytes) -> int:
+        await self.conn.execute("INSERT OR REPLACE INTO fdata (file_id, data) VALUES (?, ?)", (file_id, blob))
         return len(blob)
     
-    async def get_file_blob(self, file_path: str) -> Optional[bytes]:
-        async with self.conn.execute("SELECT data FROM fdata WHERE file_path = ?", (file_path, )) as cursor:
+    async def get_file_blob(self, file_id: str) -> Optional[bytes]:
+        async with self.conn.execute("SELECT data FROM fdata WHERE file_id = ?", (file_id, )) as cursor:
             res = await cursor.fetchone()
         if res is None:
             return None
         return res[0]
     
-    async def delete_file_blob(self, file_path: str):
-        await self.conn.execute("DELETE FROM fdata WHERE file_path = ?", (file_path, ))
+    async def delete_file_blob(self, file_id: str):
+        await self.conn.execute("DELETE FROM fdata WHERE file_id = ?", (file_id, ))
     
-    async def delete_file_blobs(self, file_paths: list[str]):
-        await self.conn.execute("DELETE FROM fdata WHERE file_path IN ({})".format(','.join(['?'] * len(file_paths))), file_paths)
+    async def delete_file_blobs(self, file_ids: list[str]):
+        await self.conn.execute("DELETE FROM fdata WHERE file_id IN ({})".format(','.join(['?'] * len(file_ids))), file_ids)
 
 def _validate_url(url: str, is_file = True) -> bool:
     ret = not url.startswith('/') and not ('..' in url) and ('/' in url) and not ('//' in url) \
@@ -416,7 +415,7 @@ class Database:
 
         async with transaction(self):
             file_size = await self.file.set_file_blob(f_id, blob)
-            await self.file.set_file_record(url, owner_id=user.id, file_path=f_id, file_size=file_size)
+            await self.file.set_file_record(url, owner_id=user.id, file_id=f_id, file_size=file_size)
             await self.user.set_active(username)
 
     # async def read_file_stream(self, url: str): ...
@@ -427,7 +426,7 @@ class Database:
         if r is None:
             raise FileNotFoundError(f"File {url} not found")
 
-        f_id = r.file_path
+        f_id = r.file_id
         blob = await self.file.get_file_blob(f_id)
         if blob is None:
             raise FileNotFoundError(f"File {url} data not found")
@@ -440,7 +439,7 @@ class Database:
             r = await self.file.get_file_record(url)
             if r is None:
                 return None
-            f_id = r.file_path
+            f_id = r.file_id
             await self.file.delete_file_blob(f_id)
             await self.file.delete_file_record(url)
             return r
@@ -452,7 +451,7 @@ class Database:
             records = await self.file.get_path_records(url)
             if not records:
                 return None
-            await self.file.delete_file_blobs([r.file_path for r in records])
+            await self.file.delete_file_blobs([r.file_id for r in records])
             await self.file.delete_path_records(url)
             return records
 
@@ -463,13 +462,13 @@ class Database:
         
         async with transaction(self):
             records = await self.file.get_user_file_records(user.id)
-            await self.file.delete_file_blobs([r.file_path for r in records])
+            await self.file.delete_file_blobs([r.file_id for r in records])
             await self.file.delete_user_file_records(user.id)
             await self.user.delete_user(user.username)
 
     async def zip_path(self, top_url: str, urls: Optional[list[str]]) -> io.BytesIO:
         if urls is None:
-            urls = [r.file_path for r in await self.file.list_path(top_url, flat=True)]
+            urls = [r.file_id for r in await self.file.list_path(top_url, flat=True)]
 
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, 'w') as zf:
@@ -479,7 +478,7 @@ class Database:
                 r = await self.file.get_file_record(url)
                 if r is None:
                     continue
-                f_id = r.file_path
+                f_id = r.file_id
                 blob = await self.file.get_file_blob(f_id)
                 if blob is None:
                     continue

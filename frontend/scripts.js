@@ -129,9 +129,11 @@ function refreshFileList(){
                     }
                     const dirName = dir.url.split('/').pop();
                     const dirLink = document.createElement('a');
-                    dirLink.textContent = dirName;
+                    dirLink.textContent = decodePathURI(dirName);
                     dirLink.addEventListener('click', () => {
-                        pathInput.value = dir.url + (dir.url.endsWith('/') ? '' : '/');
+                        let dstUrl = dir.url + (dir.url.endsWith('/') ? '' : '/');
+                        dstUrl = decodePathURI(dstUrl);
+                        pathInput.value = dstUrl;
                         onPathChange();
                     });
                     dirLink.href = '#';

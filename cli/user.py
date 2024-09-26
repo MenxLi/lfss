@@ -31,35 +31,46 @@ async def main():
     args = parser.parse_args()
     conn = await Database().init()
     
-    if args.subparser_name == 'add':
-        await conn.user.create_user(args.username, args.password, args.admin)
-        print('User created')
+    try:
+        if args.subparser_name == 'add':
+            await conn.user.create_user(args.username, args.password, args.admin)
+            user = await conn.user.get_user(args.username)
+            assert user is not None
+            print('User created, credential:', user.credential)
+        
+        if args.subparser_name == 'delete':
+            user = await conn.user.get_user(args.username)
+            if user is None:
+                print('User not found')
+                exit(1)
+            else:
+                await conn.delete_user(user.id)
+            print('User deleted')
+        
+        if args.subparser_name == 'set':
+            user = await conn.user.get_user(args.username)
+            if user is None:
+                print('User not found')
+                exit(1)
+            await conn.user.set_user(user.username, args.password, args.admin)
+            user = await conn.user.get_user(args.username)
+            assert user is not None
+            print('User updated, credential:', user.credential)
+        
+        if args.subparser_name == 'list':
+            async for user in conn.user.all():
+                print(user)
+                if args.long:
+                    print('  ', user.credential)
+        
+        await conn.commit()
     
-    if args.subparser_name == 'delete':
-        user = await conn.user.get_user(args.username)
-        if user is None:
-            print('User not found')
-            exit(1)
-        else:
-            await conn.delete_user(user.id)
-        print('User deleted')
-    
-    if args.subparser_name == 'set':
-        user = await conn.user.get_user(args.username)
-        if user is None:
-            print('User not found')
-            exit(1)
-        await conn.user.set_user(user.username, args.password, args.admin)
-        print('User updated')
-    
-    if args.subparser_name == 'list':
-        async for user in conn.user.all():
-            print(user)
-            if args.long:
-                print('  ', user.credential)
-    
-    await conn.commit()
-    await conn.close()
+    except Exception as e:
+        conn.logger.error(f'Error: {e}')
+        await conn.rollback()
+
+    finally:
+        await conn.close()
 
 if __name__ == '__main__':
     asyncio.run(main())

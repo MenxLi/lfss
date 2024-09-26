@@ -111,6 +111,16 @@ table#files th, table#files td {
     padding: 8px;
     text-align: left;
 }
+table#files tr {
+    white-space: nowrap;
+}
+table#files tr:hover {
+    background-color: #eaeaea;
+    transition: all 0.2s;
+}
+table#files tr td:nth-child(2), table#files tr td:nth-child(3), table#files tr td:nth-child(4){
+    width: 12%;
+}
 
 label#upload-file-prefix{
     width: 800px;

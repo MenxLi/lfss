@@ -95,7 +95,7 @@ class UserConn(DBConnBase):
         assert not username.startswith('_'), "Error: reserved username"
         self.logger.debug(f"Creating user {username}")
         credential = hash_credential(username, password)
-        assert await self.get_user(username) is None
+        assert await self.get_user(username) is None, "Duplicate username"
         async with self.conn.execute("INSERT INTO user (username, credential, is_admin) VALUES (?, ?, ?)", (username, credential, is_admin)) as cursor:
             self.logger.info(f"User {username} created")
             assert cursor.lastrowid is not None

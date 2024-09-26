@@ -131,6 +131,10 @@ function refreshFileList(){
                     tr.appendChild(sizeTd);
                 }
                 {
+                    const dateTd = document.createElement('td');
+                    tr.appendChild(dateTd);
+                }
+                {
                     const actTd = document.createElement('td');
                     tr.appendChild(actTd);
                 }
@@ -151,6 +155,13 @@ function refreshFileList(){
                     const fileSize = file.file_size;
                     sizeTd.textContent = formatSize(fileSize);
                     tr.appendChild(sizeTd);
+                }
+
+                {
+                    const dateTd = document.createElement('td');
+                    const createTime = file.create_time;
+                    dateTd.textContent = createTime;
+                    tr.appendChild(dateTd);
                 }
 
                 {

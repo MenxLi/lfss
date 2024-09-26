@@ -468,7 +468,7 @@ class Database:
 
     async def zip_path(self, top_url: str, urls: Optional[list[str]]) -> io.BytesIO:
         if urls is None:
-            urls = [r.file_id for r in await self.file.list_path(top_url, flat=True)]
+            urls = [r.url for r in await self.file.list_path(top_url, flat=True)]
 
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, 'w') as zf:

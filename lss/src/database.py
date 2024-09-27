@@ -35,7 +35,7 @@ class DBConnBase(ABC):
         """Should return self"""
         global _g_conn
         if _g_conn is None:
-            _g_conn = await aiosqlite.connect(DATA_HOME / 'fss.db')
+            _g_conn = await aiosqlite.connect(DATA_HOME / 'lss.db')
 
     async def commit(self):
         await self.conn.commit()

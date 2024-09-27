@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "fss"
+name = "lss"
 version = "0.1.0"
-description = "A simple file storage service"
+description = "Lightweight file storage service"
 authors = ["li, mengxun <limengxun45@outlook.com>"]
 readme = "Readme.md"
 
@@ -12,8 +12,8 @@ aiosqlite = "0.*"
 mimesniff = "1.*"
 
 [tool.poetry.scripts]
-fss-serve = "fss.cli.serve:main"
-fss-user = "fss.cli.user:main"
+lss-serve = "lss.cli.serve:main"
+lss-user = "lss.cli.user:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

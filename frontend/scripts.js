@@ -1,5 +1,5 @@
 import Connector from './api.js';
-import { formatSize, decodePathURI, copyToClipboard } from './utils.js';
+import { formatSize, decodePathURI, copyToClipboard, getRandomString } from './utils.js';
 
 const conn = new Connector();
 
@@ -13,7 +13,8 @@ const tbody = document.querySelector('#files-table-body');
 const uploadFilePrefixLabel = document.querySelector('#upload-file-prefix');
 const uploadFileSelector = document.querySelector('#file-selector');
 const uploadFileNameInput = document.querySelector('#file-name');
-const uploadButton = document.querySelector('#upload-button');
+const uploadButton = document.querySelector('#upload-btn');
+const randomizeFnameButton = document.querySelector('#randomize-fname-btn');
 
 conn.config.endpoint = endpointInput.value;
 conn.config.token = tokenInput.value;
@@ -65,6 +66,19 @@ pathBackButton.addEventListener('click', () => {
         pathInput.value = path.split('/').slice(0, -1).join('/') + '/';
     }
     onPathChange();
+});
+randomizeFnameButton.addEventListener('click', () => {
+    let currentName = uploadFileNameInput.value;
+    let newName = getRandomString(24);
+    const dotSplit = currentName.split('.');
+    let ext = '';
+    if (dotSplit.length > 1){
+        ext = dotSplit.pop();
+    }
+    if (ext.length > 0){
+        newName += '.' + ext;
+    }
+    uploadFileNameInput.value = newName;
 });
 
 {

@@ -140,7 +140,9 @@ async def put_file(request: Request, path: str, user: DBUserRecord = Depends(get
             "Content-Type": "application/json",
         }, content=json.dumps({"url": path}))
     else:
-        return Response(status_code=200)
+        return Response(status_code=200, headers={
+            "Content-Type": "application/json",
+        }, content=json.dumps({"url": path}))
 
 @router_fs.delete("/{path:path}")
 async def delete_file(path: str, user: DBUserRecord = Depends(get_current_user)):

@@ -1,3 +1,4 @@
+
 body{
     font-family: Arial, sans-serif;
     background-color: #f1f1f1;
@@ -5,6 +6,26 @@ body{
     justify-content: center;
     align-items: center;
 }
+
+input[type=button], button{
+    background-color: #195f8b;
+    color: white;
+    padding: 0.8rem;
+    margin: 0;
+    border: none;
+    border-radius: 0.2rem;
+    cursor: pointer;
+}
+
+input[type=text], input[type=password]
+{
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #ccc;
+    border-radius: 0.2rem;
+    height: 1rem;
+}
+
 
 div.container.header, div.container.footer{
     position: fixed;
@@ -60,8 +81,39 @@ span#back-btn:hover{
     background-color: rgb(169, 183, 191);
 }
 
+span#randomize-fname-btn{
+    position: absolute;
+    right: calc(6rem + 1rem + 1rem);
+    height: 2rem;
+    width: 2rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+span#randomize-fname-btn:hover{
+    background-color: rgb(240, 244, 246);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transform: scale(1.1);
+}
+span#randomize-fname-btn:active{
+    transform: none;
+}
+
 input#path{
     padding-left: 3.5rem;
+}
+
+#upload-btn{
+    background-color: #195f8b;
+    color: white;
+    min-width: 6rem;
+    margin: 0;
+    border: none;
+    border-radius: 0.2rem;
+    cursor: pointer;
 }
 
 div#position-hint{
@@ -75,10 +127,6 @@ div#position-hint{
     margin-bottom: 0.25rem;
 
     padding: 0.25rem;
-    /* padding-inline: 0.5rem;
-    border-radius: 1rem;
-    background-color: rgb(255, 255, 255);
-    box-shadow: 0 2px 3px rgba(0,0,0,0.1); */
 }
 div#position-hint span{
     width: 0.75rem;
@@ -90,25 +138,6 @@ div#position-hint.disconnected span{
 }
 div#position-hint.connected span{
     background-color: rgb(0, 166, 0);
-}
-
-input[type=button], button{
-    background-color: #195f8b;
-    color: white;
-    padding: 10px;
-    margin: 0;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-input[type=text], input[type=password]
-{
-    width: 100%;
-    padding: 12px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    height: 1rem;
 }
 
 div#settings {

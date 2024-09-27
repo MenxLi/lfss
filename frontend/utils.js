@@ -44,3 +44,17 @@ export function encodePathURI(path){
 export function decodePathURI(path){
     return path.split('/').map(decodeURIComponent).join('/');
 }
+
+export function getRandomString(n, additionalCharset='0123456789_-(=)[]{}'){
+    let result = '';
+    let charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const firstChar = charset[Math.floor(Math.random() * charset.length)];
+    const lastChar = charset[Math.floor(Math.random() * charset.length)];
+    result += firstChar;
+    charset += additionalCharset;
+    for (let i = 0; i < n-2; i++){
+        result += charset[Math.floor(Math.random() * charset.length)];
+    }
+    result += lastChar;
+    return result;
+};

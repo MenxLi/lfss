@@ -68,11 +68,13 @@ div.container.content{
 
 span#back-btn{
     position: absolute;
-    left: 2rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    left: 1.5rem;
     width: 1rem;
     padding: 0.25rem 0.5rem;
     border-radius: 0.5rem;
-    /* border: 1px solid #195f8b; */
     background-color: rgb(189, 203, 211);
     cursor: pointer;
 }
@@ -103,7 +105,7 @@ span#randomize-fname-btn:active{
 }
 
 input#path{
-    padding-left: 3.5rem;
+    padding-left: 3rem;
 }
 
 #upload-btn{

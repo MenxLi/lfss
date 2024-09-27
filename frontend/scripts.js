@@ -80,23 +80,6 @@ randomizeFnameButton.addEventListener('click', () => {
     }
     uploadFileNameInput.value = newName;
 });
-
-{
-    window.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-    });
-    window.addEventListener('drop', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const files = e.dataTransfer.files;
-        if (files.length == 1){
-            uploadFileSelector.files = files;
-            uploadFileNameInput.value = files[0].name;
-        }
-    });
-}
-
 uploadFileSelector.addEventListener('change', () => {
     uploadFileNameInput.value = uploadFileSelector.files[0].name;
 });
@@ -114,8 +97,33 @@ uploadButton.addEventListener('click', () => {
     conn.put(path, file)
         .then(() => {
             refreshFileList();
-        });
+            uploadFileNameInput.value = '';
+        }
+    );
 });
+
+uploadFileNameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter'){
+        uploadButton.click();
+    }
+});
+
+{
+    window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+    });
+    window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const files = e.dataTransfer.files;
+        if (files.length == 1){
+            uploadFileSelector.files = files;
+            uploadFileNameInput.value = files[0].name;
+            uploadFileNameInput.focus();
+        }
+    });
+}
 
 function maybeRefreshFileList(){
     if (

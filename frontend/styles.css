@@ -67,6 +67,29 @@ input#path{
 div#position-hint{
     color: rgb(138, 138, 138);
     border-radius: 0.5rem;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.25rem;
+    height: 1rem;
+    margin-bottom: 0.25rem;
+
+    padding: 0.25rem;
+    /* padding-inline: 0.5rem;
+    border-radius: 1rem;
+    background-color: rgb(255, 255, 255);
+    box-shadow: 0 2px 3px rgba(0,0,0,0.1); */
+}
+div#position-hint span{
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+}
+div#position-hint.disconnected span{
+    background-color: red;
+}
+div#position-hint.connected span{
+    background-color: rgb(0, 166, 0);
 }
 
 input[type=button], button{

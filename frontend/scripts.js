@@ -8,6 +8,7 @@ const tokenInput = document.querySelector('input#token');
 const pathInput = document.querySelector('input#path');
 const pathBackButton = document.querySelector('span#back-btn');
 const pathHintDiv = document.querySelector('#position-hint');
+const pathHintLabel = document.querySelector('#position-hint label');
 const tbody = document.querySelector('#files-table-body');
 const uploadFilePrefixLabel = document.querySelector('#upload-file-prefix');
 const uploadFileSelector = document.querySelector('#file-selector');
@@ -113,13 +114,16 @@ function maybeRefreshFileList(){
 function refreshFileList(){
     conn.listPath(pathInput.value)
         .then(data => {
+            pathHintDiv.classList.remove('disconnected');
+            pathHintDiv.classList.add('connected');
+            pathHintLabel.textContent = pathInput.value;
+            tbody.innerHTML = '';
+
             console.log("Got data", data);
 
             if (!data.dirs){ data.dirs = []; }
             if (!data.files){ data.files = []; }
 
-            tbody.innerHTML = '';
-            pathHintDiv.textContent = pathInput.value;
             data.dirs.forEach(dir => {
                 const tr = document.createElement('tr');
                 {
@@ -251,6 +255,10 @@ function refreshFileList(){
             });
         }, 
         (err) => {
+            pathHintDiv.classList.remove('connected');
+            pathHintDiv.classList.add('disconnected');
+            pathHintLabel.textContent = pathInput.value;
+            tbody.innerHTML = '';
             console.log("Error");
             console.error(err);
         }

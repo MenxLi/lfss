@@ -95,11 +95,15 @@ export default class Connector {
     async listPath(path){
         if (path.startsWith('/')){ path = path.slice(1); }
         if (!path.endsWith('/')){ path += '/'; }
-        return fetch(this.config.endpoint + '/' + path, {
+        const res = await fetch(this.config.endpoint + '/' + path, {
             method: 'GET',
             headers: {
                 'Authorization': 'Bearer ' + this.config.token
             },
-        }).then(response => response.json());
+        });
+        if (res.status == 403 || res.status == 401){
+            throw new Error(`Access denied to ${path}`);
+        }
+        return await res.json();
     }
 }

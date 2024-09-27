@@ -58,3 +58,13 @@ export function getRandomString(n, additionalCharset='0123456789_-(=)[]{}'){
     result += lastChar;
     return result;
 };
+
+/**
+ * @param {string} dateStr 
+ * @returns {string}
+ */
+export function cvtGMT2Local(dateStr){
+    const gmtdate = new Date(dateStr);
+    const localdate = new Date(gmtdate.getTime() + gmtdate.getTimezoneOffset() * 60000);
+    return localdate.toISOString().slice(0, 19).replace('T', ' ');
+}

@@ -1,5 +1,5 @@
 import Connector from './api.js';
-import { formatSize, decodePathURI, copyToClipboard, getRandomString } from './utils.js';
+import { formatSize, decodePathURI, copyToClipboard, getRandomString, cvtGMT2Local } from './utils.js';
 
 const conn = new Connector();
 
@@ -232,14 +232,14 @@ function refreshFileList(){
                 {
                     const dateTd = document.createElement('td');
                     const accessTime = file.access_time;
-                    dateTd.textContent = accessTime;
+                    dateTd.textContent = cvtGMT2Local(accessTime);
                     tr.appendChild(dateTd);
                 }
 
                 {
                     const dateTd = document.createElement('td');
                     const createTime = file.create_time;
-                    dateTd.textContent = createTime;
+                    dateTd.textContent = cvtGMT2Local(createTime);
                     tr.appendChild(dateTd);
                 }
 

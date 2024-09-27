@@ -72,10 +72,8 @@ function onFileNameInpuChange(){
     const fileName = uploadFileNameInput.value;
     if (fileName.length === 0){
         uploadFileNameInput.classList.remove('duplicate');
-        uploadButton.disabled = true;
     }
     else {
-        uploadButton.disabled = false;
         const p = ensurePathURI(pathInput.value + fileName);
         conn.getMetadata(p).then(
             (data) => {

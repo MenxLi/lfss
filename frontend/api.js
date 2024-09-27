@@ -9,6 +9,7 @@
  * @property {string} url - the url of the file
  * @property {Number} file_size - the size of the file, in bytes
  * @property {string} create_time - the time the file was created
+ * @property {string} access_time - the time the file was last accessed
  * 
  * Partially complete...
  * @typedef {Object} DirectoryRecord

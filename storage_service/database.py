@@ -151,10 +151,12 @@ class FileDBRecord:
     file_id: str      # defines mapping from fmata to fdata
     file_size: int
     create_time: str
+    access_time: str
     permission: FileReadPermission
 
     def __str__(self):
-        return f"File {self.url} (owner={self.owner_id}, created at {self.create_time}, path={self.file_id}, permission={self.permission}, size={self.file_size})"
+        return  f"File {self.url} (owner={self.owner_id}, created at {self.create_time}, accessed at {self.access_time}, " + \
+                f"file_id={self.file_id}, permission={self.permission}, size={self.file_size})"
 
 @dataclasses.dataclass
 class DirectoryRecord:
@@ -179,11 +181,12 @@ class FileConn(DBConnBase):
             file_id VARCHAR(256) NOT NULL,
             file_size INTEGER,
             create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
+            access_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             permission INTEGER DEFAULT 0
         )
         ''')
         await self.conn.execute('''
-        CREATE INDEX IF NOT EXISTS idx_fmeta_owner_id ON fmeta(owner_id)
+        CREATE INDEX IF NOT EXISTS idx_fmeta_url ON fmeta(url)
         ''')
 
         await self.conn.execute('''
@@ -308,13 +311,20 @@ class FileConn(DBConnBase):
             assert old.owner_id == owner_id, f"User mismatch: {old.owner_id} != {owner_id}"
             if permission is None:
                 permission = old.permission
-            await self.conn.execute("UPDATE fmeta SET file_id = ?, file_size = ?, permission = ? WHERE url = ?", (file_id, file_size, permission, url))
+            await self.conn.execute(
+                """
+                UPDATE fmeta SET file_id = ?, file_size = ?, permission = ?, 
+                access_time = CURRENT_TIMESTAMP WHERE url = ?
+                """, (file_id, file_size, permission, url))
             self.logger.info(f"File {url} updated")
         else:
             if permission is None:
                 permission = FileReadPermission.PUBLIC
             await self.conn.execute("INSERT INTO fmeta (url, owner_id, file_id, file_size, permission) VALUES (?, ?, ?, ?, ?)", (url, owner_id, file_id, file_size, permission))
             self.logger.info(f"File {url} created")
+    
+    async def log_access(self, url: str):
+        await self.conn.execute("UPDATE fmeta SET access_time = CURRENT_TIMESTAMP WHERE url = ?", (url, ))
     
     async def delete_file_record(self, url: str):
         file_record = await self.get_file_record(url)
@@ -448,6 +458,10 @@ class Database:
         blob = await self.file.get_file_blob(f_id)
         if blob is None:
             raise FileNotFoundError(f"File {url} data not found")
+        
+        async with transaction(self):
+            await self.file.log_access(url)
+
         return blob
 
     async def delete_file(self, url: str) -> Optional[FileDBRecord]:

@@ -179,6 +179,10 @@ function refreshFileList(){
                     tr.appendChild(dateTd);
                 }
                 {
+                    const dateTd = document.createElement('td');
+                    tr.appendChild(dateTd);
+                }
+                {
                     const actTd = document.createElement('td');
                     const actContainer = document.createElement('div');
                     actContainer.classList.add('action-container');
@@ -223,6 +227,13 @@ function refreshFileList(){
                     const fileSize = file.file_size;
                     sizeTd.textContent = formatSize(fileSize);
                     tr.appendChild(sizeTd);
+                }
+
+                {
+                    const dateTd = document.createElement('td');
+                    const accessTime = file.access_time;
+                    dateTd.textContent = accessTime;
+                    tr.appendChild(dateTd);
                 }
 
                 {

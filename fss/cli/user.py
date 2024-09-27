@@ -1,9 +1,7 @@
 import argparse, asyncio
-from storage_service.database import Database, hash_credential
+from ..src.database import Database
 
-
-
-async def main():
+async def _main():
     parser = argparse.ArgumentParser()
     sp = parser.add_subparsers(dest='subparser_name', required=True)
     sp_add = sp.add_parser('add')
@@ -72,5 +70,8 @@ async def main():
     finally:
         await conn.close()
 
+def main():
+    asyncio.run(_main())
+
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()

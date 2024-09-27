@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "fss"
+version = "0.1.0"
+description = "A simple file storage service"
+authors = ["li, mengxun <limengxun45@outlook.com>"]
+readme = "Readme.md"
+
+[tool.poetry.dependencies]
+python = ">=3.9"
+fastapi = "0.*"
+aiosqlite = "0.*"
+mimesniff = "1.*"
+
+[tool.poetry.scripts]
+fss-serve = "fss.cli.serve:main"
+fss-user = "fss.cli.user:main"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

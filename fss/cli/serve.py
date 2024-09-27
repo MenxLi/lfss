@@ -1,10 +1,9 @@
 import argparse
 from uvicorn import Config, Server
 from uvicorn.config import LOGGING_CONFIG
-from storage_service.server import *
+from ..src.server import *
 
-if __name__ == "__main__":
-
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', type=str, default='0.0.0.0')
     parser.add_argument('--port', type=int, default=8000)
@@ -27,3 +26,6 @@ if __name__ == "__main__":
     server = Server(config=config)
     logger.info(f"Starting server at {args.host}:{args.port}, with {args.workers} workers")
     server.run()
+
+if __name__ == "__main__":
+    main()

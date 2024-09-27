@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from enum import IntEnum
 import zipfile, io
 
-import aiosqlite, asyncio
+import aiosqlite
 from asyncio import Lock
 
 from .config import DATA_HOME

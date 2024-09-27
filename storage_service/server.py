@@ -136,7 +136,9 @@ async def put_file(request: Request, path: str, user: DBUserRecord = Depends(get
 
     # https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Methods/PUT
     if exists_flag:
-        return Response(status_code=201)
+        return Response(status_code=201, headers={
+            "Content-Type": "application/json",
+        }, content=json.dumps({"url": path}))
     else:
         return Response(status_code=200)
 

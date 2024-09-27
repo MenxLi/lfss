@@ -11,6 +11,7 @@ import mimetypes
 
 import json
 from .log import get_logger
+from .config import MAX_BUNDLE_BYTES
 from .utils import ensure_uri_compnents
 from .database import Database, DBUserRecord, DECOY_USER, FileReadPermission
 
@@ -169,7 +170,6 @@ router_api = APIRouter(prefix="/_api")
 @router_api.get("/bundle")
 async def bundle_files(path: str, user: DBUserRecord = Depends(get_current_user)):
     logger.info(f"GET bundle <= {path}, user: {user.username}")
-    MAX_ZIP_BYTES = 128 * 1024 * 1024   # 128MB
     path = ensure_uri_compnents(path)
     assert path.endswith("/") or path == ""
 
@@ -183,7 +183,7 @@ async def bundle_files(path: str, user: DBUserRecord = Depends(get_current_user)
     if len(files) == 0:
         raise HTTPException(status_code=404, detail="No files found")
     total_size = sum([f.file_size for f in files])
-    if total_size > MAX_ZIP_BYTES:
+    if total_size > MAX_BUNDLE_BYTES:
         raise HTTPException(status_code=400, detail="Too large to zip")
 
     file_paths = [f.url for f in files]

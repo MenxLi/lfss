@@ -1,9 +1,11 @@
 [tool.poetry]
-name = "lss"
+name = "lfss"
 version = "0.1.0"
 description = "Lightweight file storage service"
 authors = ["li, mengxun <limengxun45@outlook.com>"]
 readme = "Readme.md"
+homepage = "https://github.com/MenxLi/lfss"
+repository = "https://github.com/MenxLi/lfss"
 
 [tool.poetry.dependencies]
 python = ">=3.9"
@@ -12,8 +14,8 @@ aiosqlite = "0.*"
 mimesniff = "1.*"
 
 [tool.poetry.scripts]
-lss-serve = "lss.cli.serve:main"
-lss-user = "lss.cli.user:main"
+lfss-serve = "lfss.cli.serve:main"
+lfss-user = "lfss.cli.user:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

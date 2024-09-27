@@ -1,4 +1,5 @@
 # Lightweight File Storage Service (LFSS)
+[![PyPI](https://img.shields.io/pypi/v/lfss)](https://pypi.org/project/lfss/)
 
 A lightweight file/object storage service!
 

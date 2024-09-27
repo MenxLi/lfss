@@ -390,12 +390,10 @@ class Database:
     user: UserConn = UserConn()
     file: FileConn = FileConn()
     logger = get_logger('database', global_instance=True)
-    _should_do_periodic_commit: bool = False
 
     async def init(self):
         await self.user.init()
         await self.file.init()
-        self._should_do_periodic_commit = False
         return self
     
     async def commit(self):
@@ -405,15 +403,7 @@ class Database:
     
     async def close(self):
         global _g_conn
-        self._should_do_periodic_commit = False
         if _g_conn: await _g_conn.close()
-    
-    async def start_periodic_commit(self, interval: int):
-        self._should_do_periodic_commit = True
-        while self._should_do_periodic_commit:
-            await asyncio.sleep(interval)
-            async with _transaction_lock:
-                await self.commit()
     
     async def rollback(self):
         global _g_conn
@@ -428,6 +418,17 @@ class Database:
         user = await get_user(self, u)
         if user is None:
             return
+        
+        # check if the user is the owner of the path, or is admin
+        if url.startswith('/'):
+            url = url[1:]
+        first_component = url.split('/')[0]
+        if first_component != user.username:
+            if not user.is_admin:
+                raise ValueError(f"Permission denied: {user.username} cannot write to {url}")
+            else:
+                if await get_user(self, first_component) is None:
+                    raise ValueError(f"Invalid path: {first_component} is not a valid username")
 
         f_id = uuid.uuid4().hex
         async with transaction(self):

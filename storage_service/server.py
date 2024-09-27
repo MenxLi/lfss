@@ -158,7 +158,7 @@ async def delete_file(path: str, user: DBUserRecord = Depends(get_current_user))
     path = ensure_uri_compnents(path)
     if user.id == 0:
         raise HTTPException(status_code=403, detail="Permission denied")
-    if not path.startswith(f"{user.username}/"):
+    if not path.startswith(f"{user.username}/") and not user.is_admin:
         raise HTTPException(status_code=403, detail="Permission denied")
     
     logger.info(f"DELETE {path}, user: {user.username}")

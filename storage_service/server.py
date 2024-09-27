@@ -52,8 +52,16 @@ async def get_file(path: str, asfile = False, user: DBUserRecord = Depends(get_c
         # return file under the path as json
         if user.id == 0:
             raise HTTPException(status_code=403, detail="Permission denied, credential required")
+        if path == "/":
+            return {
+                "dirs": await conn.file.list_root(user.username) \
+                    if not user.is_admin else await conn.file.list_root(),
+                "files": []
+            }
+
         if not path.startswith(f"{user.username}/") and not user.is_admin:
             raise HTTPException(status_code=403, detail="Permission denied, path must start with username")
+
         dirs, files = await conn.file.list_path(path, flat = False)
         return {
             "dirs": dirs,
@@ -103,7 +111,7 @@ async def put_file(request: Request, path: str, user: DBUserRecord = Depends(get
     if user.id == 0:
         logger.debug("Reject put request from DECOY_USER")
         raise HTTPException(status_code=403, detail="Permission denied")
-    if not path.startswith(f"{user.username}/"):
+    if not path.startswith(f"{user.username}/") and not user.is_admin:
         logger.debug(f"Reject put request from {user.username} to {path}")
         raise HTTPException(status_code=403, detail="Permission denied")
     

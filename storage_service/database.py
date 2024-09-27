@@ -219,6 +219,23 @@ class FileConn(DBConnBase):
             res = await cursor.fetchall()
         return [self.parse_record(r) for r in res]
 
+    async def list_root(self, *usernames: str) -> list[DirectoryRecord]:
+        """
+        Efficiently list users' directories, if usernames is empty, list all users' directories.
+        """
+        if not usernames:
+            # list all users
+            async with self.conn.execute("SELECT username FROM user") as cursor:
+                res = await cursor.fetchall()
+            dirnames = [u[0] + '/' for u in res]
+            dirs = [DirectoryRecord(u, await self.path_size(u, include_subpath=True)) for u in dirnames]
+            return dirs
+        else:
+            # list specific users
+            dirnames = [uname + '/' for uname in usernames]
+            dirs = [DirectoryRecord(u, await self.path_size(u, include_subpath=True)) for u in dirnames]
+            return dirs
+    
     @overload
     async def list_path(self, url: str, flat: Literal[True]) -> list[FileDBRecord]:...
     @overload
@@ -241,11 +258,7 @@ class FileConn(DBConnBase):
                 return [self.parse_record(r) for r in res]
 
             else:
-                # directly query all usernames is more efficient.
-                async with self.conn.execute("SELECT username FROM user") as cursor:
-                    res = await cursor.fetchall()
-                dirs = [DirectoryRecord(u[0], await self.path_size(u[0], include_subpath=True)) for u in res]
-                return (dirs, [])
+                return (await self.list_root(), [])
         
         if flat:
             async with self.conn.execute("SELECT * FROM fmeta WHERE url LIKE ?", (url + '%', )) as cursor:
@@ -270,7 +283,7 @@ class FileConn(DBConnBase):
             (url, url, url + '%')
             ) as cursor:
             res = await cursor.fetchall()
-        dirs_str = [r[0] for r in res if r[0] != '/']
+        dirs_str = [r[0] + '/' for r in res if r[0] != '/']
         dirs = [DirectoryRecord(url + d, await self.path_size(url + d, include_subpath=True)) for d in dirs_str]
             
         return (dirs, files)
@@ -408,15 +421,11 @@ class Database:
         if user is None:
             return
 
-        username = user.username
-        assert url.startswith(f"{username}/"), f"URL must start with {username}/, get: {url}"
-
         f_id = uuid.uuid4().hex
-
         async with transaction(self):
             file_size = await self.file.set_file_blob(f_id, blob)
             await self.file.set_file_record(url, owner_id=user.id, file_id=f_id, file_size=file_size)
-            await self.user.set_active(username)
+            await self.user.set_active(user.username)
 
     # async def read_file_stream(self, url: str): ...
     async def read_file(self, url: str) -> bytes:

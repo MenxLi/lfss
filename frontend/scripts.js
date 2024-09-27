@@ -1,5 +1,5 @@
 import Connector from './api.js';
-import { formatSize, decodePathURI } from './utils.js';
+import { formatSize, decodePathURI, copyToClipboard } from './utils.js';
 
 const conn = new Connector();
 
@@ -215,7 +215,7 @@ function refreshFileList(){
                     copyButton.textContent = 'Copy';
                     copyButton.href = '#';
                     copyButton.addEventListener('click', () => {
-                        navigator.clipboard.writeText(conn.config.endpoint + '/' + file.url);
+                        copyToClipboard(conn.config.endpoint + '/' + file.url);
                     });
                     actContainer.appendChild(copyButton);
 

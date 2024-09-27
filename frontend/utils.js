@@ -18,12 +18,23 @@ export function formatSize(size){
 }
 
 export function copyToClipboard(text){
-    const el = document.createElement('textarea');
-    el.value = text;
-    document.body.appendChild(el);
-    el.select();
-    document.execCommand('copy');
-    document.body.removeChild(el);
+    function secureCopy(text){
+        navigator.clipboard.writeText(text);
+    }
+    function unsecureCopy(text){
+        const el = document.createElement('textarea');
+        el.value = text;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+    }
+    if (navigator.clipboard){
+        secureCopy(text);
+    }
+    else {
+        unsecureCopy(text);
+    }
 }
 
 export function encodePathURI(path){

@@ -16,3 +16,9 @@ def decode_uri_compnents(path: str):
     path_sp = path.split("/")
     mapped = map(lambda x: urllib.parse.unquote(x), path_sp)
     return "/".join(mapped)
+
+def ensure_uri_compnents(path: str):
+    """
+    Ensure the path components are safe to use
+    """
+    return encode_uri_compnents(decode_uri_compnents(path))

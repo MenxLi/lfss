@@ -11,7 +11,7 @@ import mimetypes
 
 import json
 from .log import get_logger
-from .utils import encode_uri_compnents
+from .utils import ensure_uri_compnents
 from .database import Database, DBUserRecord, DECOY_USER, FileReadPermission
 
 logger = get_logger("server")
@@ -45,7 +45,7 @@ router_fs = APIRouter(prefix="")
 
 @router_fs.get("/{path:path}")
 async def get_file(path: str, asfile = False, user: DBUserRecord = Depends(get_current_user)):
-    path = encode_uri_compnents(path)
+    path = ensure_uri_compnents(path)
     if path == "": path = "/"
     if path.endswith("/"):
         # return file under the path as json
@@ -98,7 +98,7 @@ async def get_file(path: str, asfile = False, user: DBUserRecord = Depends(get_c
 
 @router_fs.put("/{path:path}")
 async def put_file(request: Request, path: str, user: DBUserRecord = Depends(get_current_user)):
-    path = encode_uri_compnents(path)
+    path = ensure_uri_compnents(path)
     if user.id == 0:
         logger.debug("Reject put request from DECOY_USER")
         raise HTTPException(status_code=403, detail="Permission denied")
@@ -142,7 +142,7 @@ async def put_file(request: Request, path: str, user: DBUserRecord = Depends(get
 
 @router_fs.delete("/{path:path}")
 async def delete_file(path: str, user: DBUserRecord = Depends(get_current_user)):
-    path = encode_uri_compnents(path)
+    path = ensure_uri_compnents(path)
     if user.id == 0:
         raise HTTPException(status_code=403, detail="Permission denied")
     if not path.startswith(f"{user.username}/"):
@@ -166,7 +166,7 @@ router_api = APIRouter(prefix="/_api")
 async def bundle_files(path: str, user: DBUserRecord = Depends(get_current_user)):
     logger.info(f"GET bundle <= {path}, user: {user.username}")
     MAX_ZIP_BYTES = 128 * 1024 * 1024   # 128MB
-    path = encode_uri_compnents(path)
+    path = ensure_uri_compnents(path)
     assert path.endswith("/") or path == ""
 
     if not path == "" and path[0] == "/":   # adapt to both /path and path

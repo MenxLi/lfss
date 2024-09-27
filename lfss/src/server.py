@@ -47,6 +47,8 @@ router_fs = APIRouter(prefix="")
 @router_fs.get("/{path:path}")
 async def get_file(path: str, asfile = False, user: DBUserRecord = Depends(get_current_user)):
     path = ensure_uri_compnents(path)
+
+    # handle directory query
     if path == "": path = "/"
     if path.endswith("/"):
         # return file under the path as json
@@ -67,23 +69,35 @@ async def get_file(path: str, asfile = False, user: DBUserRecord = Depends(get_c
             "dirs": dirs,
             "files": files
         }
-
+    
     file_record = await conn.file.get_file_record(path)
     if not file_record:
         raise HTTPException(status_code=404, detail="File not found")
-    
+
     # permission check
-    perm = file_record.permission
-    if perm == FileReadPermission.PRIVATE:
-        if not user.is_admin and user.id != file_record.owner_id:
-            raise HTTPException(status_code=403, detail="Permission denied")
+    if not (user.is_admin):
+        # check permission
+        if file_record.permission == FileReadPermission.PRIVATE:
+            if user.id != file_record.owner_id:
+                raise HTTPException(status_code=403, detail="Permission denied, private file")
+        elif file_record.permission == FileReadPermission.PROTECTED:
+            if user.id == 0:
+                raise HTTPException(status_code=403, detail="Permission denied, protected file")
+        elif file_record.permission == FileReadPermission.UNSET:
+            # use owner's permission as fallback
+            owner = await conn.user.get_user_by_id(file_record.owner_id)
+            if owner is None:
+                raise HTTPException(status_code=500, detail="Internal error, owner not found")
+            if owner.permission == FileReadPermission.PRIVATE:
+                if user.id != owner.id:
+                    raise HTTPException(status_code=403, detail="Permission denied, private user")
+            elif owner.permission == FileReadPermission.PROTECTED:
+                if user.id == 0:
+                    raise HTTPException(status_code=403, detail="Permission denied, protected user")
+            else:
+                assert owner.permission == FileReadPermission.PUBLIC or owner.permission == FileReadPermission.UNSET
         else:
-            assert path.startswith(f"{user.username}/")
-    elif perm == FileReadPermission.PROTECTED:
-        if user.id == 0:
-            raise HTTPException(status_code=403, detail="Permission denied")
-    else:
-        assert perm == FileReadPermission.PUBLIC
+            assert file_record.permission == FileReadPermission.PUBLIC
     
     fname = path.split("/")[-1]
     async def send(media_type: Optional[str] = None, disposition = "attachment"):

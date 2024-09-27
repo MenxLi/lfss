@@ -40,6 +40,12 @@ class DBConnBase(ABC):
     async def commit(self):
         await self.conn.commit()
 
+class FileReadPermission(IntEnum):
+    UNSET = 0           # not set
+    PUBLIC = 1          # accessible by anyone
+    PROTECTED = 2       # accessible by any user
+    PRIVATE = 3         # accessible by owner only (including admin)
+
 @dataclasses.dataclass
 class DBUserRecord:
     id: int
@@ -48,11 +54,13 @@ class DBUserRecord:
     is_admin: bool
     create_time: str
     last_active: str
+    max_storage: int
+    permission: 'FileReadPermission'
 
     def __str__(self):
-        return f"User {self.username} (id={self.id}, admin={self.is_admin}, created at {self.create_time}, last active at {self.last_active})"
+        return f"User {self.username} (id={self.id}, admin={self.is_admin}, created at {self.create_time}, last active at {self.last_active}), storage={self.max_storage}, permission={self.permission}"
 
-DECOY_USER = DBUserRecord(0, 'decoy', 'decoy', False, '2021-01-01 00:00:00', '2021-01-01 00:00:00')
+DECOY_USER = DBUserRecord(0, 'decoy', 'decoy', False, '2021-01-01 00:00:00', '2021-01-01 00:00:00', 0, FileReadPermission.PRIVATE)
 class UserConn(DBConnBase):
 
     @staticmethod
@@ -61,6 +69,7 @@ class UserConn(DBConnBase):
 
     async def init(self):
         await super().init()
+        # default to 1GB (1024x1024x1024 bytes)
         await self.conn.execute('''
         CREATE TABLE IF NOT EXISTS user (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,9 +77,18 @@ class UserConn(DBConnBase):
             credential VARCHAR(255) NOT NULL,
             is_admin BOOLEAN DEFAULT FALSE,
             create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
-            last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
+            max_storage INTEGER DEFAULT 1073741824,
+            permission INTEGER DEFAULT 0
         )
         ''')
+        await self.conn.execute('''
+        CREATE INDEX IF NOT EXISTS idx_user_username ON user(username)
+        ''')
+        await self.conn.execute('''
+        CREATE INDEX IF NOT EXISTS idx_user_credential ON user(credential)
+        ''')
+
         return self
     
     async def get_user(self, username: str) -> Optional[DBUserRecord]:
@@ -94,37 +112,43 @@ class UserConn(DBConnBase):
         if res is None: return None
         return self.parse_record(res)
     
-    async def create_user(self, username: str, password: str, is_admin: bool = False) -> int:
+    async def create_user(
+        self, username: str, password: str, is_admin: bool = False, 
+        max_storage: int = 1073741824, permission: FileReadPermission = FileReadPermission.UNSET
+        ) -> int:
         assert not username.startswith('_'), "Error: reserved username"
         assert not ('/' in username or len(username) > 255), "Invalid username"
         assert urllib.parse.quote(username) == username, "Invalid username, must be URL safe"
         self.logger.debug(f"Creating user {username}")
         credential = hash_credential(username, password)
         assert await self.get_user(username) is None, "Duplicate username"
-        async with self.conn.execute("INSERT INTO user (username, credential, is_admin) VALUES (?, ?, ?)", (username, credential, is_admin)) as cursor:
+        async with self.conn.execute("INSERT INTO user (username, credential, is_admin, max_storage, permission) VALUES (?, ?, ?, ?, ?)", (username, credential, is_admin, max_storage, permission)) as cursor:
             self.logger.info(f"User {username} created")
             assert cursor.lastrowid is not None
             return cursor.lastrowid
     
-    async def set_user(self, username: str, password: Optional[str] = None, is_admin: Optional[bool] = None):
+    async def update_user(
+        self, username: str, password: Optional[str] = None, is_admin: Optional[bool] = None, 
+        max_storage: Optional[int] = None, permission: Optional[FileReadPermission] = None
+        ):
         assert not username.startswith('_'), "Error: reserved username"
         assert not ('/' in username or len(username) > 255), "Invalid username"
         assert urllib.parse.quote(username) == username, "Invalid username, must be URL safe"
+
+        current_record = await self.get_user(username)
+        if current_record is None:
+            raise ValueError(f"User {username} not found")
+
         if password is not None:
             credential = hash_credential(username, password)
         else:
-            async with self.conn.execute("SELECT credential FROM user WHERE username = ?", (username, )) as cursor:
-                res = await cursor.fetchone()
-                assert res is not None, f"User {username} not found"
-                credential = res[0]
+            credential = current_record.credential
         
-        if is_admin is None:
-            async with self.conn.execute("SELECT is_admin FROM user WHERE username = ?", (username, )) as cursor:
-                res = await cursor.fetchone()
-                assert res is not None, f"User {username} not found"
-                is_admin = res[0]
-
-        await self.conn.execute("UPDATE user SET credential = ?, is_admin = ? WHERE username = ?", (credential, is_admin, username))
+        if is_admin is None: is_admin = current_record.is_admin
+        if max_storage is None: max_storage = current_record.max_storage
+        if permission is None: permission = current_record.permission
+        
+        await self.conn.execute("UPDATE user SET credential = ?, is_admin = ?, max_storage = ?, permission = ? WHERE username = ?", (credential, is_admin, max_storage, permission, username))
         self.logger.info(f"User {username} updated")
     
     async def all(self):
@@ -138,11 +162,6 @@ class UserConn(DBConnBase):
     async def delete_user(self, username: str):
         await self.conn.execute("DELETE FROM user WHERE username = ?", (username, ))
         self.logger.info(f"Delete user {username}")
-
-class FileReadPermission(IntEnum):
-    PUBLIC = 0          # accessible by anyone
-    PROTECTED = 1       # accessible by any user
-    PRIVATE = 2         # accessible by owner only (including admin)
 
 @dataclasses.dataclass
 class FileDBRecord:
@@ -319,7 +338,7 @@ class FileConn(DBConnBase):
             self.logger.info(f"File {url} updated")
         else:
             if permission is None:
-                permission = FileReadPermission.PUBLIC
+                permission = FileReadPermission.UNSET
             await self.conn.execute("INSERT INTO fmeta (url, owner_id, file_id, file_size, permission) VALUES (?, ?, ?, ?, ?)", (url, owner_id, file_id, file_size, permission))
             self.logger.info(f"File {url} created")
     

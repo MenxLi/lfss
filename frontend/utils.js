@@ -45,6 +45,10 @@ export function decodePathURI(path){
     return path.split('/').map(decodeURIComponent).join('/');
 }
 
+export function ensurePathURI(path){
+    return encodePathURI(decodePathURI(path));
+}
+
 export function getRandomString(n, additionalCharset='0123456789_-(=)[]{}'){
     let result = '';
     let charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -67,4 +71,13 @@ export function cvtGMT2Local(dateStr){
     const gmtdate = new Date(dateStr);
     const localdate = new Date(gmtdate.getTime() + gmtdate.getTimezoneOffset() * 60000);
     return localdate.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+export function debounce(fn,wait){
+    let timeout;
+    return function(...args){
+        const context = this;
+        if (timeout) clearTimeout(timeout);
+        timeout = setTimeout(() => fn.apply(context, args), wait);
+    }
 }

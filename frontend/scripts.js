@@ -1,5 +1,5 @@
 import Connector from './api.js';
-import { formatSize, decodePathURI, copyToClipboard, getRandomString, cvtGMT2Local } from './utils.js';
+import { formatSize, decodePathURI, ensurePathURI, copyToClipboard, getRandomString, cvtGMT2Local, debounce } from './utils.js';
 
 const conn = new Connector();
 
@@ -67,6 +67,25 @@ pathBackButton.addEventListener('click', () => {
     }
     onPathChange();
 });
+
+function onFileNameInpuChange(){
+    const fileName = uploadFileNameInput.value;
+    if (fileName.length === 0){
+        uploadFileNameInput.classList.remove('duplicate');
+        uploadButton.disabled = true;
+    }
+    else {
+        uploadButton.disabled = false;
+        const p = ensurePathURI(pathInput.value + fileName);
+        conn.getMetadata(p).then(
+            (data) => {
+                if (data === null) uploadFileNameInput.classList.remove('duplicate');
+                else uploadFileNameInput.classList.add('duplicate');
+            }
+        );
+    }
+}
+
 randomizeFnameButton.addEventListener('click', () => {
     let currentName = uploadFileNameInput.value;
     let newName = getRandomString(24);
@@ -79,9 +98,11 @@ randomizeFnameButton.addEventListener('click', () => {
         newName += '.' + ext;
     }
     uploadFileNameInput.value = newName;
+    onFileNameInpuChange();
 });
 uploadFileSelector.addEventListener('change', () => {
     uploadFileNameInput.value = uploadFileSelector.files[0].name;
+    onFileNameInpuChange();
 });
 uploadButton.addEventListener('click', () => {
     const file = uploadFileSelector.files[0];
@@ -98,6 +119,7 @@ uploadButton.addEventListener('click', () => {
         .then(() => {
             refreshFileList();
             uploadFileNameInput.value = '';
+            onFileNameInpuChange();
         }
     );
 });
@@ -107,6 +129,7 @@ uploadFileNameInput.addEventListener('keydown', (e) => {
         uploadButton.click();
     }
 });
+uploadFileNameInput.addEventListener('input', debounce(onFileNameInpuChange, 500));
 
 {
     window.addEventListener('dragover', (e) => {

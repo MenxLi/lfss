@@ -183,6 +183,9 @@ label#upload-file-prefix{
     width: 800px;
     text-align: right;
 }
+input#file-name.duplicate{
+    background-color: #ff001511
+}
 
 .action-container{
     display: flex;

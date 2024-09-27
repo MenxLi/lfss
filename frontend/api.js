@@ -22,7 +22,6 @@
  * 
  */
 
-
 export default class Connector {
 
     constructor(){
@@ -87,6 +86,24 @@ export default class Connector {
         });
         if (res.status == 200) return;
         throw new Error(`Failed to delete file, status code: ${res.status}, message: ${await res.json()}`);
+    }
+
+    /**
+     * @param {string} path - the path to the file
+     * @returns {Promise<FileRecord | null>} - the promise of the request
+     */
+    async getMetadata(path){
+        if (path.startsWith('/')){ path = path.slice(1); }
+        const res = await fetch(this.config.endpoint + '/_api/fmeta?path=' + path, {
+            method: 'GET',
+            headers: {
+                'Authorization': 'Bearer ' + this.config.token
+            },
+        });
+        if (res.status == 404){
+            return null;
+        }
+        return await res.json();
     }
 
     /**

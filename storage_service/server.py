@@ -177,7 +177,7 @@ router_api = APIRouter(prefix="/_api")
 
 @router_api.get("/bundle")
 async def bundle_files(path: str, user: DBUserRecord = Depends(get_current_user)):
-    logger.info(f"GET bundle <= {path}, user: {user.username}")
+    logger.info(f"GET bundle({path}), user: {user.username}")
     path = ensure_uri_compnents(path)
     assert path.endswith("/") or path == ""
 
@@ -202,6 +202,17 @@ async def bundle_files(path: str, user: DBUserRecord = Depends(get_current_user)
             "Content-Length": str(zip_buffer.getbuffer().nbytes)
         }
     )
+
+@router_api.get("/fmeta")
+async def get_file_meta(path: str, user: DBUserRecord = Depends(get_current_user)):
+    logger.info(f"GET meta({path}), user: {user.username}")
+    if path.endswith("/"):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    path = ensure_uri_compnents(path)
+    file_record = await conn.file.get_file_record(path)
+    if not file_record:
+        raise HTTPException(status_code=404, detail="File not found")
+    return file_record
 
 # order matters
 app.include_router(router_api)

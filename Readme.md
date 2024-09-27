@@ -4,8 +4,9 @@ A simple file/object storage service!
 
 usage:
 ```sh
-python -m cli.user add <username> <password>
-python -m cli.serve
+pip install .
+fss-user add <username> <password>
+fss-serve
 ```
 
 By default, the data will be stored in the `.storage_data` directory.  

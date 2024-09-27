@@ -5,11 +5,11 @@ from abc import ABC, abstractmethod
 import urllib.parse
 import dataclasses, hashlib, uuid
 from contextlib import asynccontextmanager
-from threading import Lock
 from enum import IntEnum
 import zipfile, io
 
-import aiosqlite
+import aiosqlite, asyncio
+from asyncio import Lock
 
 from .config import DATA_HOME
 from .log import get_logger
@@ -377,7 +377,7 @@ _transaction_lock = Lock()
 @asynccontextmanager
 async def transaction(db: "Database"):
     try:
-        _transaction_lock.acquire()
+        await _transaction_lock.acquire()
         yield
         await db.commit()
     except Exception as e:
@@ -386,15 +386,16 @@ async def transaction(db: "Database"):
     finally:
         _transaction_lock.release()
 
-@dataclasses.dataclass(frozen=True)
 class Database:
     user: UserConn = UserConn()
     file: FileConn = FileConn()
     logger = get_logger('database', global_instance=True)
+    _should_do_periodic_commit: bool = False
 
     async def init(self):
         await self.user.init()
         await self.file.init()
+        self._should_do_periodic_commit = False
         return self
     
     async def commit(self):
@@ -404,8 +405,15 @@ class Database:
     
     async def close(self):
         global _g_conn
-        if _g_conn is not None:
-            await _g_conn.close()
+        self._should_do_periodic_commit = False
+        if _g_conn: await _g_conn.close()
+    
+    async def start_periodic_commit(self, interval: int):
+        self._should_do_periodic_commit = True
+        while self._should_do_periodic_commit:
+            await asyncio.sleep(interval)
+            async with _transaction_lock:
+                await self.commit()
     
     async def rollback(self):
         global _g_conn

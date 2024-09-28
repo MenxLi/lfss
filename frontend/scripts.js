@@ -85,8 +85,10 @@ function onFileNameInpuChange(){
         const p = ensurePathURI(pathInput.value + fileName);
         conn.getMetadata(p).then(
             (data) => {
-                if (data === null) uploadFileNameInput.classList.remove('duplicate');
-                else uploadFileNameInput.classList.add('duplicate');
+                console.log("Got file meta", data);
+                if (data===null) uploadFileNameInput.classList.remove('duplicate');
+                else if (data.url) uploadFileNameInput.classList.add('duplicate');
+                else throw new Error('Invalid response');
             }
         );
     }

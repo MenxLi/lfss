@@ -322,13 +322,13 @@ function refreshFileList(){
 
                     const viewButton = document.createElement('a');
                     viewButton.textContent = 'View';
-                    viewButton.href = conn.config.endpoint + '/' + file.url;
+                    viewButton.href = conn.config.endpoint + '/' + file.url + '?token=' + conn.config.token;
                     viewButton.target = '_blank';
                     actContainer.appendChild(viewButton);
 
                     const downloadBtn = document.createElement('a');
                     downloadBtn.textContent = 'Download';
-                    downloadBtn.href = conn.config.endpoint + '/' + file.url + '?asfile=true';
+                    downloadBtn.href = conn.config.endpoint + '/' + file.url + '?asfile=true&token=' + conn.config.token;
                     actContainer.appendChild(downloadBtn);
 
                     const deleteButton = document.createElement('a');

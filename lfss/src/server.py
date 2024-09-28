@@ -12,8 +12,8 @@ from contextlib import asynccontextmanager
 
 from .log import get_logger
 from .config import MAX_BUNDLE_BYTES
-from .utils import ensure_uri_compnents, check_user_permission
-from .database import Database, DBUserRecord, DECOY_USER, FileReadPermission
+from .utils import ensure_uri_compnents
+from .database import Database, DBUserRecord, DECOY_USER, FileDBRecord, check_user_permission
 
 logger = get_logger("server")
 conn = Database()
@@ -193,12 +193,24 @@ async def bundle_files(path: str, user: DBUserRecord = Depends(get_current_user)
     if not path == "" and path[0] == "/":   # adapt to both /path and path
         path = path[1:]
     
-    # TODO: maybe check permission here...
-
-    # return bundle of files
+    owner_records_cache = {}     # cache owner records, ID -> UserRecord
+    async def is_access_granted(file_record: FileDBRecord):
+        owner_id = file_record.owner_id
+        owner = owner_records_cache.get(owner_id, None)
+        if owner is None:
+            owner = await conn.user.get_user_by_id(owner_id)
+            assert owner is not None, f"File owner not found: id={owner_id}"
+            owner_records_cache[owner_id] = owner
+            
+        allow_access, _ = check_user_permission(user, owner, file_record)
+        return allow_access
+    
     files = await conn.file.list_path(path, flat = True)
+    files = [f for f in files if await is_access_granted(f)]
     if len(files) == 0:
         raise HTTPException(status_code=404, detail="No files found")
+
+    # return bundle of files
     total_size = sum([f.file_size for f in files])
     if total_size > MAX_BUNDLE_BYTES:
         raise HTTPException(status_code=400, detail="Too large to zip")

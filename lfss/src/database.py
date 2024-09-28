@@ -540,3 +540,31 @@ class Database:
 
         buffer.seek(0)
         return buffer
+
+def check_user_permission(user: DBUserRecord, owner: DBUserRecord, file: FileDBRecord) -> tuple[bool, str]:
+    if user.is_admin:
+        return True, ""
+    
+    # check permission of the file
+    if file.permission == FileReadPermission.PRIVATE:
+        if user.id != owner.id:
+            return False, "Permission denied, private file"
+    elif file.permission == FileReadPermission.PROTECTED:
+        if user.id == 0:
+            return False, "Permission denied, protected file"
+    elif file.permission == FileReadPermission.PUBLIC:
+        return True, ""
+    else:
+        assert file.permission == FileReadPermission.UNSET
+
+    # use owner's permission as fallback
+    if owner.permission == FileReadPermission.PRIVATE:
+        if user.id != owner.id:
+            return False, "Permission denied, private user file"
+    elif owner.permission == FileReadPermission.PROTECTED:
+        if user.id == 0:
+            return False, "Permission denied, protected user file"
+    else:
+        assert owner.permission == FileReadPermission.PUBLIC or owner.permission == FileReadPermission.UNSET
+
+    return True, ""

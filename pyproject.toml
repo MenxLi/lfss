@@ -6,6 +6,7 @@ authors = ["li, mengxun <limengxun45@outlook.com>"]
 readme = "Readme.md"
 homepage = "https://github.com/MenxLi/lfss"
 repository = "https://github.com/MenxLi/lfss"
+include = ["Readme.md", "docs/*", "frontend/*"]
 
 [tool.poetry.dependencies]
 python = ">=3.9"
@@ -16,6 +17,7 @@ mimesniff = "1.*"
 [tool.poetry.scripts]
 lfss-serve = "lfss.cli.serve:main"
 lfss-user = "lfss.cli.user:main"
+lfss-panel = "lfss.cli.panel:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

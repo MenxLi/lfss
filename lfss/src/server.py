@@ -1,4 +1,5 @@
 from typing import Optional
+from functools import wraps
 
 from fastapi import FastAPI, APIRouter, Depends, Request, Response
 from fastapi.exceptions import HTTPException 
@@ -10,6 +11,7 @@ import json
 import mimetypes
 from contextlib import asynccontextmanager
 
+from .error import *
 from .log import get_logger
 from .config import MAX_BUNDLE_BYTES
 from .utils import ensure_uri_compnents
@@ -25,6 +27,19 @@ async def lifespan(app: FastAPI):
     yield
     await conn.commit()
     await conn.close()
+
+def handle_exception(fn):
+    @wraps(fn)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await fn(*args, **kwargs)
+        except Exception as e:
+            logger.error(f"Error in {fn.__name__}: {e}")
+            if isinstance(e, HTTPException): raise e
+            elif isinstance(e, StorageExceededError): raise HTTPException(status_code=413, detail=str(e))
+            elif isinstance(e, PermissionDeniedError): raise HTTPException(status_code=403, detail=str(e))
+            else: raise HTTPException(status_code=500, detail=str(e))
+    return wrapper
 
 async def get_credential_from_params(request: Request):
     return request.query_params.get("token")
@@ -138,20 +153,20 @@ async def put_file(request: Request, path: str, user: DBUserRecord = Depends(get
     logger.debug(f"Content-Type: {content_type}")
     if content_type == "application/json":
         body = await request.json()
-        await conn.save_file(user.id, path, json.dumps(body).encode('utf-8'))
+        await handle_exception(conn.save_file)(user.id, path, json.dumps(body).encode('utf-8'))
     elif content_type == "application/x-www-form-urlencoded":
         # may not work...
         body = await request.form()
         file = body.get("file")
         if isinstance(file, str) or file is None:
             raise HTTPException(status_code=400, detail="Invalid form data, file required")
-        await conn.save_file(user.id, path, await file.read())
+        await handle_exception(conn.save_file)(user.id, path, await file.read())
     elif content_type == "application/octet-stream":
         body = await request.body()
-        await conn.save_file(user.id, path, body)
+        await handle_exception(conn.save_file)(user.id, path, body)
     else:
         body = await request.body()
-        await conn.save_file(user.id, path, body)
+        await handle_exception(conn.save_file)(user.id, path, body)
 
     # https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Methods/PUT
     if exists_flag:

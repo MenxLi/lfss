@@ -14,6 +14,7 @@ from asyncio import Lock
 from .config import DATA_HOME
 from .log import get_logger
 from .utils import decode_uri_compnents
+from .error import *
 
 _g_conn: Optional[aiosqlite.Connection] = None
 
@@ -419,9 +420,8 @@ class FileConn(DBConnBase):
         await self.conn.execute("DELETE FROM fmeta WHERE url LIKE ?", (path + '%', ))
         self.logger.info(f"Deleted {len(all_f_rec)} files for path {path}") # type: ignore
     
-    async def set_file_blob(self, file_id: str, blob: bytes) -> int:
+    async def set_file_blob(self, file_id: str, blob: bytes):
         await self.conn.execute("INSERT OR REPLACE INTO fdata (file_id, data) VALUES (?, ?)", (file_id, blob))
-        return len(blob)
     
     async def get_file_blob(self, file_id: str) -> Optional[bytes]:
         async with self.conn.execute("SELECT data FROM fdata WHERE file_id = ?", (file_id, )) as cursor:
@@ -510,14 +510,20 @@ class Database:
         first_component = url.split('/')[0]
         if first_component != user.username:
             if not user.is_admin:
-                raise ValueError(f"Permission denied: {user.username} cannot write to {url}")
+                raise PermissionDeniedError(f"Permission denied: {user.username} cannot write to {url}")
             else:
                 if await get_user(self, first_component) is None:
-                    raise ValueError(f"Invalid path: {first_component} is not a valid username")
+                    raise PermissionDeniedError(f"Invalid path: {first_component} is not a valid username")
+        
+        # check if fize_size is within limit
+        file_size = len(blob)
+        user_size_used = await self.file.user_size(user.id)
+        if user_size_used + file_size > user.max_storage:
+            raise StorageExceededError(f"Unable to save file, user {user.username} has storage limit of {user.max_storage}, used {user_size_used}, requested {file_size}")
 
         f_id = uuid.uuid4().hex
         async with transaction(self):
-            file_size = await self.file.set_file_blob(f_id, blob)
+            await self.file.set_file_blob(f_id, blob)
             await self.file.set_file_record(url, owner_id=user.id, file_id=f_id, file_size=file_size)
             await self.user.set_active(user.username)
 

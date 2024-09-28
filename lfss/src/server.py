@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 
 from .log import get_logger
 from .config import MAX_BUNDLE_BYTES
-from .utils import ensure_uri_compnents
+from .utils import ensure_uri_compnents, check_user_permission
 from .database import Database, DBUserRecord, DECOY_USER, FileReadPermission
 
 logger = get_logger("server")
@@ -25,10 +25,24 @@ async def lifespan(app: FastAPI):
     yield
     await conn.close()
 
-async def get_current_user(token: HTTPAuthorizationCredentials = Depends(HTTPBearer(auto_error=False))):
-    if not token:
-        return DECOY_USER
-    user = await conn.user.get_user_by_credential(token.credentials)
+async def get_credential_from_params(request: Request):
+    return request.query_params.get("token")
+async def get_current_user(
+    token: HTTPAuthorizationCredentials = Depends(HTTPBearer(auto_error=False)), 
+    q_token: Optional[str] = Depends(get_credential_from_params)
+    ):
+    """
+    First try to get the user from the bearer token, 
+    if not found, try to get the user from the query parameter
+    """
+    if token:
+        user = await conn.user.get_user_by_credential(token.credentials)
+    else:
+        if not q_token:
+            return DECOY_USER
+        else:
+            user = await conn.user.get_user_by_credential(q_token)
+
     if not user:
         raise HTTPException(status_code=401, detail="Invalid token")
     return user
@@ -74,30 +88,11 @@ async def get_file(path: str, asfile = False, user: DBUserRecord = Depends(get_c
     if not file_record:
         raise HTTPException(status_code=404, detail="File not found")
 
-    # permission check
-    if not (user.is_admin):
-        # check permission
-        if file_record.permission == FileReadPermission.PRIVATE:
-            if user.id != file_record.owner_id:
-                raise HTTPException(status_code=403, detail="Permission denied, private file")
-        elif file_record.permission == FileReadPermission.PROTECTED:
-            if user.id == 0:
-                raise HTTPException(status_code=403, detail="Permission denied, protected file")
-        elif file_record.permission == FileReadPermission.UNSET:
-            # use owner's permission as fallback
-            owner = await conn.user.get_user_by_id(file_record.owner_id)
-            if owner is None:
-                raise HTTPException(status_code=500, detail="Internal error, owner not found")
-            if owner.permission == FileReadPermission.PRIVATE:
-                if user.id != owner.id:
-                    raise HTTPException(status_code=403, detail="Permission denied, private user")
-            elif owner.permission == FileReadPermission.PROTECTED:
-                if user.id == 0:
-                    raise HTTPException(status_code=403, detail="Permission denied, protected user")
-            else:
-                assert owner.permission == FileReadPermission.PUBLIC or owner.permission == FileReadPermission.UNSET
-        else:
-            assert file_record.permission == FileReadPermission.PUBLIC
+    owner = await conn.user.get_user_by_id(file_record.owner_id)
+    assert owner is not None, "Owner not found"
+    allow_access, reason = check_user_permission(user, owner, file_record)
+    if not allow_access:
+        raise HTTPException(status_code=403, detail=reason)
     
     fname = path.split("/")[-1]
     async def send(media_type: Optional[str] = None, disposition = "attachment"):

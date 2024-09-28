@@ -149,7 +149,10 @@ class UserConn(DBConnBase):
         if max_storage is None: max_storage = current_record.max_storage
         if permission is None: permission = current_record.permission
         
-        await self.conn.execute("UPDATE user SET credential = ?, is_admin = ?, max_storage = ?, permission = ? WHERE username = ?", (credential, is_admin, max_storage, permission, username))
+        await self.conn.execute(
+            "UPDATE user SET credential = ?, is_admin = ?, max_storage = ?, permission = ? WHERE username = ?", 
+            (credential, is_admin, max_storage, int(permission), username)
+            )
         self.logger.info(f"User {username} updated")
     
     async def all(self):
@@ -374,15 +377,18 @@ class FileConn(DBConnBase):
             if permission is None: permission = old.permission
             await self.conn.execute(
                 """
-                UPDATE fmeta SET owner_id = ?, file_id = ?, file_size = ?, permission = ?, 
+                UPDATE fmeta SET owner_id = ?, permission = ?, 
                 access_time = CURRENT_TIMESTAMP WHERE url = ?
-                """, (owner_id, file_id, file_size, permission, url))
+                """, (owner_id, int(permission), url))
             self.logger.info(f"File {url} updated")
         else:
             if permission is None:
                 permission = FileReadPermission.UNSET
             assert owner_id is not None and file_id is not None and file_size is not None, "Missing required fields"
-            await self.conn.execute("INSERT INTO fmeta (url, owner_id, file_id, file_size, permission) VALUES (?, ?, ?, ?, ?)", (url, owner_id, file_id, file_size, permission))
+            await self.conn.execute(
+                "INSERT INTO fmeta (url, owner_id, file_id, file_size, permission) VALUES (?, ?, ?, ?, ?)", 
+                (url, owner_id, file_id, file_size, int(permission))
+                )
             await self.user_size_inc(owner_id, file_size)
             self.logger.info(f"File {url} created")
     

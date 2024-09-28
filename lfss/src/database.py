@@ -215,6 +215,25 @@ class FileConn(DBConnBase):
         )
         ''')
 
+        # user file size table
+        await self.conn.execute('''
+        CREATE TABLE IF NOT EXISTS usize (
+            user_id INTEGER PRIMARY KEY,
+            size INTEGER DEFAULT 0
+        )
+        ''')
+        # backward compatibility, since 0.2.1
+        async with self.conn.execute("SELECT * FROM user") as cursor:
+            res = await cursor.fetchall()
+        for r in res:
+            async with self.conn.execute("SELECT user_id FROM usize WHERE user_id = ?", (r[0], )) as cursor:
+                size = await cursor.fetchone()
+            if size is None:
+                async with self.conn.execute("SELECT SUM(file_size) FROM fmeta WHERE owner_id = ?", (r[0], )) as cursor:
+                    size = await cursor.fetchone()
+                if size is not None and size[0] is not None:
+                    await self.user_size_inc(r[0], size[0])
+
         return self
     
     async def get_file_record(self, url: str) -> Optional[FileDBRecord]:
@@ -310,6 +329,19 @@ class FileConn(DBConnBase):
             
         return (dirs, files)
     
+    async def user_size(self, user_id: int) -> int:
+        async with self.conn.execute("SELECT size FROM usize WHERE user_id = ?", (user_id, )) as cursor:
+            res = await cursor.fetchone()
+        if res is None:
+            return -1
+        return res[0]
+    async def user_size_inc(self, user_id: int, inc: int):
+        self.logger.debug(f"Increasing user {user_id} size by {inc}")
+        await self.conn.execute("INSERT OR REPLACE INTO usize (user_id, size) VALUES (?, COALESCE((SELECT size FROM usize WHERE user_id = ?), 0) + ?)", (user_id, user_id, inc))
+    async def user_size_dec(self, user_id: int, dec: int):
+        self.logger.debug(f"Decreasing user {user_id} size by {dec}")
+        await self.conn.execute("INSERT OR REPLACE INTO usize (user_id, size) VALUES (?, COALESCE((SELECT size FROM usize WHERE user_id = ?), 0) - ?)", (user_id, user_id, dec))
+    
     async def path_size(self, url: str, include_subpath = False) -> int:
         if not url.endswith('/'):
             url += '/'
@@ -333,9 +365,11 @@ class FileConn(DBConnBase):
 
         old = await self.get_file_record(url)
         if old is not None:
+            # should delete the old blob if file_id is changed
+            assert file_id is None, "Cannot update file id"
+            assert file_size is None, "Cannot update file size"
+
             if owner_id is None: owner_id = old.owner_id
-            if file_id is None: file_id = old.file_id
-            if file_size is None: file_size = old.file_size
             if permission is None: permission = old.permission
             await self.conn.execute(
                 """
@@ -348,6 +382,7 @@ class FileConn(DBConnBase):
                 permission = FileReadPermission.UNSET
             assert owner_id is not None and file_id is not None and file_size is not None, "Missing required fields"
             await self.conn.execute("INSERT INTO fmeta (url, owner_id, file_id, file_size, permission) VALUES (?, ?, ?, ?, ?)", (url, owner_id, file_id, file_size, permission))
+            await self.user_size_inc(owner_id, file_size)
             self.logger.info(f"File {url} created")
     
     async def log_access(self, url: str):
@@ -357,20 +392,32 @@ class FileConn(DBConnBase):
         file_record = await self.get_file_record(url)
         if file_record is None: return
         await self.conn.execute("DELETE FROM fmeta WHERE url = ?", (url, ))
+        await self.user_size_dec(file_record.owner_id, file_record.file_size)
         self.logger.info(f"Deleted fmeta {url}")
     
     async def delete_user_file_records(self, owner_id: int):
         async with self.conn.execute("SELECT * FROM fmeta WHERE owner_id = ?", (owner_id, )) as cursor:
             res = await cursor.fetchall()
         await self.conn.execute("DELETE FROM fmeta WHERE owner_id = ?", (owner_id, ))
+        await self.conn.execute("DELETE FROM usize WHERE user_id = ?", (owner_id, ))
         self.logger.info(f"Deleted {len(res)} files for user {owner_id}") # type: ignore
     
     async def delete_path_records(self, path: str):
         """Delete all records with url starting with path"""
         async with self.conn.execute("SELECT * FROM fmeta WHERE url LIKE ?", (path + '%', )) as cursor:
+            all_f_rec = await cursor.fetchall()
+        
+        # update user size
+        async with self.conn.execute("SELECT DISTINCT owner_id FROM fmeta WHERE url LIKE ?", (path + '%', )) as cursor:
             res = await cursor.fetchall()
+            for r in res:
+                async with self.conn.execute("SELECT SUM(file_size) FROM fmeta WHERE owner_id = ? AND url LIKE ?", (r[0], path + '%')) as cursor:
+                    size = await cursor.fetchone()
+                if size is not None:
+                    await self.user_size_dec(r[0], size[0])
+        
         await self.conn.execute("DELETE FROM fmeta WHERE url LIKE ?", (path + '%', ))
-        self.logger.info(f"Deleted {len(res)} files for path {path}") # type: ignore
+        self.logger.info(f"Deleted {len(all_f_rec)} files for path {path}") # type: ignore
     
     async def set_file_blob(self, file_id: str, blob: bytes) -> int:
         await self.conn.execute("INSERT OR REPLACE INTO fdata (file_id, data) VALUES (?, ?)", (file_id, blob))
@@ -429,8 +476,9 @@ class Database:
     logger = get_logger('database', global_instance=True)
 
     async def init(self):
-        await self.user.init()
-        await self.file.init()
+        async with transaction(self):
+            await self.user.init()
+            await self.file.init()
         return self
     
     async def commit(self):

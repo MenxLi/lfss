@@ -23,6 +23,7 @@ async def lifespan(app: FastAPI):
     global conn
     await conn.init()
     yield
+    await conn.commit()
     await conn.close()
 
 async def get_credential_from_params(request: Request):

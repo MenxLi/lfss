@@ -5,9 +5,19 @@
  * @property {string} token - the token to authenticate the user
  * 
  * Partially complete...
+ * @typedef {Object} UserRecord
+ * @property {number} id - the id of the user
+ * @property {string} username - the username of the user
+ * @property {boolean} is_admin - whether the user is an admin
+ * @property {string} create_time - the time the user was created
+ * @property {number} max_storage - the maximum storage the user can use
+ * @property {number} permission - the default read permission of the files owned by the user
+ * 
+ * Partially complete...
  * @typedef {Object} FileRecord
  * @property {string} url - the url of the file
- * @property {Number} file_size - the size of the file, in bytes
+ * @property {number} owner_id - the id of the owner of the file
+ * @property {number} file_size - the size of the file, in bytes
  * @property {string} create_time - the time the file was created
  * @property {string} access_time - the time the file was last accessed
  * 
@@ -21,6 +31,13 @@
  * @property {FileRecord[]} files - the list of files in the directory
  * 
  */
+
+export const permMap = {
+    0: 'unset',
+    1: 'public',
+    2: 'protected',
+    3: 'private'
+}
 
 export default class Connector {
 
@@ -123,5 +140,39 @@ export default class Connector {
             throw new Error(`Access denied to ${path}`);
         }
         return await res.json();
+    }
+
+    /**
+     * Check the user information by the token
+     * @returns {Promise<UserRecord>} - the promise of the request
+     */
+    async whoami(){
+        const res = await fetch(this.config.endpoint + '/_api/whoami', {
+            method: 'GET',
+            headers: {
+                'Authorization': 'Bearer ' + this.config.token
+            },
+        });
+        if (res.status != 200){
+            throw new Error('Failed to get user info, status code: ' + res.status);
+        }
+        return await res.json();
+    };
+
+    /**
+     * @param {string} path - file path(url)
+     * @param {number} permission - please refer to the permMap
+     */
+    async setFilePermission(path, permission){
+        if (path.startsWith('/')){ path = path.slice(1); }
+        const res = await fetch(this.config.endpoint + '/_api/fmeta?path=' + path + '&perm=' + permission, {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer ' + this.config.token
+            },
+        });
+        if (res.status != 200){
+            throw new Error(`Failed to set permission, status code: ${res.status}, message: ${await res.json()}`);
+        }
     }
 }

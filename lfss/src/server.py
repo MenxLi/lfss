@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from .log import get_logger
 from .config import MAX_BUNDLE_BYTES
 from .utils import ensure_uri_compnents
-from .database import Database, DBUserRecord, DECOY_USER, FileDBRecord, check_user_permission
+from .database import Database, DBUserRecord, DECOY_USER, FileDBRecord, check_user_permission, FileReadPermission
 
 logger = get_logger("server")
 conn = Database()
@@ -119,7 +119,7 @@ async def put_file(request: Request, path: str, user: DBUserRecord = Depends(get
     path = ensure_uri_compnents(path)
     if user.id == 0:
         logger.debug("Reject put request from DECOY_USER")
-        raise HTTPException(status_code=403, detail="Permission denied")
+        raise HTTPException(status_code=401, detail="Permission denied")
     if not path.startswith(f"{user.username}/") and not user.is_admin:
         logger.debug(f"Reject put request from {user.username} to {path}")
         raise HTTPException(status_code=403, detail="Permission denied")
@@ -166,7 +166,7 @@ async def put_file(request: Request, path: str, user: DBUserRecord = Depends(get
 async def delete_file(path: str, user: DBUserRecord = Depends(get_current_user)):
     path = ensure_uri_compnents(path)
     if user.id == 0:
-        raise HTTPException(status_code=403, detail="Permission denied")
+        raise HTTPException(status_code=401, detail="Permission denied")
     if not path.startswith(f"{user.username}/") and not user.is_admin:
         raise HTTPException(status_code=403, detail="Permission denied")
     
@@ -234,6 +234,40 @@ async def get_file_meta(path: str, user: DBUserRecord = Depends(get_current_user
     if not file_record:
         raise HTTPException(status_code=404, detail="File not found")
     return file_record
+
+@router_api.post("/fmeta")
+async def update_file_meta(
+    path: str, 
+    perm: Optional[int] = None, 
+    user: DBUserRecord = Depends(get_current_user)
+    ):
+    if user.id == 0:
+        raise HTTPException(status_code=401, detail="Permission denied")
+    path = ensure_uri_compnents(path)
+    file_record = await conn.file.get_file_record(path)
+    if not file_record:
+        logger.debug(f"Reject update meta request from {user.username} to {path}")
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    if not (user.is_admin or user.id == file_record.owner_id):
+        logger.debug(f"Reject update meta request from {user.username} to {path}")
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    if perm is not None:
+        logger.info(f"Update permission of {path} to {perm}")
+        await conn.file.set_file_record(
+            url = file_record.url, 
+            permission = FileReadPermission(perm)
+        )
+    return Response(status_code=200, content="OK")
+    
+@router_api.get("/whoami")
+async def whoami(user: DBUserRecord = Depends(get_current_user)):
+    if user.id == 0:
+        raise HTTPException(status_code=401, detail="Login required")
+    user.credential = "__HIDDEN__"
+    return user
+
 
 # order matters
 app.include_router(router_api)

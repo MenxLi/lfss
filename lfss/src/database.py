@@ -322,23 +322,31 @@ class FileConn(DBConnBase):
         assert res is not None
         return res[0] or 0
     
-    async def set_file_record(self, url: str, owner_id: int, file_id: str, file_size: int, permission: Optional[ FileReadPermission ] = None):
+    async def set_file_record(
+        self, url: str, 
+        owner_id: Optional[int] = None, 
+        file_id: Optional[str] = None, 
+        file_size: Optional[int] = None, 
+        permission: Optional[ FileReadPermission ] = None
+        ):
         self.logger.debug(f"Updating fmeta {url}: user_id={owner_id}, file_id={file_id}")
 
         old = await self.get_file_record(url)
         if old is not None:
-            assert old.owner_id == owner_id, f"User mismatch: {old.owner_id} != {owner_id}"
-            if permission is None:
-                permission = old.permission
+            if owner_id is None: owner_id = old.owner_id
+            if file_id is None: file_id = old.file_id
+            if file_size is None: file_size = old.file_size
+            if permission is None: permission = old.permission
             await self.conn.execute(
                 """
-                UPDATE fmeta SET file_id = ?, file_size = ?, permission = ?, 
+                UPDATE fmeta SET owner_id = ?, file_id = ?, file_size = ?, permission = ?, 
                 access_time = CURRENT_TIMESTAMP WHERE url = ?
-                """, (file_id, file_size, permission, url))
+                """, (owner_id, file_id, file_size, permission, url))
             self.logger.info(f"File {url} updated")
         else:
             if permission is None:
                 permission = FileReadPermission.UNSET
+            assert owner_id is not None and file_id is not None and file_size is not None, "Missing required fields"
             await self.conn.execute("INSERT INTO fmeta (url, owner_id, file_id, file_size, permission) VALUES (?, ?, ?, ?, ?)", (url, owner_id, file_id, file_size, permission))
             self.logger.info(f"File {url} created")
     

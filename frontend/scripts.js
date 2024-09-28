@@ -1,7 +1,9 @@
 import Connector from './api.js';
+import { permMap } from './api.js';
 import { formatSize, decodePathURI, ensurePathURI, copyToClipboard, getRandomString, cvtGMT2Local, debounce } from './utils.js';
 
 const conn = new Connector();
+let userRecord = null;
 
 const endpointInput = document.querySelector('input#endpoint');
 const tokenInput = document.querySelector('input#token');
@@ -35,7 +37,9 @@ conn.config.token = tokenInput.value;
         pathInput.value = path;
     }
     uploadFilePrefixLabel.textContent = pathInput.value;
-    maybeRefreshFileList();
+    maybeRefreshUserRecord().then(
+        () => maybeRefreshFileList()
+    );
 }
 
 function onPathChange(){
@@ -47,12 +51,16 @@ function onPathChange(){
 endpointInput.addEventListener('blur', () => {
     conn.config.endpoint = endpointInput.value;
     window.localStorage.setItem('endpoint', endpointInput.value);
-    maybeRefreshFileList();
+    maybeRefreshUserRecord().then(
+        () => maybeRefreshFileList()
+    );
 });
 tokenInput.addEventListener('blur', () => {
     conn.config.token = tokenInput.value;
     window.localStorage.setItem('token', tokenInput.value);
-    maybeRefreshFileList();
+    maybeRefreshUserRecord().then(
+        () => maybeRefreshFileList()
+    );
 });
 pathInput.addEventListener('input', () => {
     onPathChange();
@@ -204,6 +212,10 @@ function refreshFileList(){
                     tr.appendChild(dateTd);
                 }
                 {
+                    const accessTd = document.createElement('td');
+                    tr.appendChild(accessTd);
+                }
+                {
                     const actTd = document.createElement('td');
                     const actContainer = document.createElement('div');
                     actContainer.classList.add('action-container');
@@ -265,6 +277,37 @@ function refreshFileList(){
                 }
 
                 {
+                    const accessTd = document.createElement('td');
+                    if (file.owner_id === userRecord.id || userRecord.is_admin){
+                        console.log("User is owner or admin");
+                        const select = document.createElement('select');
+                        select.classList.add('access-select');
+                        const options = ['unset', 'public', 'protected', 'private'];
+                        options.forEach(opt => {
+                            const option = document.createElement('option');
+                            option.textContent = opt;
+                            select.appendChild(option);
+                        });
+                        select.value = permMap[file.permission];
+                        select.addEventListener('change', () => {
+                            const perm = options.indexOf(select.value);
+                            {
+                                // ensure the permission is correct!
+                                const permStr = options[perm];
+                                const permStrFromMap = permMap[perm];
+                                if (permStr !== permStrFromMap){
+                                    console.warn("Permission string mismatch", permStr, permStrFromMap);
+                                }
+                            }
+                            conn.setFilePermission(file.url, perm)
+                        });
+                            
+                        accessTd.appendChild(select);
+                    }
+                    tr.appendChild(accessTd);
+                }
+
+                {
                     const actTd = document.createElement('td');
                     const actContainer = document.createElement('div');
                     actContainer.classList.add('action-container');
@@ -317,6 +360,29 @@ function refreshFileList(){
             console.error(err);
         }
     );
+}
+
+
+async function maybeRefreshUserRecord(){
+    if (endpointInput.value && tokenInput.value){
+        await refreshUserRecord();
+    }
+}
+
+async function refreshUserRecord(){
+    try{
+        userRecord = await conn.whoami();
+        console.log("User record: ", userRecord);
+    }
+    catch (err){
+        userRecord = null;
+        console.error("Failed to get user record");
+        return false;
+    }
+
+    // UI updates.
+
+    return true;
 }
 
 console.log("Hello World");

@@ -133,7 +133,8 @@ uploadButton.addEventListener('click', () => {
 });
 
 uploadFileNameInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter'){
+    if (e.key === 'Enter' && !e.isComposing){
+        e.preventDefault();
         uploadButton.click();
     }
 });

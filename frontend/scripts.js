@@ -151,6 +151,36 @@ uploadFileNameInput.addEventListener('input', debounce(onFileNameInpuChange, 500
             uploadFileNameInput.value = files[0].name;
             uploadFileNameInput.focus();
         }
+        else if (files.length > 1){
+            let dstPath = pathInput.value + uploadFileNameInput.value;
+            if (!dstPath.endsWith('/')){ dstPath += '/'; }
+            if (!confirm(`
+You are trying to upload multiple files at once. 
+This will directly upload the files to the [${dstPath}] directory without renaming. 
+Note that same name files will be overwritten.
+Are you sure you want to proceed?
+                `)){ return; }
+            
+            let counter = 0;
+            async function uploadFile(...args){
+                const [file, path] = args;
+                await conn.put(path, file);
+                counter += 1;
+                console.log("Uploading file: ", counter, "/", files.length);
+            }
+            
+            let promises = [];
+            for (let i = 0; i < files.length; i++){
+                const file = files[i];
+                const path = dstPath + file.name;
+                promises.push(uploadFile(file, path));
+            }
+            Promise.all(promises).then(
+                () => {
+                    refreshFileList();
+                }
+            );
+        }
     });
 }
 
@@ -279,7 +309,6 @@ function refreshFileList(){
                 {
                     const accessTd = document.createElement('td');
                     if (file.owner_id === userRecord.id || userRecord.is_admin){
-                        console.log("User is owner or admin");
                         const select = document.createElement('select');
                         select.classList.add('access-select');
                         const options = ['unset', 'public', 'protected', 'private'];

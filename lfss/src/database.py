@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 import urllib.parse
 import dataclasses, hashlib, uuid
 from contextlib import asynccontextmanager
+from functools import wraps
 from enum import IntEnum
 import zipfile, io
 
@@ -21,6 +22,18 @@ _g_conn: Optional[aiosqlite.Connection] = None
 def hash_credential(username, password):
     return hashlib.sha256((username + password).encode()).hexdigest()
 
+_atomic_lock = Lock()
+def atomic(func):
+    """
+    Ensure non-reentrancy. 
+    Can be skipped if the function only executes a single SQL statement.
+    """
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        async with _atomic_lock:
+            return await func(*args, **kwargs)
+    return wrapper
+    
 class DBConnBase(ABC):
     logger = get_logger('database', global_instance=True)
 
@@ -113,6 +126,7 @@ class UserConn(DBConnBase):
         if res is None: return None
         return self.parse_record(res)
     
+    @atomic
     async def create_user(
         self, username: str, password: str, is_admin: bool = False, 
         max_storage: int = 1073741824, permission: FileReadPermission = FileReadPermission.UNSET
@@ -128,6 +142,7 @@ class UserConn(DBConnBase):
             assert cursor.lastrowid is not None
             return cursor.lastrowid
     
+    @atomic
     async def update_user(
         self, username: str, password: Optional[str] = None, is_admin: Optional[bool] = None, 
         max_storage: Optional[int] = None, permission: Optional[FileReadPermission] = None
@@ -358,6 +373,7 @@ class FileConn(DBConnBase):
         assert res is not None
         return res[0] or 0
     
+    @atomic
     async def set_file_record(
         self, url: str, 
         owner_id: Optional[int] = None, 
@@ -365,10 +381,10 @@ class FileConn(DBConnBase):
         file_size: Optional[int] = None, 
         permission: Optional[ FileReadPermission ] = None
         ):
-        self.logger.debug(f"Updating fmeta {url}: user_id={owner_id}, file_id={file_id}")
 
         old = await self.get_file_record(url)
         if old is not None:
+            self.logger.debug(f"Updating fmeta {url}: permission={permission}, owner_id={owner_id}")
             # should delete the old blob if file_id is changed
             assert file_id is None, "Cannot update file id"
             assert file_size is None, "Cannot update file size"
@@ -382,6 +398,7 @@ class FileConn(DBConnBase):
                 """, (owner_id, int(permission), url))
             self.logger.info(f"File {url} updated")
         else:
+            self.logger.debug(f"Creating fmeta {url}: permission={permission}, owner_id={owner_id}, file_id={file_id}, file_size={file_size}")
             if permission is None:
                 permission = FileReadPermission.UNSET
             assert owner_id is not None and file_id is not None and file_size is not None, "Missing required fields"
@@ -392,9 +409,21 @@ class FileConn(DBConnBase):
             await self.user_size_inc(owner_id, file_size)
             self.logger.info(f"File {url} created")
     
+    @atomic
+    async def move_file(self, old_url: str, new_url: str):
+        old = await self.get_file_record(old_url)
+        if old is None:
+            raise FileNotFoundError(f"File {old_url} not found")
+        new_exists = await self.get_file_record(new_url)
+        if new_exists is not None:
+            raise FileExistsError(f"File {new_url} already exists")
+        async with self.conn.execute("UPDATE fmeta SET url = ? WHERE url = ?", (new_url, old_url)):
+            self.logger.info(f"Moved file {old_url} to {new_url}")
+    
     async def log_access(self, url: str):
         await self.conn.execute("UPDATE fmeta SET access_time = CURRENT_TIMESTAMP WHERE url = ?", (url, ))
     
+    @atomic
     async def delete_file_record(self, url: str):
         file_record = await self.get_file_record(url)
         if file_record is None: return
@@ -402,6 +431,7 @@ class FileConn(DBConnBase):
         await self.user_size_dec(file_record.owner_id, file_record.file_size)
         self.logger.info(f"Deleted fmeta {url}")
     
+    @atomic
     async def delete_user_file_records(self, owner_id: int):
         async with self.conn.execute("SELECT * FROM fmeta WHERE owner_id = ?", (owner_id, )) as cursor:
             res = await cursor.fetchall()
@@ -409,6 +439,7 @@ class FileConn(DBConnBase):
         await self.conn.execute("DELETE FROM usize WHERE user_id = ?", (owner_id, ))
         self.logger.info(f"Deleted {len(res)} files for user {owner_id}") # type: ignore
     
+    @atomic
     async def delete_path_records(self, path: str):
         """Delete all records with url starting with path"""
         async with self.conn.execute("SELECT * FROM fmeta WHERE url LIKE ?", (path + '%', )) as cursor:
@@ -562,6 +593,12 @@ class Database:
             await self.file.delete_file_blob(f_id)
             await self.file.delete_file_record(url)
             return r
+    
+    async def move_file(self, old_url: str, new_url: str):
+        if not _validate_url(old_url) or not _validate_url(new_url):
+            raise ValueError(f"Invalid URL: {old_url} or {new_url}")
+        async with transaction(self):
+            await self.file.move_file(old_url, new_url)
 
     async def delete_path(self, url: str):
         if not _validate_url(url, is_file=False): raise ValueError(f"Invalid URL: {url}")

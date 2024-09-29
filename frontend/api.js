@@ -165,7 +165,10 @@ export default class Connector {
      */
     async setFilePermission(path, permission){
         if (path.startsWith('/')){ path = path.slice(1); }
-        const res = await fetch(this.config.endpoint + '/_api/fmeta?path=' + path + '&perm=' + permission, {
+        const dst = new URL(this.config.endpoint + '/_api/fmeta');
+        dst.searchParams.append('path', path);
+        dst.searchParams.append('perm', permission);
+        const res = await fetch(dst.toString(), {
             method: 'POST',
             headers: {
                 'Authorization': 'Bearer ' + this.config.token
@@ -175,4 +178,27 @@ export default class Connector {
             throw new Error(`Failed to set permission, status code: ${res.status}, message: ${await res.json()}`);
         }
     }
+
+    /**
+     * @param {string} path - file path(url)
+     * @param {string} newPath - new file path(url)
+     */
+    async moveFile(path, newPath){
+        if (path.startsWith('/')){ path = path.slice(1); }
+        if (newPath.startsWith('/')){ newPath = newPath.slice(1); }
+        const dst = new URL(this.config.endpoint + '/_api/fmeta');
+        dst.searchParams.append('path', path);
+        dst.searchParams.append('new_path', newPath);
+        const res = await fetch(dst.toString(), {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer ' + this.config.token, 
+                'Content-Type': 'application/www-form-urlencoded'
+            },
+        });
+        if (res.status != 200){
+            throw new Error(`Failed to move file, status code: ${res.status}, message: ${await res.json()}`);
+        }
+    }
+
 }

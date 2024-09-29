@@ -37,7 +37,9 @@ def handle_exception(fn):
             logger.error(f"Error in {fn.__name__}: {e}")
             if isinstance(e, HTTPException): raise e
             elif isinstance(e, StorageExceededError): raise HTTPException(status_code=413, detail=str(e))
-            elif isinstance(e, PermissionDeniedError): raise HTTPException(status_code=403, detail=str(e))
+            elif isinstance(e, PermissionError): raise HTTPException(status_code=403, detail=str(e))
+            elif isinstance(e, FileNotFoundError): raise HTTPException(status_code=404, detail=str(e))
+            elif isinstance(e, FileExistsError): raise HTTPException(status_code=409, detail=str(e))
             else: raise HTTPException(status_code=500, detail=str(e))
     return wrapper
 
@@ -63,7 +65,7 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Invalid token")
     return user
 
-app = FastAPI(docs_url=None, redoc_url=None, lifespan=lifespan)
+app = FastAPI(docs_url="/_docs", redoc_url=None, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -255,6 +257,7 @@ async def get_file_meta(path: str, user: DBUserRecord = Depends(get_current_user
 async def update_file_meta(
     path: str, 
     perm: Optional[int] = None, 
+    new_path: Optional[str] = None,
     user: DBUserRecord = Depends(get_current_user)
     ):
     if user.id == 0:
@@ -271,10 +274,16 @@ async def update_file_meta(
     
     if perm is not None:
         logger.info(f"Update permission of {path} to {perm}")
-        await conn.file.set_file_record(
+        await handle_exception(conn.file.set_file_record)(
             url = file_record.url, 
             permission = FileReadPermission(perm)
         )
+    
+    if new_path is not None:
+        new_path = ensure_uri_compnents(new_path)
+        logger.info(f"Update path of {path} to {new_path}")
+        await handle_exception(conn.move_file)(path, new_path)
+
     return Response(status_code=200, content="OK")
     
 @router_api.get("/whoami")

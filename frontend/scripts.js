@@ -1,6 +1,7 @@
 import Connector from './api.js';
 import { permMap } from './api.js';
-import { formatSize, decodePathURI, ensurePathURI, copyToClipboard, getRandomString, cvtGMT2Local, debounce } from './utils.js';
+import { showFloatingWindowLineInput } from './popup.js';
+import { formatSize, decodePathURI, ensurePathURI, copyToClipboard, getRandomString, cvtGMT2Local, debounce, encodePathURI } from './utils.js';
 
 const conn = new Connector();
 let userRecord = null;
@@ -344,19 +345,41 @@ function refreshFileList(){
                     const actContainer = document.createElement('div');
                     actContainer.classList.add('action-container');
 
+                    const viewButton = document.createElement('a');
+                    viewButton.textContent = 'View';
+                    viewButton.href = conn.config.endpoint + '/' + file.url + '?token=' + conn.config.token;
+                    viewButton.target = '_blank';
+                    actContainer.appendChild(viewButton);
+
                     const copyButton = document.createElement('a');
-                    copyButton.textContent = 'Copy';
+                    copyButton.textContent = 'Share';
                     copyButton.href = '#';
                     copyButton.addEventListener('click', () => {
                         copyToClipboard(conn.config.endpoint + '/' + file.url);
                     });
                     actContainer.appendChild(copyButton);
 
-                    const viewButton = document.createElement('a');
-                    viewButton.textContent = 'View';
-                    viewButton.href = conn.config.endpoint + '/' + file.url + '?token=' + conn.config.token;
-                    viewButton.target = '_blank';
-                    actContainer.appendChild(viewButton);
+                    const moveButton = document.createElement('a');
+                    moveButton.textContent = 'Move';
+                    moveButton.href = '#';
+                    moveButton.addEventListener('click', () => {
+                        showFloatingWindowLineInput((dstPath) => {
+                            dstPath = encodePathURI(dstPath);
+                            if (dstPath.endsWith('/')){
+                                dstPath = dstPath.slice(0, -1);
+                            }
+                            conn.moveFile(file.url, dstPath)
+                                .then(() => {
+                                    refreshFileList();
+                                });
+                        }, {
+                            text: 'Enter the destination path: ',
+                            placeholder: 'Destination path',
+                            value: decodePathURI(file.url), 
+                            select: "last-filename"
+                        });
+                    });
+                    actContainer.appendChild(moveButton);
 
                     const downloadBtn = document.createElement('a');
                     downloadBtn.textContent = 'Download';

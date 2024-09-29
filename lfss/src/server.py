@@ -38,6 +38,7 @@ def handle_exception(fn):
             if isinstance(e, HTTPException): raise e
             elif isinstance(e, StorageExceededError): raise HTTPException(status_code=413, detail=str(e))
             elif isinstance(e, PermissionError): raise HTTPException(status_code=403, detail=str(e))
+            elif isinstance(e, InvalidPathError): raise HTTPException(status_code=400, detail=str(e))
             elif isinstance(e, FileNotFoundError): raise HTTPException(status_code=404, detail=str(e))
             elif isinstance(e, FileExistsError): raise HTTPException(status_code=409, detail=str(e))
             else: raise HTTPException(status_code=500, detail=str(e))

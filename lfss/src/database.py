@@ -473,18 +473,20 @@ class FileConn(DBConnBase):
     async def delete_file_blobs(self, file_ids: list[str]):
         await self.conn.execute("DELETE FROM fdata WHERE file_id IN ({})".format(','.join(['?'] * len(file_ids))), file_ids)
 
-def _validate_url(url: str, is_file = True) -> bool:
+def validate_url(url: str, is_file = True):
     ret = not url.startswith('/') and not ('..' in url) and ('/' in url) and not ('//' in url) \
         and not ' ' in url and not url.startswith('\\') and not url.startswith('_') and not url.startswith('.')
 
     if not ret:
-        return False
+        raise InvalidPathError(f"Invalid URL: {url}")
     
     if is_file:
         ret = ret and not url.endswith('/')
     else:
         ret = ret and url.endswith('/')
-    return ret
+
+    if not ret:
+        raise InvalidPathError(f"Invalid URL: {url}")
 
 async def get_user(db: "Database", user: int | str) -> Optional[DBUserRecord]:
     if isinstance(user, str):
@@ -504,6 +506,7 @@ async def transaction(db: "Database"):
     except Exception as e:
         db.logger.error(f"Error in transaction: {e}")
         await db.rollback()
+        raise e
     finally:
         _transaction_lock.release()
 
@@ -533,8 +536,7 @@ class Database:
             await _g_conn.rollback()
 
     async def save_file(self, u: int | str, url: str, blob: bytes):
-        if not _validate_url(url):
-            raise ValueError(f"Invalid URL: {url}")
+        validate_url(url)
         assert isinstance(blob, bytes), "blob must be bytes"
 
         user = await get_user(self, u)
@@ -566,7 +568,7 @@ class Database:
 
     # async def read_file_stream(self, url: str): ...
     async def read_file(self, url: str) -> bytes:
-        if not _validate_url(url): raise ValueError(f"Invalid URL: {url}")
+        validate_url(url)
 
         r = await self.file.get_file_record(url)
         if r is None:
@@ -583,7 +585,7 @@ class Database:
         return blob
 
     async def delete_file(self, url: str) -> Optional[FileDBRecord]:
-        if not _validate_url(url): raise ValueError(f"Invalid URL: {url}")
+        validate_url(url)
 
         async with transaction(self):
             r = await self.file.get_file_record(url)
@@ -595,13 +597,14 @@ class Database:
             return r
     
     async def move_file(self, old_url: str, new_url: str):
-        if not _validate_url(old_url) or not _validate_url(new_url):
-            raise ValueError(f"Invalid URL: {old_url} or {new_url}")
+        validate_url(old_url)
+        validate_url(new_url)
+
         async with transaction(self):
             await self.file.move_file(old_url, new_url)
 
     async def delete_path(self, url: str):
-        if not _validate_url(url, is_file=False): raise ValueError(f"Invalid URL: {url}")
+        validate_url(url, is_file=False)
 
         async with transaction(self):
             records = await self.file.get_path_records(url)

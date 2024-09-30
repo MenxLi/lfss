@@ -168,7 +168,12 @@ Are you sure you want to proceed?
             let counter = 0;
             async function uploadFile(...args){
                 const [file, path] = args;
-                await conn.put(path, file);
+                try{
+                    await conn.put(path, file);
+                }
+                catch (err){
+                    showPopup('Failed to upload file [' + file.name + ']: ' + err, {level: 'error', timeout: 5000});
+                }
                 counter += 1;
                 console.log("Uploading file: ", counter, "/", files.length);
             }
@@ -261,6 +266,7 @@ function refreshFileList(){
 
                     const deleteButton = document.createElement('a');
                     deleteButton.textContent = 'Delete';
+                    deleteButton.classList.add('delete-btn');
                     deleteButton.href = '#';
                     deleteButton.addEventListener('click', () => {
                         const dirurl = dir.url + (dir.url.endsWith('/') ? '' : '/');
@@ -270,6 +276,8 @@ function refreshFileList(){
                         conn.delete(dirurl)
                             .then(() => {
                                 refreshFileList();
+                            }, (err)=>{
+                                showPopup('Failed to delete path: ' + err, {level: 'error', timeout: 5000});
                             });
                     });
                     actContainer.appendChild(deleteButton);
@@ -332,7 +340,12 @@ function refreshFileList(){
                                     console.warn("Permission string mismatch", permStr, permStrFromMap);
                                 }
                             }
-                            conn.setFilePermission(file.url, perm)
+                            conn.setFilePermission(file.url, perm).then(
+                                () => {},
+                                (err) => {
+                                    showPopup('Failed to set permission: ' + err, {level: 'error', timeout: 5000});
+                                }
+                            );
                         });
                             
                         accessTd.appendChild(select);
@@ -346,8 +359,8 @@ function refreshFileList(){
                     actContainer.classList.add('action-container');
 
                     const copyButton = document.createElement('a');
+                    copyButton.style.cursor = 'pointer';
                     copyButton.textContent = 'Share';
-                    copyButton.href = '#';
                     copyButton.addEventListener('click', () => {
                         copyToClipboard(conn.config.endpoint + '/' + file.url);
                         showPopup('Link copied to clipboard', {level: "success"});
@@ -362,7 +375,7 @@ function refreshFileList(){
 
                     const moveButton = document.createElement('a');
                     moveButton.textContent = 'Move';
-                    moveButton.href = '#';
+                    moveButton.style.cursor = 'pointer';
                     moveButton.addEventListener('click', () => {
                         showFloatingWindowLineInput((dstPath) => {
                             dstPath = encodePathURI(dstPath);
@@ -372,7 +385,11 @@ function refreshFileList(){
                             conn.moveFile(file.url, dstPath)
                                 .then(() => {
                                     refreshFileList();
-                                });
+                                }, 
+                                (err) => {
+                                    showPopup('Failed to move file: ' + err, {level: 'error'});
+                                }
+                            );
                         }, {
                             text: 'Enter the destination path: ',
                             placeholder: 'Destination path',
@@ -398,6 +415,8 @@ function refreshFileList(){
                         conn.delete(file.url)
                             .then(() => {
                                 refreshFileList();
+                            }, (err) => {
+                                showPopup('Failed to delete file: ' + err, {level: 'error', timeout: 5000});
                             });
                     });
                     actContainer.appendChild(deleteButton);

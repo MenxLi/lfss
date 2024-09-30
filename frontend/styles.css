@@ -156,9 +156,6 @@ label#bucket-label{
 table#files {
     width: 100%;
     border-collapse: collapse;
-    border-radius: 1rem;
-    border: 1px solid #ddd;
-    clip-path: inset(0 0 0 0 round 0.5rem);
 }
 table#files th {
     background-color: #195f8b;

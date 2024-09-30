@@ -206,6 +206,8 @@ router_api = APIRouter(prefix="/_api")
 @router_api.get("/bundle")
 async def bundle_files(path: str, user: DBUserRecord = Depends(get_current_user)):
     logger.info(f"GET bundle({path}), user: {user.username}")
+    if user.id == 0:
+        raise HTTPException(status_code=401, detail="Permission denied")
     path = ensure_uri_compnents(path)
     assert path.endswith("/") or path == ""
 

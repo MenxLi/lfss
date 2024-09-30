@@ -129,6 +129,9 @@ uploadButton.addEventListener('click', () => {
             refreshFileList();
             uploadFileNameInput.value = '';
             onFileNameInpuChange();
+        }, 
+        (err) => {
+            showPopup('Failed to upload file: ' + err, {level: 'error', timeout: 5000});
         }
     );
 });

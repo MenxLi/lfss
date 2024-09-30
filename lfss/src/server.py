@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 
 from .error import *
 from .log import get_logger
-from .config import MAX_BUNDLE_BYTES
+from .config import MAX_BUNDLE_BYTES, MAX_FILE_BYTES
 from .utils import ensure_uri_compnents
 from .database import Database, DBUserRecord, DECOY_USER, FileDBRecord, check_user_permission, FileReadPermission
 
@@ -142,6 +142,13 @@ async def put_file(request: Request, path: str, user: DBUserRecord = Depends(get
     if not path.startswith(f"{user.username}/") and not user.is_admin:
         logger.debug(f"Reject put request from {user.username} to {path}")
         raise HTTPException(status_code=403, detail="Permission denied")
+    
+    content_length = request.headers.get("Content-Length")
+    if content_length is not None:
+        content_length = int(content_length)
+        if content_length > MAX_FILE_BYTES:
+            logger.debug(f"Reject put request from {user.username} to {path}, file too large")
+            raise HTTPException(status_code=413, detail="File too large")
     
     logger.info(f"PUT {path}, user: {user.username}")
     exists_flag = False

@@ -14,7 +14,7 @@ input[type=button], button{
     padding: 0.8rem;
     margin: 0;
     border: none;
-    border-radius: 0.2rem;
+    border-radius: 0.25rem;
     cursor: pointer;
 }
 
@@ -23,7 +23,7 @@ input[type=text], input[type=password]
     width: 100%;
     padding: 0.75rem;
     border: 1px solid #ccc;
-    border-radius: 0.2rem;
+    border-radius: 0.25rem;
     height: 1rem;
 }
 
@@ -156,6 +156,9 @@ label#bucket-label{
 table#files {
     width: 100%;
     border-collapse: collapse;
+    border-radius: 1rem;
+    border: 1px solid #ddd;
+    clip-path: inset(0 0 0 0 round 0.5rem);
 }
 table#files th {
     background-color: #195f8b;
@@ -209,4 +212,12 @@ a{
     background-color: #195f8b;
     transform: scale(1.1);
     color: white;
+}
+
+.delete-btn{
+    color: darkred !important;
+}
+.delete-btn:hover{
+    color: white !important;
+    background-color: #990511c7 !important;
 }

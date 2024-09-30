@@ -87,3 +87,44 @@ export function showFloatingWindowLineInput(onSubmit = (v) => {}, {
 
     return [floatingWindow, closeWindow];
 }
+
+const shownPopups = [];
+export function showPopup(content = '',  {
+    level = "info",
+    width = "auto",
+    timeout = 3000, 
+    showTime = true
+} = {}){
+    const popup = document.createElement("div");
+    popup.classList.add("popup-window");
+    popup.innerHTML = showTime? `<span>[${new Date().toLocaleTimeString()}]</span> ${content}` : content;
+    popup.style.width = width;
+    const popupHeight = '1rem';
+    popup.style.height = popupHeight;
+    popup.style.maxHeight = popupHeight;
+    popup.style.minHeight = popupHeight;
+    const paddingHeight = '1rem';
+    popup.style.padding = paddingHeight;
+
+    // traverse shownPopups and update the top position of each popup
+    if (shownPopups.length > 0) {
+        for (let i = 0; i < shownPopups.length; i++) {
+            shownPopups[i].style.top = `${i * (parseInt(popupHeight) + 2*parseInt(paddingHeight))*1.2 + 0.5}rem`;
+        }
+    }
+    popup.style.top = `${shownPopups.length * (parseInt(popupHeight) + 2*parseInt(paddingHeight))*1.2 + 0.5}rem`;
+
+    if (level === "error") popup.style.backgroundColor = "darkred";
+    if (level === "warning") popup.style.backgroundColor = "darkorange";
+    if (level === "info") popup.style.backgroundColor = "darkblue";
+    if (level === "success") popup.style.backgroundColor = "darkgreen";
+    document.body.appendChild(popup);
+    shownPopups.push(popup);
+    window.setTimeout(() => {
+        if (popup.parentNode) document.body.removeChild(popup);
+        shownPopups.splice(shownPopups.indexOf(popup), 1);
+        for (let i = 0; i < shownPopups.length; i++) {
+            shownPopups[i].style.top = `${i * (parseInt(popupHeight) + 2*parseInt(paddingHeight))*1.2 + 0.5}rem`;
+        }
+    }, timeout);
+}

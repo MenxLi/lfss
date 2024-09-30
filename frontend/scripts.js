@@ -1,6 +1,6 @@
 import Connector from './api.js';
 import { permMap } from './api.js';
-import { showFloatingWindowLineInput } from './popup.js';
+import { showFloatingWindowLineInput, showPopup } from './popup.js';
 import { formatSize, decodePathURI, ensurePathURI, copyToClipboard, getRandomString, cvtGMT2Local, debounce, encodePathURI } from './utils.js';
 
 const conn = new Connector();
@@ -345,19 +345,20 @@ function refreshFileList(){
                     const actContainer = document.createElement('div');
                     actContainer.classList.add('action-container');
 
-                    const viewButton = document.createElement('a');
-                    viewButton.textContent = 'View';
-                    viewButton.href = conn.config.endpoint + '/' + file.url + '?token=' + conn.config.token;
-                    viewButton.target = '_blank';
-                    actContainer.appendChild(viewButton);
-
                     const copyButton = document.createElement('a');
                     copyButton.textContent = 'Share';
                     copyButton.href = '#';
                     copyButton.addEventListener('click', () => {
                         copyToClipboard(conn.config.endpoint + '/' + file.url);
+                        showPopup('Link copied to clipboard', {level: "success"});
                     });
                     actContainer.appendChild(copyButton);
+
+                    const viewButton = document.createElement('a');
+                    viewButton.textContent = 'View';
+                    viewButton.href = conn.config.endpoint + '/' + file.url + '?token=' + conn.config.token;
+                    viewButton.target = '_blank';
+                    actContainer.appendChild(viewButton);
 
                     const moveButton = document.createElement('a');
                     moveButton.textContent = 'Move';
@@ -388,6 +389,7 @@ function refreshFileList(){
 
                     const deleteButton = document.createElement('a');
                     deleteButton.textContent = 'Delete';
+                    deleteButton.classList.add('delete-btn');
                     deleteButton.href = '#';
                     deleteButton.addEventListener('click', () => {
                         if (!confirm('Are you sure you want to delete ' + file.url + '?')){

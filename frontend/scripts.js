@@ -404,7 +404,7 @@ function refreshFileList(){
 
                     const downloadBtn = document.createElement('a');
                     downloadBtn.textContent = 'Download';
-                    downloadBtn.href = conn.config.endpoint + '/' + file.url + '?asfile=true&token=' + conn.config.token;
+                    downloadBtn.href = conn.config.endpoint + '/' + file.url + '?download=true&token=' + conn.config.token;
                     actContainer.appendChild(downloadBtn);
 
                     const deleteButton = document.createElement('a');

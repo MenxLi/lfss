@@ -78,7 +78,7 @@ app.add_middleware(
 router_fs = APIRouter(prefix="")
 
 @router_fs.get("/{path:path}")
-async def get_file(path: str, asfile = False, user: DBUserRecord = Depends(get_current_user)):
+async def get_file(path: str, download = False, user: DBUserRecord = Depends(get_current_user)):
     path = ensure_uri_compnents(path)
 
     # handle directory query
@@ -97,11 +97,7 @@ async def get_file(path: str, asfile = False, user: DBUserRecord = Depends(get_c
         if not path.startswith(f"{user.username}/") and not user.is_admin:
             raise HTTPException(status_code=403, detail="Permission denied, path must start with username")
 
-        dirs, files = await conn.file.list_path(path, flat = False)
-        return {
-            "dirs": dirs,
-            "files": files
-        }
+        return await conn.file.list_path(path, flat = False)
     
     file_record = await conn.file.get_file_record(path)
     if not file_record:
@@ -128,7 +124,7 @@ async def get_file(path: str, asfile = False, user: DBUserRecord = Depends(get_c
             }
         )
     
-    if asfile:
+    if download:
         return await send('application/octet-stream', "attachment")
     else:
         return await send(None, "inline")

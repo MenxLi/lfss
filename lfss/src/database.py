@@ -202,6 +202,11 @@ class DirectoryRecord:
 
     def __str__(self):
         return f"Directory {self.url} (size={self.size})"
+
+@dataclasses.dataclass
+class PathContents:
+    dirs: list[DirectoryRecord]
+    files: list[FileDBRecord]
     
 class FileConn(DBConnBase):
 
@@ -298,9 +303,9 @@ class FileConn(DBConnBase):
     @overload
     async def list_path(self, url: str, flat: Literal[True]) -> list[FileDBRecord]:...
     @overload
-    async def list_path(self, url: str, flat: Literal[False]) -> tuple[list[DirectoryRecord], list[FileDBRecord]]:...
+    async def list_path(self, url: str, flat: Literal[False]) -> PathContents:...
     
-    async def list_path(self, url: str, flat: bool = False) -> list[FileDBRecord] | tuple[list[DirectoryRecord], list[FileDBRecord]]:
+    async def list_path(self, url: str, flat: bool = False) -> list[FileDBRecord] | PathContents:
         """
         List all files and directories under the given path, 
         if flat is True, return a list of FileDBRecord, recursively including all subdirectories. 
@@ -317,7 +322,7 @@ class FileConn(DBConnBase):
                 return [self.parse_record(r) for r in res]
 
             else:
-                return (await self.list_root(), [])
+                return PathContents(await self.list_root(), [])
         
         if flat:
             async with self.conn.execute("SELECT * FROM fmeta WHERE url LIKE ?", (url + '%', )) as cursor:
@@ -345,7 +350,7 @@ class FileConn(DBConnBase):
         dirs_str = [r[0] + '/' for r in res if r[0] != '/']
         dirs = [DirectoryRecord(url + d, await self.path_size(url + d, include_subpath=True)) for d in dirs_str]
             
-        return (dirs, files)
+        return PathContents(dirs, files)
     
     async def user_size(self, user_id: int) -> int:
         async with self.conn.execute("SELECT size FROM usize WHERE user_id = ?", (user_id, )) as cursor:

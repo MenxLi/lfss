@@ -24,10 +24,7 @@ def hash_credential(username, password):
 
 _atomic_lock = Lock()
 def atomic(func):
-    """
-    Ensure non-reentrancy. 
-    Can be skipped if the function only executes a single SQL statement.
-    """
+    """ Ensure non-reentrancy """
     @wraps(func)
     async def wrapper(*args, **kwargs):
         async with _atomic_lock:
@@ -175,9 +172,11 @@ class UserConn(DBConnBase):
             async for record in cursor:
                 yield self.parse_record(record)
     
+    @atomic
     async def set_active(self, username: str):
         await self.conn.execute("UPDATE user SET last_active = CURRENT_TIMESTAMP WHERE username = ?", (username, ))
     
+    @atomic
     async def delete_user(self, username: str):
         await self.conn.execute("DELETE FROM user WHERE username = ?", (username, ))
         self.logger.info(f"Delete user {username}")
@@ -251,7 +250,7 @@ class FileConn(DBConnBase):
                 async with self.conn.execute("SELECT SUM(file_size) FROM fmeta WHERE owner_id = ?", (r[0], )) as cursor:
                     size = await cursor.fetchone()
                 if size is not None and size[0] is not None:
-                    await self.user_size_inc(r[0], size[0])
+                    await self._user_size_inc(r[0], size[0])
 
         return self
     
@@ -354,10 +353,10 @@ class FileConn(DBConnBase):
         if res is None:
             return -1
         return res[0]
-    async def user_size_inc(self, user_id: int, inc: int):
+    async def _user_size_inc(self, user_id: int, inc: int):
         self.logger.debug(f"Increasing user {user_id} size by {inc}")
         await self.conn.execute("INSERT OR REPLACE INTO usize (user_id, size) VALUES (?, COALESCE((SELECT size FROM usize WHERE user_id = ?), 0) + ?)", (user_id, user_id, inc))
-    async def user_size_dec(self, user_id: int, dec: int):
+    async def _user_size_dec(self, user_id: int, dec: int):
         self.logger.debug(f"Decreasing user {user_id} size by {dec}")
         await self.conn.execute("INSERT OR REPLACE INTO usize (user_id, size) VALUES (?, COALESCE((SELECT size FROM usize WHERE user_id = ?), 0) - ?)", (user_id, user_id, dec))
     
@@ -406,7 +405,7 @@ class FileConn(DBConnBase):
                 "INSERT INTO fmeta (url, owner_id, file_id, file_size, permission) VALUES (?, ?, ?, ?, ?)", 
                 (url, owner_id, file_id, file_size, int(permission))
                 )
-            await self.user_size_inc(owner_id, file_size)
+            await self._user_size_inc(owner_id, file_size)
             self.logger.info(f"File {url} created")
     
     @atomic
@@ -428,7 +427,7 @@ class FileConn(DBConnBase):
         file_record = await self.get_file_record(url)
         if file_record is None: return
         await self.conn.execute("DELETE FROM fmeta WHERE url = ?", (url, ))
-        await self.user_size_dec(file_record.owner_id, file_record.file_size)
+        await self._user_size_dec(file_record.owner_id, file_record.file_size)
         self.logger.info(f"Deleted fmeta {url}")
     
     @atomic
@@ -452,11 +451,12 @@ class FileConn(DBConnBase):
                 async with self.conn.execute("SELECT SUM(file_size) FROM fmeta WHERE owner_id = ? AND url LIKE ?", (r[0], path + '%')) as cursor:
                     size = await cursor.fetchone()
                 if size is not None:
-                    await self.user_size_dec(r[0], size[0])
+                    await self._user_size_dec(r[0], size[0])
         
         await self.conn.execute("DELETE FROM fmeta WHERE url LIKE ?", (path + '%', ))
         self.logger.info(f"Deleted {len(all_f_rec)} files for path {path}") # type: ignore
     
+    @atomic
     async def set_file_blob(self, file_id: str, blob: bytes):
         await self.conn.execute("INSERT OR REPLACE INTO fdata (file_id, data) VALUES (?, ?)", (file_id, blob))
     
@@ -467,9 +467,11 @@ class FileConn(DBConnBase):
             return None
         return res[0]
     
+    @atomic
     async def delete_file_blob(self, file_id: str):
         await self.conn.execute("DELETE FROM fdata WHERE file_id = ?", (file_id, ))
     
+    @atomic
     async def delete_file_blobs(self, file_ids: list[str]):
         await self.conn.execute("DELETE FROM fdata WHERE file_id IN ({})".format(','.join(['?'] * len(file_ids))), file_ids)
 

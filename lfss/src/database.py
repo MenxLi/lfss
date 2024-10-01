@@ -481,8 +481,9 @@ class FileConn(DBConnBase):
         await self.conn.execute("DELETE FROM fdata WHERE file_id IN ({})".format(','.join(['?'] * len(file_ids))), file_ids)
 
 def validate_url(url: str, is_file = True):
-    ret = not url.startswith('/') and not ('..' in url) and ('/' in url) and not ('//' in url) \
-        and not ' ' in url and not url.startswith('\\') and not url.startswith('_') and not url.startswith('.')
+    prohibited_chars = ['..', ';', "'", '"', '/', '\\', '\0', '\n', '\r', '\t', '\x0b', '\x0c']
+    ret = not url.startswith('/') and not url.startswith('_') and not url.startswith('.')
+    ret = ret and not any([c in url for c in prohibited_chars])
 
     if not ret:
         raise InvalidPathError(f"Invalid URL: {url}")

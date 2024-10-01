@@ -64,6 +64,7 @@ def get_logger(
     name = 'default', 
     log_home = pathlib.Path(DATA_HOME) / 'logs', 
     level = 'DEBUG',
+    term_level = 'INFO',
     file_handler_type: _fh_T = 'rotate', 
     global_instance = True
     )->BaseLogger:
@@ -77,6 +78,7 @@ def get_logger(
         formatter = logging.Formatter(format_str)
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(formatter)
+        console_handler.setLevel(term_level)
         logger.addHandler(console_handler)
 
         # format_str_plain = format_str.replace(BCOLORS.LIGHTMAGENTA, '').replace(BCOLORS.OKCYAN, '').replace(BCOLORS.ENDC, '')

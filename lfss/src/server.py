@@ -7,7 +7,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 import mimesniff
 
-import json
+import json, time
 import mimetypes
 from contextlib import asynccontextmanager
 
@@ -17,8 +17,8 @@ from .config import MAX_BUNDLE_BYTES, MAX_FILE_BYTES
 from .utils import ensure_uri_compnents
 from .database import Database, UserRecord, DECOY_USER, FileRecord, check_user_permission, FileReadPermission
 
-logger = get_logger("server")
-logger_failed_requests = get_logger("failed_requests")
+logger = get_logger("server", term_level="DEBUG")
+logger_requests = get_logger("requests", term_level="INFO")
 conn = Database()
 
 @asynccontextmanager
@@ -35,7 +35,6 @@ def handle_exception(fn):
         try:
             return await fn(*args, **kwargs)
         except Exception as e:
-            logger_failed_requests.error(f"Error in {fn.__name__}: {e}")
             if isinstance(e, HTTPException): raise e
             if isinstance(e, StorageExceededError): raise HTTPException(status_code=413, detail=str(e))
             if isinstance(e, PermissionError): raise HTTPException(status_code=403, detail=str(e))
@@ -76,6 +75,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    req_info = f"{request.method} {request.url}"
+    if request.headers:
+        req_info += f"\n\tHEADERS: {request.headers}"
+    if request.query_params:
+        req_info += f"\n\tQUERY_PARAMS: {request.query_params}"
+    if request.client:
+        req_info += f"\n\tCLIENT: {request.client}"
+    logger_requests.debug(req_info)
+
+    start_time = time.perf_counter()
+    response: Response = await call_next(request)
+    end_time = time.perf_counter()
+    response.headers["X-Response-Time"] = str(end_time - start_time)
+    if response.status_code >= 400:
+        logger_requests.error(f"{request.method} {request.url} -> {response.status_code}")
+    return response
 
 router_fs = APIRouter(prefix="")
 
@@ -307,7 +325,6 @@ async def whoami(user: UserRecord = Depends(get_current_user)):
         raise HTTPException(status_code=401, detail="Login required")
     user.credential = "__HIDDEN__"
     return user
-
 
 # order matters
 app.include_router(router_api)

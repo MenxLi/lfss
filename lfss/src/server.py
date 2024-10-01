@@ -18,6 +18,7 @@ from .utils import ensure_uri_compnents
 from .database import Database, UserRecord, DECOY_USER, FileRecord, check_user_permission, FileReadPermission
 
 logger = get_logger("server")
+logger_failed_requests = get_logger("failed_requests")
 conn = Database()
 
 @asynccontextmanager
@@ -34,14 +35,15 @@ def handle_exception(fn):
         try:
             return await fn(*args, **kwargs)
         except Exception as e:
-            logger.error(f"Error in {fn.__name__}: {e}")
+            logger_failed_requests.error(f"Error in {fn.__name__}: {e}")
             if isinstance(e, HTTPException): raise e
-            elif isinstance(e, StorageExceededError): raise HTTPException(status_code=413, detail=str(e))
-            elif isinstance(e, PermissionError): raise HTTPException(status_code=403, detail=str(e))
-            elif isinstance(e, InvalidPathError): raise HTTPException(status_code=400, detail=str(e))
-            elif isinstance(e, FileNotFoundError): raise HTTPException(status_code=404, detail=str(e))
-            elif isinstance(e, FileExistsError): raise HTTPException(status_code=409, detail=str(e))
-            else: raise HTTPException(status_code=500, detail=str(e))
+            if isinstance(e, StorageExceededError): raise HTTPException(status_code=413, detail=str(e))
+            if isinstance(e, PermissionError): raise HTTPException(status_code=403, detail=str(e))
+            if isinstance(e, InvalidPathError): raise HTTPException(status_code=400, detail=str(e))
+            if isinstance(e, FileNotFoundError): raise HTTPException(status_code=404, detail=str(e))
+            if isinstance(e, FileExistsError): raise HTTPException(status_code=409, detail=str(e))
+            logger.error(f"Uncaptured error in {fn.__name__}: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
     return wrapper
 
 async def get_credential_from_params(request: Request):
@@ -66,7 +68,7 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Invalid token")
     return user
 
-app = FastAPI(docs_url="/_docs", redoc_url=None, lifespan=lifespan)
+app = FastAPI(docs_url=None, redoc_url=None, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -78,6 +80,7 @@ app.add_middleware(
 router_fs = APIRouter(prefix="")
 
 @router_fs.get("/{path:path}")
+@handle_exception
 async def get_file(path: str, download = False, user: UserRecord = Depends(get_current_user)):
     path = ensure_uri_compnents(path)
 
@@ -130,6 +133,7 @@ async def get_file(path: str, download = False, user: UserRecord = Depends(get_c
         return await send(None, "inline")
 
 @router_fs.put("/{path:path}")
+@handle_exception
 async def put_file(request: Request, path: str, user: UserRecord = Depends(get_current_user)):
     path = ensure_uri_compnents(path)
     if user.id == 0:
@@ -159,20 +163,20 @@ async def put_file(request: Request, path: str, user: UserRecord = Depends(get_c
     logger.debug(f"Content-Type: {content_type}")
     if content_type == "application/json":
         body = await request.json()
-        await handle_exception(conn.save_file)(user.id, path, json.dumps(body).encode('utf-8'))
+        await conn.save_file(user.id, path, json.dumps(body).encode('utf-8'))
     elif content_type == "application/x-www-form-urlencoded":
         # may not work...
         body = await request.form()
         file = body.get("file")
         if isinstance(file, str) or file is None:
             raise HTTPException(status_code=400, detail="Invalid form data, file required")
-        await handle_exception(conn.save_file)(user.id, path, await file.read())
+        await conn.save_file(user.id, path, await file.read())
     elif content_type == "application/octet-stream":
         body = await request.body()
-        await handle_exception(conn.save_file)(user.id, path, body)
+        await conn.save_file(user.id, path, body)
     else:
         body = await request.body()
-        await handle_exception(conn.save_file)(user.id, path, body)
+        await conn.save_file(user.id, path, body)
 
     # https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Methods/PUT
     if exists_flag:
@@ -185,6 +189,7 @@ async def put_file(request: Request, path: str, user: UserRecord = Depends(get_c
         }, content=json.dumps({"url": path}))
 
 @router_fs.delete("/{path:path}")
+@handle_exception
 async def delete_file(path: str, user: UserRecord = Depends(get_current_user)):
     path = ensure_uri_compnents(path)
     if user.id == 0:
@@ -207,6 +212,7 @@ async def delete_file(path: str, user: UserRecord = Depends(get_current_user)):
 router_api = APIRouter(prefix="/_api")
 
 @router_api.get("/bundle")
+@handle_exception
 async def bundle_files(path: str, user: UserRecord = Depends(get_current_user)):
     logger.info(f"GET bundle({path}), user: {user.username}")
     if user.id == 0:
@@ -249,6 +255,7 @@ async def bundle_files(path: str, user: UserRecord = Depends(get_current_user)):
     )
 
 @router_api.get("/fmeta")
+@handle_exception
 async def get_file_meta(path: str, user: UserRecord = Depends(get_current_user)):
     logger.info(f"GET meta({path}), user: {user.username}")
     if path.endswith("/"):
@@ -260,6 +267,7 @@ async def get_file_meta(path: str, user: UserRecord = Depends(get_current_user))
     return file_record
 
 @router_api.post("/fmeta")
+@handle_exception
 async def update_file_meta(
     path: str, 
     perm: Optional[int] = None, 
@@ -280,7 +288,7 @@ async def update_file_meta(
     
     if perm is not None:
         logger.info(f"Update permission of {path} to {perm}")
-        await handle_exception(conn.file.set_file_record)(
+        await conn.file.set_file_record(
             url = file_record.url, 
             permission = FileReadPermission(perm)
         )
@@ -288,11 +296,12 @@ async def update_file_meta(
     if new_path is not None:
         new_path = ensure_uri_compnents(new_path)
         logger.info(f"Update path of {path} to {new_path}")
-        await handle_exception(conn.move_file)(path, new_path)
+        await conn.move_file(path, new_path)
 
     return Response(status_code=200, content="OK")
     
 @router_api.get("/whoami")
+@handle_exception
 async def whoami(user: UserRecord = Depends(get_current_user)):
     if user.id == 0:
         raise HTTPException(status_code=401, detail="Login required")

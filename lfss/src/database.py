@@ -1,5 +1,5 @@
 
-from typing import Optional, overload, Literal
+from typing import Optional, overload, Literal, AsyncIterable
 from abc import ABC, abstractmethod
 
 import urllib.parse
@@ -631,28 +631,33 @@ class Database:
             await self.file.delete_file_blobs([r.file_id for r in records])
             await self.file.delete_user_file_records(user.id)
             await self.user.delete_user(user.username)
-
-    async def zip_path(self, top_url: str, urls: Optional[list[str]]) -> io.BytesIO:
+    
+    async def iter_path(self, top_url: str, urls: Optional[list[str]]) -> AsyncIterable[tuple[FileRecord, bytes]]:
         if urls is None:
             urls = [r.url for r in await self.file.list_path(top_url, flat=True)]
 
+        for url in urls:
+            if not url.startswith(top_url):
+                continue
+            r = await self.file.get_file_record(url)
+            if r is None:
+                continue
+            f_id = r.file_id
+            blob = await self.file.get_file_blob(f_id)
+            if blob is None:
+                self.logger.warning(f"Blob not found for {url}")
+                continue
+            yield r, blob
+
+    async def zip_path(self, top_url: str, urls: Optional[list[str]]) -> io.BytesIO:
+        if top_url.startswith('/'):
+            top_url = top_url[1:]
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, 'w') as zf:
-            for url in urls:
-                if not url.startswith(top_url):
-                    continue
-                r = await self.file.get_file_record(url)
-                if r is None:
-                    continue
-                f_id = r.file_id
-                blob = await self.file.get_file_blob(f_id)
-                if blob is None:
-                    continue
-
-                rel_path = url[len(top_url):]
+            async for (r, blob) in self.iter_path(top_url, urls):
+                rel_path = r.url[len(top_url):]
                 rel_path = decode_uri_compnents(rel_path)
                 zf.writestr(rel_path, blob)
-
         buffer.seek(0)
         return buffer
 

@@ -15,7 +15,7 @@ from .error import *
 from .log import get_logger
 from .config import MAX_BUNDLE_BYTES, MAX_FILE_BYTES
 from .utils import ensure_uri_compnents
-from .database import Database, DBUserRecord, DECOY_USER, FileDBRecord, check_user_permission, FileReadPermission
+from .database import Database, UserRecord, DECOY_USER, FileRecord, check_user_permission, FileReadPermission
 
 logger = get_logger("server")
 conn = Database()
@@ -78,7 +78,7 @@ app.add_middleware(
 router_fs = APIRouter(prefix="")
 
 @router_fs.get("/{path:path}")
-async def get_file(path: str, download = False, user: DBUserRecord = Depends(get_current_user)):
+async def get_file(path: str, download = False, user: UserRecord = Depends(get_current_user)):
     path = ensure_uri_compnents(path)
 
     # handle directory query
@@ -130,7 +130,7 @@ async def get_file(path: str, download = False, user: DBUserRecord = Depends(get
         return await send(None, "inline")
 
 @router_fs.put("/{path:path}")
-async def put_file(request: Request, path: str, user: DBUserRecord = Depends(get_current_user)):
+async def put_file(request: Request, path: str, user: UserRecord = Depends(get_current_user)):
     path = ensure_uri_compnents(path)
     if user.id == 0:
         logger.debug("Reject put request from DECOY_USER")
@@ -185,7 +185,7 @@ async def put_file(request: Request, path: str, user: DBUserRecord = Depends(get
         }, content=json.dumps({"url": path}))
 
 @router_fs.delete("/{path:path}")
-async def delete_file(path: str, user: DBUserRecord = Depends(get_current_user)):
+async def delete_file(path: str, user: UserRecord = Depends(get_current_user)):
     path = ensure_uri_compnents(path)
     if user.id == 0:
         raise HTTPException(status_code=401, detail="Permission denied")
@@ -207,7 +207,7 @@ async def delete_file(path: str, user: DBUserRecord = Depends(get_current_user))
 router_api = APIRouter(prefix="/_api")
 
 @router_api.get("/bundle")
-async def bundle_files(path: str, user: DBUserRecord = Depends(get_current_user)):
+async def bundle_files(path: str, user: UserRecord = Depends(get_current_user)):
     logger.info(f"GET bundle({path}), user: {user.username}")
     if user.id == 0:
         raise HTTPException(status_code=401, detail="Permission denied")
@@ -218,7 +218,7 @@ async def bundle_files(path: str, user: DBUserRecord = Depends(get_current_user)
         path = path[1:]
     
     owner_records_cache = {}     # cache owner records, ID -> UserRecord
-    async def is_access_granted(file_record: FileDBRecord):
+    async def is_access_granted(file_record: FileRecord):
         owner_id = file_record.owner_id
         owner = owner_records_cache.get(owner_id, None)
         if owner is None:
@@ -249,7 +249,7 @@ async def bundle_files(path: str, user: DBUserRecord = Depends(get_current_user)
     )
 
 @router_api.get("/fmeta")
-async def get_file_meta(path: str, user: DBUserRecord = Depends(get_current_user)):
+async def get_file_meta(path: str, user: UserRecord = Depends(get_current_user)):
     logger.info(f"GET meta({path}), user: {user.username}")
     if path.endswith("/"):
         raise HTTPException(status_code=400, detail="Invalid path")
@@ -264,7 +264,7 @@ async def update_file_meta(
     path: str, 
     perm: Optional[int] = None, 
     new_path: Optional[str] = None,
-    user: DBUserRecord = Depends(get_current_user)
+    user: UserRecord = Depends(get_current_user)
     ):
     if user.id == 0:
         raise HTTPException(status_code=401, detail="Permission denied")
@@ -293,7 +293,7 @@ async def update_file_meta(
     return Response(status_code=200, content="OK")
     
 @router_api.get("/whoami")
-async def whoami(user: DBUserRecord = Depends(get_current_user)):
+async def whoami(user: UserRecord = Depends(get_current_user)):
     if user.id == 0:
         raise HTTPException(status_code=401, detail="Login required")
     user.credential = "__HIDDEN__"

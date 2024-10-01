@@ -3,7 +3,7 @@ import os
 import requests
 import urllib.parse
 from lfss.src.database import (
-    FileReadPermission, FileDBRecord, DBUserRecord, PathContents
+    FileReadPermission, FileRecord, UserRecord, PathContents
     )
 
 _default_endpoint = os.environ.get('LFSS_ENDPOINT', 'http://localhost:8000')
@@ -58,11 +58,11 @@ class Connector:
             path = path[1:]
         self._fetch('DELETE', path)()
     
-    def get_metadata(self, path: str) -> Optional[FileDBRecord]:
+    def get_metadata(self, path: str) -> Optional[FileRecord]:
         """Gets the metadata for the file at the specified path."""
         try:
             response = self._fetch('GET', '_api/fmeta', {'path': path})()
-            return FileDBRecord(**response.json())
+            return FileRecord(**response.json())
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
                 return None
@@ -85,7 +85,7 @@ class Connector:
             headers = {'Content-Type': 'application/www-form-urlencoded'}
         )
         
-    def whoami(self) -> DBUserRecord:
+    def whoami(self) -> UserRecord:
         """Gets information about the current user."""
         response = self._fetch('GET', '_api/whoami')()
-        return DBUserRecord(**response.json())
+        return UserRecord(**response.json())

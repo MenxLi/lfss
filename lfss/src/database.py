@@ -58,7 +58,7 @@ class FileReadPermission(IntEnum):
     PRIVATE = 3         # accessible by owner only (including admin)
 
 @dataclasses.dataclass
-class DBUserRecord:
+class UserRecord:
     id: int
     username: str
     credential: str
@@ -71,12 +71,12 @@ class DBUserRecord:
     def __str__(self):
         return f"User {self.username} (id={self.id}, admin={self.is_admin}, created at {self.create_time}, last active at {self.last_active}), storage={self.max_storage}, permission={self.permission}"
 
-DECOY_USER = DBUserRecord(0, 'decoy', 'decoy', False, '2021-01-01 00:00:00', '2021-01-01 00:00:00', 0, FileReadPermission.PRIVATE)
+DECOY_USER = UserRecord(0, 'decoy', 'decoy', False, '2021-01-01 00:00:00', '2021-01-01 00:00:00', 0, FileReadPermission.PRIVATE)
 class UserConn(DBConnBase):
 
     @staticmethod
-    def parse_record(record) -> DBUserRecord:
-        return DBUserRecord(*record)
+    def parse_record(record) -> UserRecord:
+        return UserRecord(*record)
 
     async def init(self):
         await super().init()
@@ -102,21 +102,21 @@ class UserConn(DBConnBase):
 
         return self
     
-    async def get_user(self, username: str) -> Optional[DBUserRecord]:
+    async def get_user(self, username: str) -> Optional[UserRecord]:
         async with self.conn.execute("SELECT * FROM user WHERE username = ?", (username, )) as cursor:
             res = await cursor.fetchone()
         
         if res is None: return None
         return self.parse_record(res)
     
-    async def get_user_by_id(self, user_id: int) -> Optional[DBUserRecord]:
+    async def get_user_by_id(self, user_id: int) -> Optional[UserRecord]:
         async with self.conn.execute("SELECT * FROM user WHERE id = ?", (user_id, )) as cursor:
             res = await cursor.fetchone()
         
         if res is None: return None
         return self.parse_record(res)
     
-    async def get_user_by_credential(self, credential: str) -> Optional[DBUserRecord]:
+    async def get_user_by_credential(self, credential: str) -> Optional[UserRecord]:
         async with self.conn.execute("SELECT * FROM user WHERE credential = ?", (credential, )) as cursor:
             res = await cursor.fetchone()
         
@@ -182,7 +182,7 @@ class UserConn(DBConnBase):
         self.logger.info(f"Delete user {username}")
 
 @dataclasses.dataclass
-class FileDBRecord:
+class FileRecord:
     url: str
     owner_id: int
     file_id: str      # defines mapping from fmata to fdata
@@ -206,13 +206,13 @@ class DirectoryRecord:
 @dataclasses.dataclass
 class PathContents:
     dirs: list[DirectoryRecord]
-    files: list[FileDBRecord]
+    files: list[FileRecord]
     
 class FileConn(DBConnBase):
 
     @staticmethod
-    def parse_record(record) -> FileDBRecord:
-        return FileDBRecord(*record)
+    def parse_record(record) -> FileRecord:
+        return FileRecord(*record)
     
     async def init(self):
         await super().init()
@@ -259,26 +259,26 @@ class FileConn(DBConnBase):
 
         return self
     
-    async def get_file_record(self, url: str) -> Optional[FileDBRecord]:
+    async def get_file_record(self, url: str) -> Optional[FileRecord]:
         async with self.conn.execute("SELECT * FROM fmeta WHERE url = ?", (url, )) as cursor:
             res = await cursor.fetchone()
         if res is None:
             return None
         return self.parse_record(res)
     
-    async def get_file_records(self, urls: list[str]) -> list[FileDBRecord]:
+    async def get_file_records(self, urls: list[str]) -> list[FileRecord]:
         async with self.conn.execute("SELECT * FROM fmeta WHERE url IN ({})".format(','.join(['?'] * len(urls))), urls) as cursor:
             res = await cursor.fetchall()
         if res is None:
             return []
         return [self.parse_record(r) for r in res]
     
-    async def get_user_file_records(self, owner_id: int) -> list[FileDBRecord]:
+    async def get_user_file_records(self, owner_id: int) -> list[FileRecord]:
         async with self.conn.execute("SELECT * FROM fmeta WHERE owner_id = ?", (owner_id, )) as cursor:
             res = await cursor.fetchall()
         return [self.parse_record(r) for r in res]
     
-    async def get_path_records(self, url: str) -> list[FileDBRecord]:
+    async def get_path_records(self, url: str) -> list[FileRecord]:
         async with self.conn.execute("SELECT * FROM fmeta WHERE url LIKE ?", (url + '%', )) as cursor:
             res = await cursor.fetchall()
         return [self.parse_record(r) for r in res]
@@ -301,11 +301,11 @@ class FileConn(DBConnBase):
             return dirs
     
     @overload
-    async def list_path(self, url: str, flat: Literal[True]) -> list[FileDBRecord]:...
+    async def list_path(self, url: str, flat: Literal[True]) -> list[FileRecord]:...
     @overload
     async def list_path(self, url: str, flat: Literal[False]) -> PathContents:...
     
-    async def list_path(self, url: str, flat: bool = False) -> list[FileDBRecord] | PathContents:
+    async def list_path(self, url: str, flat: bool = False) -> list[FileRecord] | PathContents:
         """
         List all files and directories under the given path, 
         if flat is True, return a list of FileDBRecord, recursively including all subdirectories. 
@@ -495,7 +495,7 @@ def validate_url(url: str, is_file = True):
     if not ret:
         raise InvalidPathError(f"Invalid URL: {url}")
 
-async def get_user(db: "Database", user: int | str) -> Optional[DBUserRecord]:
+async def get_user(db: "Database", user: int | str) -> Optional[UserRecord]:
     if isinstance(user, str):
         return await db.user.get_user(user)
     elif isinstance(user, int):
@@ -591,7 +591,7 @@ class Database:
 
         return blob
 
-    async def delete_file(self, url: str) -> Optional[FileDBRecord]:
+    async def delete_file(self, url: str) -> Optional[FileRecord]:
         validate_url(url)
 
         async with transaction(self):
@@ -656,7 +656,7 @@ class Database:
         buffer.seek(0)
         return buffer
 
-def check_user_permission(user: DBUserRecord, owner: DBUserRecord, file: FileDBRecord) -> tuple[bool, str]:
+def check_user_permission(user: UserRecord, owner: UserRecord, file: FileRecord) -> tuple[bool, str]:
     if user.is_admin:
         return True, ""
     

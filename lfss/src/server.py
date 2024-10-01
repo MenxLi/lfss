@@ -7,27 +7,29 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 import mimesniff
 
-import json, time
+import asyncio, json, time
 import mimetypes
 from contextlib import asynccontextmanager
 
 from .error import *
 from .log import get_logger
+from .stat import RequestDB
 from .config import MAX_BUNDLE_BYTES, MAX_FILE_BYTES
 from .utils import ensure_uri_compnents
 from .database import Database, UserRecord, DECOY_USER, FileRecord, check_user_permission, FileReadPermission
 
 logger = get_logger("server", term_level="DEBUG")
-logger_requests = get_logger("requests", term_level="INFO")
+logger_failed_request = get_logger("failed_requests", term_level="INFO")
 conn = Database()
+req_conn = RequestDB()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global conn
-    await conn.init()
+    await asyncio.gather(conn.init(), req_conn.init())
     yield
-    await conn.commit()
-    await conn.close()
+    await asyncio.gather(conn.commit(), req_conn.commit())
+    await asyncio.gather(conn.close(), req_conn.close())
 
 def handle_exception(fn):
     @wraps(fn)
@@ -78,21 +80,26 @@ app.add_middleware(
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    req_info = f"{request.method} {request.url}"
-    if request.headers:
-        req_info += f"\n\tHEADERS: {request.headers}"
-    if request.query_params:
-        req_info += f"\n\tQUERY_PARAMS: {request.query_params}"
-    if request.client:
-        req_info += f"\n\tCLIENT: {request.client}"
-    logger_requests.debug(req_info)
 
     start_time = time.perf_counter()
     response: Response = await call_next(request)
     end_time = time.perf_counter()
-    response.headers["X-Response-Time"] = str(end_time - start_time)
+    response_time = end_time - start_time
+    response.headers["X-Response-Time"] = str(response_time)
+
     if response.status_code >= 400:
-        logger_requests.error(f"{request.method} {request.url} -> {response.status_code}")
+        logger_failed_request.error(f"{request.method} {request.url.path} {response.status_code}")
+        
+    await req_conn.log_request(
+        request.method, request.url.path, response.status_code, response_time,
+        headers = dict(request.headers), 
+        query = dict(request.query_params), 
+        client = request.client, 
+        request_size = int(request.headers.get("Content-Length", 0)),
+        response_size = int(response.headers.get("Content-Length", 0))
+    )
+    await req_conn.ensure_commit_once()
+
     return response
 
 router_fs = APIRouter(prefix="")

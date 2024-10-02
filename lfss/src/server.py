@@ -15,7 +15,7 @@ from .error import *
 from .log import get_logger
 from .stat import RequestDB
 from .config import MAX_BUNDLE_BYTES, MAX_FILE_BYTES
-from .utils import ensure_uri_compnents, format_last_modified
+from .utils import ensure_uri_compnents, format_last_modified, now_stamp
 from .database import Database, UserRecord, DECOY_USER, FileRecord, check_user_permission, FileReadPermission
 
 logger = get_logger("server", term_level="DEBUG")
@@ -81,6 +81,7 @@ app.add_middleware(
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
 
+    request_time_stamp = now_stamp()
     start_time = time.perf_counter()
     response: Response = await call_next(request)
     end_time = time.perf_counter()
@@ -91,6 +92,7 @@ async def log_requests(request: Request, call_next):
         logger_failed_request.error(f"{request.method} {request.url.path} {response.status_code}")
         
     await req_conn.log_request(
+        request_time_stamp, 
         request.method, request.url.path, response.status_code, response_time,
         headers = dict(request.headers), 
         query = dict(request.query_params), 

@@ -57,5 +57,12 @@ def format_last_modified(last_modified_gmt: str):
     Format the last modified time to the HTTP standard format
     - last_modified_gmt: The last modified time in SQLite ISO 8601 GMT format: e.g. '2021-09-01 12:00:00'
     """
+    assert len(last_modified_gmt) == 19
     dt = datetime.datetime.strptime(last_modified_gmt, '%Y-%m-%d %H:%M:%S')
     return dt.strftime('%a, %d %b %Y %H:%M:%S GMT')
+
+def now_stamp() -> float:
+    return datetime.datetime.now().timestamp()
+
+def stamp_to_str(stamp: float) -> str:
+    return datetime.datetime.fromtimestamp(stamp).strftime('%Y-%m-%d %H:%M:%S')

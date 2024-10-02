@@ -13,7 +13,7 @@ class RequestDB:
         await self.conn.execute('''
             CREATE TABLE IF NOT EXISTS requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
+                time FLOAT DEFAULT (strftime('%s', 'now')),
                 method TEXT,
                 path TEXT,
                 headers TEXT,
@@ -43,7 +43,8 @@ class RequestDB:
         await self.commit()
     
     async def log_request(
-        self, method: str, path: str, 
+        self, time: float, 
+        method: str, path: str, 
         status: int, duration: float,
         headers: Optional[Any] = None, 
         query: Optional[Any] = None, 
@@ -57,9 +58,9 @@ class RequestDB:
         client = str(client)
         async with self.conn.execute('''
             INSERT INTO requests (
-                method, path, headers, query, client, duration, request_size, response_size, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (method, path, headers, query, client, duration, request_size, response_size, status)) as cursor:
+                time, method, path, headers, query, client, duration, request_size, response_size, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (time, method, path, headers, query, client, duration, request_size, response_size, status)) as cursor:
             assert cursor.lastrowid is not None
             return cursor.lastrowid
         

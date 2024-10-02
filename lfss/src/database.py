@@ -69,7 +69,7 @@ class UserRecord:
     permission: 'FileReadPermission'
 
     def __str__(self):
-        return f"User {self.username} (id={self.id}, admin={self.is_admin}, created at {self.create_time}, last active at {self.last_active}), storage={self.max_storage}, permission={self.permission}"
+        return f"User {self.username} (id={self.id}, admin={self.is_admin}, created at {self.create_time}, last active at {self.last_active}, storage={self.max_storage}, permission={self.permission})"
 
 DECOY_USER = UserRecord(0, 'decoy', 'decoy', False, '2021-01-01 00:00:00', '2021-01-01 00:00:00', 0, FileReadPermission.PRIVATE)
 class UserConn(DBConnBase):
@@ -421,7 +421,7 @@ class FileConn(DBConnBase):
         new_exists = await self.get_file_record(new_url)
         if new_exists is not None:
             raise FileExistsError(f"File {new_url} already exists")
-        async with self.conn.execute("UPDATE fmeta SET url = ? WHERE url = ?", (new_url, old_url)):
+        async with self.conn.execute("UPDATE fmeta SET url = ?, create_time = CURRENT_TIMESTAMP WHERE url = ?", (new_url, old_url)):
             self.logger.info(f"Moved file {old_url} to {new_url}")
     
     async def log_access(self, url: str):

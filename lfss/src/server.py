@@ -15,7 +15,7 @@ from .error import *
 from .log import get_logger
 from .stat import RequestDB
 from .config import MAX_BUNDLE_BYTES, MAX_FILE_BYTES
-from .utils import ensure_uri_compnents
+from .utils import ensure_uri_compnents, format_last_modified
 from .database import Database, UserRecord, DECOY_USER, FileRecord, check_user_permission, FileReadPermission
 
 logger = get_logger("server", term_level="DEBUG")
@@ -148,7 +148,8 @@ async def get_file(path: str, download = False, user: UserRecord = Depends(get_c
         return Response(
             content=fblob, media_type=media_type, headers={
                 "Content-Disposition": f"{disposition}; filename={fname}", 
-                "Content-Length": str(len(fblob))
+                "Content-Length": str(len(fblob)), 
+                "Last-Modified": format_last_modified(file_record.create_time)
             }
         )
     

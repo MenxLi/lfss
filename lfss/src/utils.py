@@ -1,4 +1,4 @@
-from typing import Callable
+import datetime
 import urllib.parse
 import asyncio
 import functools
@@ -50,3 +50,12 @@ def debounce_async(delay: float = 0):
                 pass
         return wrapper
     return debounce_wrap
+
+# https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Last-Modified
+def format_last_modified(last_modified_gmt: str):
+    """
+    Format the last modified time to the HTTP standard format
+    - last_modified_gmt: The last modified time in SQLite ISO 8601 GMT format: e.g. '2021-09-01 12:00:00'
+    """
+    dt = datetime.datetime.strptime(last_modified_gmt, '%Y-%m-%d %H:%M:%S')
+    return dt.strftime('%a, %d %b %Y %H:%M:%S GMT')

@@ -54,10 +54,16 @@ export default class Connector {
     * @param {File} file - the file to upload
     * @returns {Promise<string>} - the promise of the request, the url of the file
     */
-    async put(path, file){
+    async put(path, file, {
+        overwrite = false,
+        permission = 0
+    } = {}){
         if (path.startsWith('/')){ path = path.slice(1); }
         const fileBytes = await file.arrayBuffer();
-        const res = await fetch(this.config.endpoint + '/' + path, {
+        const dst = new URL(this.config.endpoint + '/' + path);
+        dst.searchParams.append('overwrite', overwrite);
+        dst.searchParams.append('permission', permission);
+        const res = await fetch(dst.toString(), {
             method: 'PUT',
             headers: {
                 'Authorization': 'Bearer ' + this.config.token, 

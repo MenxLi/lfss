@@ -162,7 +162,12 @@ async def get_file(path: str, download = False, user: UserRecord = Depends(get_c
 
 @router_fs.put("/{path:path}")
 @handle_exception
-async def put_file(request: Request, path: str, user: UserRecord = Depends(get_current_user)):
+async def put_file(
+    request: Request, 
+    path: str, 
+    overwrite: Optional[bool] = False,
+    permission: int = 0,
+    user: UserRecord = Depends(get_current_user)):
     path = ensure_uri_compnents(path)
     if user.id == 0:
         logger.debug("Reject put request from DECOY_USER")
@@ -182,8 +187,10 @@ async def put_file(request: Request, path: str, user: UserRecord = Depends(get_c
     exists_flag = False
     file_record = await conn.file.get_file_record(path)
     if file_record:
-        exists_flag = True
+        if not overwrite:
+            raise HTTPException(status_code=409, detail="File exists")
         # remove the old file
+        exists_flag = True
         await conn.delete_file(path)
     
     # check content-type
@@ -191,20 +198,20 @@ async def put_file(request: Request, path: str, user: UserRecord = Depends(get_c
     logger.debug(f"Content-Type: {content_type}")
     if content_type == "application/json":
         body = await request.json()
-        await conn.save_file(user.id, path, json.dumps(body).encode('utf-8'))
+        await conn.save_file(user.id, path, json.dumps(body).encode('utf-8'), permission = FileReadPermission(permission))
     elif content_type == "application/x-www-form-urlencoded":
         # may not work...
         body = await request.form()
         file = body.get("file")
         if isinstance(file, str) or file is None:
             raise HTTPException(status_code=400, detail="Invalid form data, file required")
-        await conn.save_file(user.id, path, await file.read())
+        await conn.save_file(user.id, path, await file.read(), permission = FileReadPermission(permission))
     elif content_type == "application/octet-stream":
         body = await request.body()
-        await conn.save_file(user.id, path, body)
+        await conn.save_file(user.id, path, body, permission = FileReadPermission(permission))
     else:
         body = await request.body()
-        await conn.save_file(user.id, path, body)
+        await conn.save_file(user.id, path, body, permission = FileReadPermission(permission))
 
     # https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Methods/PUT
     if exists_flag:

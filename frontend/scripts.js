@@ -172,7 +172,7 @@ Are you sure you want to proceed?
             async function uploadFile(...args){
                 const [file, path] = args;
                 try{
-                    await conn.put(path, file);
+                    await conn.put(path, file, {overwrite: true});
                 }
                 catch (err){
                     showPopup('Failed to upload file [' + file.name + ']: ' + err, {level: 'error', timeout: 5000});

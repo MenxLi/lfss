@@ -543,7 +543,7 @@ class Database:
         if _g_conn is not None:
             await _g_conn.rollback()
 
-    async def save_file(self, u: int | str, url: str, blob: bytes):
+    async def save_file(self, u: int | str, url: str, blob: bytes, permission: FileReadPermission = FileReadPermission.UNSET):
         validate_url(url)
         assert isinstance(blob, bytes), "blob must be bytes"
 
@@ -571,7 +571,7 @@ class Database:
         f_id = uuid.uuid4().hex
         async with transaction(self):
             await self.file.set_file_blob(f_id, blob)
-            await self.file.set_file_record(url, owner_id=user.id, file_id=f_id, file_size=file_size)
+            await self.file.set_file_record(url, owner_id=user.id, file_id=f_id, file_size=file_size, permission=permission)
             await self.user.set_active(user.username)
 
     # async def read_file_stream(self, url: str): ...

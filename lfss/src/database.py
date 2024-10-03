@@ -7,7 +7,7 @@ import dataclasses, hashlib, uuid
 from contextlib import asynccontextmanager
 from functools import wraps
 from enum import IntEnum
-import zipfile, io
+import zipfile, io, asyncio
 
 import aiosqlite
 from asyncio import Lock
@@ -348,8 +348,9 @@ class FileConn(DBConnBase):
             ) as cursor:
             res = await cursor.fetchall()
         dirs_str = [r[0] + '/' for r in res if r[0] != '/']
-        dirs = [DirectoryRecord(url + d, await self.path_size(url + d, include_subpath=True)) for d in dirs_str]
-            
+        async def get_dir(dir_url):
+            return DirectoryRecord(dir_url, await self.path_size(dir_url, include_subpath=True))
+        dirs = await asyncio.gather(*[get_dir(url + d) for d in dirs_str])
         return PathContents(dirs, files)
     
     async def user_size(self, user_id: int) -> int:

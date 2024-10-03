@@ -26,7 +26,7 @@ def main():
     if args.command == "upload":
         src_path = Path(args.src)
         if src_path.is_dir():
-            upload_directory(
+            failed_upload = upload_directory(
                 connector, args.src, args.dst, 
                 verbose=True, 
                 n_concurrent=args.jobs, 
@@ -35,6 +35,10 @@ def main():
                 overwrite=args.overwrite, 
                 permission=args.permission
             )
+            if failed_upload:
+                print("Failed to upload:")
+                for path in failed_upload:
+                    print(f"  {path}")
         else:
             with open(args.src, 'rb') as f:
                 connector.put(

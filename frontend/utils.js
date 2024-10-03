@@ -1,5 +1,8 @@
 
 export function formatSize(size){
+    if (size < 0){
+        return 'N/A';
+    }
     const sizeInKb = size / 1024;
     const sizeInMb = sizeInKb / 1024;
     const sizeInGb = sizeInMb / 1024;

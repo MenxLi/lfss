@@ -349,6 +349,9 @@ class FileConn(DBConnBase):
             res = await cursor.fetchall()
         dirs_str = [r[0] + '/' for r in res if r[0] != '/']
         async def get_dir(dir_url):
+            if len(dirs_str) > 16:
+                # skip subpath size calculation if there are too many subpaths...
+                return DirectoryRecord(dir_url, -1)
             return DirectoryRecord(dir_url, await self.path_size(dir_url, include_subpath=True))
         dirs = await asyncio.gather(*[get_dir(url + d) for d in dirs_str])
         return PathContents(dirs, files)
@@ -612,6 +615,11 @@ class Database:
         async with transaction(self):
             await self.file.move_file(old_url, new_url)
 
+    async def __batch_delete_file_blobs(self, file_ids: list[str], batch_size: int = 512):
+        # https://github.com/langchain-ai/langchain/issues/10321
+        for i in range(0, len(file_ids), batch_size):
+            await self.file.delete_file_blobs([r for r in file_ids[i:i+batch_size]])
+
     async def delete_path(self, url: str):
         validate_url(url, is_file=False)
 
@@ -619,10 +627,10 @@ class Database:
             records = await self.file.get_path_records(url)
             if not records:
                 return None
-            await self.file.delete_file_blobs([r.file_id for r in records])
+            await self.__batch_delete_file_blobs([r.file_id for r in records])
             await self.file.delete_path_records(url)
             return records
-
+    
     async def delete_user(self, u: str | int):
         user = await get_user(self, u)
         if user is None:
@@ -630,7 +638,7 @@ class Database:
         
         async with transaction(self):
             records = await self.file.get_user_file_records(user.id)
-            await self.file.delete_file_blobs([r.file_id for r in records])
+            await self.__batch_delete_file_blobs([r.file_id for r in records])
             await self.file.delete_user_file_records(user.id)
             await self.user.delete_user(user.username)
     

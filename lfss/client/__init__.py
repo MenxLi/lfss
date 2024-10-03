@@ -39,6 +39,8 @@ def upload_directory(
                 connector.put(dst_path, blob, **put_kwargs)
                 break
             except Exception as e:
+                if isinstance(e, KeyboardInterrupt):
+                    raise e
                 if verbose:
                     print(f"[{this_count}] Error uploading {file_path}: {e}, retrying...")
                 this_try += 1

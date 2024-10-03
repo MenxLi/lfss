@@ -18,6 +18,7 @@ mimesniff = "1.*"
 lfss-serve = "lfss.cli.serve:main"
 lfss-user = "lfss.cli.user:main"
 lfss-panel = "lfss.cli.panel:main"
+lfss-cli = "lfss.cli.cli:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

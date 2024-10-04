@@ -3,7 +3,7 @@ import os
 import requests
 import urllib.parse
 from lfss.src.database import (
-    FileReadPermission, FileRecord, UserRecord, PathContents
+    FileReadPermission, FileRecord, DirectoryRecord, UserRecord, PathContents
     )
 
 _default_endpoint = os.environ.get('LFSS_ENDPOINT', 'http://localhost:8000')
@@ -63,7 +63,7 @@ class Connector:
             path = path[1:]
         self._fetch('DELETE', path)()
     
-    def get_metadata(self, path: str) -> Optional[FileRecord]:
+    def get_metadata(self, path: str) -> Optional[FileRecord | DirectoryRecord]:
         """Gets the metadata for the file at the specified path."""
         try:
             response = self._fetch('GET', '_api/meta', {'path': path})()

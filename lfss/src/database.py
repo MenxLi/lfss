@@ -47,6 +47,7 @@ class DBConnBase(ABC):
         global _g_conn
         if _g_conn is None:
             _g_conn = await aiosqlite.connect(DATA_HOME / 'lfss.db')
+            await _g_conn.execute('PRAGMA journal_mode=WAL')
 
     async def commit(self):
         await self.conn.commit()

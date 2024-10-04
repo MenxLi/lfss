@@ -1,4 +1,4 @@
-from lfss.client.api import Connector
+from lfss.client.api import Connector, FileRecord
 from concurrent.futures import ThreadPoolExecutor
 import random, string
 
@@ -16,6 +16,7 @@ def test_put_get_delete(conn: Connector):
         assert conn.put(path, random_data)
         assert conn.get(path) == random_data
         assert (meta:=conn.get_metadata(path))
+        assert isinstance(meta, FileRecord)
         assert meta.file_size == len(random_data)
         conn.delete(path)
         assert not conn.get_metadata(path)

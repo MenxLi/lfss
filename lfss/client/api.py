@@ -67,7 +67,10 @@ class Connector:
         """Gets the metadata for the file at the specified path."""
         try:
             response = self._fetch('GET', '_api/meta', {'path': path})()
-            return FileRecord(**response.json())
+            if path.endswith('/'):
+                return DirectoryRecord(**response.json())
+            else:
+                return FileRecord(**response.json())
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
                 return None

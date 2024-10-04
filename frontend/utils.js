@@ -1,7 +1,7 @@
 
 export function formatSize(size){
     if (size < 0){
-        return 'N/A';
+        return '';
     }
     const sizeInKb = size / 1024;
     const sizeInMb = sizeInKb / 1024;
@@ -71,6 +71,9 @@ export function getRandomString(n, additionalCharset='0123456789_-(=)[]{}'){
  * @returns {string}
  */
 export function cvtGMT2Local(dateStr){
+    if (!dateStr || dateStr === 'N/A'){
+        return '';
+    }
     const gmtdate = new Date(dateStr);
     const localdate = new Date(gmtdate.getTime() + gmtdate.getTimezoneOffset() * 60000);
     return localdate.toISOString().slice(0, 19).replace('T', ' ');

@@ -247,10 +247,12 @@ function refreshFileList(){
                 }
                 {
                     const dateTd = document.createElement('td');
+                    dateTd.textContent = cvtGMT2Local(dir.access_time);
                     tr.appendChild(dateTd);
                 }
                 {
                     const dateTd = document.createElement('td');
+                    dateTd.textContent = cvtGMT2Local(dir.create_time);
                     tr.appendChild(dateTd);
                 }
                 {

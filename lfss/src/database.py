@@ -199,6 +199,8 @@ class FileRecord:
 class DirectoryRecord:
     url: str
     size: int
+    create_time: str = ""
+    access_time: str = ""
 
     def __str__(self):
         return f"Directory {self.url} (size={self.size})"
@@ -352,9 +354,23 @@ class FileConn(DBConnBase):
             if len(dirs_str) > 16:
                 # skip subpath size calculation if there are too many subpaths...
                 return DirectoryRecord(dir_url, -1)
-            return DirectoryRecord(dir_url, await self.path_size(dir_url, include_subpath=True))
+            # return DirectoryRecord(dir_url, await self.path_size(dir_url, include_subpath=True))
+            return await self.get_path_info(dir_url)
         dirs = await asyncio.gather(*[get_dir(url + d) for d in dirs_str])
         return PathContents(dirs, files)
+    
+    async def get_path_info(self, url: str) -> DirectoryRecord:
+        assert url.endswith('/'), "Path must end with /"
+        async with self.conn.execute("SELECT create_time FROM fmeta WHERE url LIKE ? ORDER BY create_time ASC LIMIT 1", (url + '%', )) as cursor:
+            create_time = await cursor.fetchone()
+            if create_time is None:
+                raise PathNotFoundError(f"Path {url} not found")
+        async with self.conn.execute("SELECT access_time FROM fmeta WHERE url LIKE ? ORDER BY access_time DESC LIMIT 1", (url + '%', )) as cursor:
+            access_time = await cursor.fetchone()
+            if access_time is None:
+                raise PathNotFoundError(f"Path {url} not found when querying access time")
+        p_size = await self.path_size(url, include_subpath=True)
+        return DirectoryRecord(url, p_size, create_time=create_time[0], access_time=access_time[0])
     
     async def user_size(self, user_id: int) -> int:
         async with self.conn.execute("SELECT size FROM usize WHERE user_id = ?", (user_id, )) as cursor:

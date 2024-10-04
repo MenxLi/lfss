@@ -289,19 +289,18 @@ async def bundle_files(path: str, user: UserRecord = Depends(get_current_user)):
         }
     )
 
-@router_api.get("/fmeta")
+@router_api.get("/meta")
 @handle_exception
 async def get_file_meta(path: str, user: UserRecord = Depends(get_current_user)):
     logger.info(f"GET meta({path}), user: {user.username}")
-    if path.endswith("/"):
-        raise HTTPException(status_code=400, detail="Invalid path")
     path = ensure_uri_compnents(path)
-    file_record = await conn.file.get_file_record(path)
-    if not file_record:
-        raise HTTPException(status_code=404, detail="File not found")
-    return file_record
+    get_fn = conn.file.get_file_record if not path.endswith("/") else conn.file.get_path_record
+    record = await get_fn(path)
+    if not record:
+        raise HTTPException(status_code=404, detail="Path not found")
+    return record
 
-@router_api.post("/fmeta")
+@router_api.post("/meta")
 @handle_exception
 async def update_file_meta(
     path: str, 

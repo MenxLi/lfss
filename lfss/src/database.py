@@ -200,6 +200,7 @@ class DirectoryRecord:
     url: str
     size: int
     create_time: str = ""
+    update_time: str = ""
     access_time: str = ""
 
     def __str__(self):
@@ -280,7 +281,7 @@ class FileConn(DBConnBase):
             res = await cursor.fetchall()
         return [self.parse_record(r) for r in res]
     
-    async def get_path_records(self, url: str) -> list[FileRecord]:
+    async def get_path_file_records(self, url: str) -> list[FileRecord]:
         async with self.conn.execute("SELECT * FROM fmeta WHERE url LIKE ?", (url + '%', )) as cursor:
             res = await cursor.fetchall()
         return [self.parse_record(r) for r in res]
@@ -351,26 +352,25 @@ class FileConn(DBConnBase):
             res = await cursor.fetchall()
         dirs_str = [r[0] + '/' for r in res if r[0] != '/']
         async def get_dir(dir_url):
-            if len(dirs_str) > 16:
-                # skip subpath size calculation if there are too many subpaths...
-                return DirectoryRecord(dir_url, -1)
-            # return DirectoryRecord(dir_url, await self.path_size(dir_url, include_subpath=True))
-            return await self.get_path_info(dir_url)
+            return DirectoryRecord(dir_url, -1)
         dirs = await asyncio.gather(*[get_dir(url + d) for d in dirs_str])
         return PathContents(dirs, files)
     
-    async def get_path_info(self, url: str) -> DirectoryRecord:
+    async def get_path_record(self, url: str) -> Optional[DirectoryRecord]:
         assert url.endswith('/'), "Path must end with /"
-        async with self.conn.execute("SELECT create_time FROM fmeta WHERE url LIKE ? ORDER BY create_time ASC LIMIT 1", (url + '%', )) as cursor:
-            create_time = await cursor.fetchone()
-            if create_time is None:
+        async with self.conn.execute("""
+            SELECT MIN(create_time) as create_time, 
+                MAX(create_time) as update_time, 
+                MAX(access_time) as access_time 
+            FROM fmeta 
+            WHERE url LIKE ?
+        """, (url + '%', )) as cursor:
+            result = await cursor.fetchone()
+            if result is None or any(val is None for val in result):
                 raise PathNotFoundError(f"Path {url} not found")
-        async with self.conn.execute("SELECT access_time FROM fmeta WHERE url LIKE ? ORDER BY access_time DESC LIMIT 1", (url + '%', )) as cursor:
-            access_time = await cursor.fetchone()
-            if access_time is None:
-                raise PathNotFoundError(f"Path {url} not found when querying access time")
+            create_time, update_time, access_time = result
         p_size = await self.path_size(url, include_subpath=True)
-        return DirectoryRecord(url, p_size, create_time=create_time[0], access_time=access_time[0])
+        return DirectoryRecord(url, p_size, create_time=create_time, update_time=update_time, access_time=access_time)
     
     async def user_size(self, user_id: int) -> int:
         async with self.conn.execute("SELECT size FROM usize WHERE user_id = ?", (user_id, )) as cursor:
@@ -640,7 +640,7 @@ class Database:
         validate_url(url, is_file=False)
 
         async with transaction(self):
-            records = await self.file.get_path_records(url)
+            records = await self.file.get_path_file_records(url)
             if not records:
                 return None
             await self.__batch_delete_file_blobs([r.file_id for r in records])

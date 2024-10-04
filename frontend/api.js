@@ -114,12 +114,12 @@ export default class Connector {
     }
 
     /**
-     * @param {string} path - the path to the file
-     * @returns {Promise<FileRecord | null>} - the promise of the request
+     * @param {string} path - the path to the file or directory
+     * @returns {Promise<FileRecord | DirectoryRecord | null>} - the promise of the request
      */
     async getMetadata(path){
         if (path.startsWith('/')){ path = path.slice(1); }
-        const res = await fetch(this.config.endpoint + '/_api/fmeta?path=' + path, {
+        const res = await fetch(this.config.endpoint + '/_api/meta?path=' + path, {
             method: 'GET',
             headers: {
                 'Authorization': 'Bearer ' + this.config.token
@@ -173,7 +173,7 @@ export default class Connector {
      */
     async setFilePermission(path, permission){
         if (path.startsWith('/')){ path = path.slice(1); }
-        const dst = new URL(this.config.endpoint + '/_api/fmeta');
+        const dst = new URL(this.config.endpoint + '/_api/meta');
         dst.searchParams.append('path', path);
         dst.searchParams.append('perm', permission);
         const res = await fetch(dst.toString(), {
@@ -194,7 +194,7 @@ export default class Connector {
     async moveFile(path, newPath){
         if (path.startsWith('/')){ path = path.slice(1); }
         if (newPath.startsWith('/')){ newPath = newPath.slice(1); }
-        const dst = new URL(this.config.endpoint + '/_api/fmeta');
+        const dst = new URL(this.config.endpoint + '/_api/meta');
         dst.searchParams.append('path', path);
         dst.searchParams.append('new_path', newPath);
         const res = await fetch(dst.toString(), {

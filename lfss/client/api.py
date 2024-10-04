@@ -66,7 +66,7 @@ class Connector:
     def get_metadata(self, path: str) -> Optional[FileRecord]:
         """Gets the metadata for the file at the specified path."""
         try:
-            response = self._fetch('GET', '_api/fmeta', {'path': path})()
+            response = self._fetch('GET', '_api/meta', {'path': path})()
             return FileRecord(**response.json())
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
@@ -80,13 +80,13 @@ class Connector:
 
     def set_file_permission(self, path: str, permission: int | FileReadPermission):
         """Sets the file permission for the specified path."""
-        self._fetch('POST', '_api/fmeta', {'path': path, 'perm': int(permission)})(
+        self._fetch('POST', '_api/meta', {'path': path, 'perm': int(permission)})(
             headers={'Content-Type': 'application/www-form-urlencoded'}
         )
         
     def move_file(self, path: str, new_path: str):
         """Moves a file to a new location."""
-        self._fetch('POST', '_api/fmeta', {'path': path, 'new_path': new_path})(
+        self._fetch('POST', '_api/meta', {'path': path, 'new_path': new_path})(
             headers = {'Content-Type': 'application/www-form-urlencoded'}
         )
         

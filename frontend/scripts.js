@@ -79,6 +79,10 @@ pathBackButton.addEventListener('click', () => {
 
 function onFileNameInpuChange(){
     const fileName = uploadFileNameInput.value;
+    if (fileName.endsWith('/')){
+        uploadFileNameInput.classList.add('duplicate');
+        return;
+    }
     if (fileName.length === 0){
         uploadFileNameInput.classList.remove('duplicate');
     }
@@ -219,6 +223,9 @@ function refreshFileList(){
 
             data.dirs.forEach(dir => {
                 const tr = document.createElement('tr');
+                const sizeTd = document.createElement('td');
+                const accessTimeTd = document.createElement('td');
+                const createTimeTd = document.createElement('td');
                 {
                     const nameTd = document.createElement('td');
                     if (dir.url.endsWith('/')){
@@ -239,21 +246,14 @@ function refreshFileList(){
                     tr.appendChild(nameTd);
                     tbody.appendChild(tr);
                 }
-
                 {
-                    const sizeTd = document.createElement('td');
+                    // these are initialized meta
                     sizeTd.textContent = formatSize(dir.size);
                     tr.appendChild(sizeTd);
-                }
-                {
-                    const dateTd = document.createElement('td');
-                    dateTd.textContent = cvtGMT2Local(dir.access_time);
-                    tr.appendChild(dateTd);
-                }
-                {
-                    const dateTd = document.createElement('td');
-                    dateTd.textContent = cvtGMT2Local(dir.create_time);
-                    tr.appendChild(dateTd);
+                    accessTimeTd.textContent = cvtGMT2Local(dir.access_time);
+                    tr.appendChild(accessTimeTd);
+                    createTimeTd.textContent = cvtGMT2Local(dir.create_time);
+                    tr.appendChild(createTimeTd);
                 }
                 {
                     const accessTd = document.createElement('td');
@@ -263,6 +263,22 @@ function refreshFileList(){
                     const actTd = document.createElement('td');
                     const actContainer = document.createElement('div');
                     actContainer.classList.add('action-container');
+
+                    const showMetaButton = document.createElement('a');
+                    showMetaButton.textContent = 'Details';
+                    showMetaButton.style.cursor = 'pointer';
+                    showMetaButton.addEventListener('click', () => {
+                        const dirUrlEncap = dir.url + (dir.url.endsWith('/') ? '' : '/');
+                        conn.getMetadata(dirUrlEncap).then(
+                            (meta) => {
+                                sizeTd.textContent = formatSize(meta.size);
+                                accessTimeTd.textContent = cvtGMT2Local(meta.access_time);
+                                createTimeTd.textContent = cvtGMT2Local(meta.create_time);
+                            }
+                        );
+                        showPopup('Fetching metadata...', {level: 'info', timeout: 3000});
+                    });
+                    actContainer.appendChild(showMetaButton);
 
                     const downloadButton = document.createElement('a');
                     downloadButton.textContent = 'Download';

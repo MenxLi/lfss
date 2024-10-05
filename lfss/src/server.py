@@ -160,7 +160,7 @@ async def get_file(path: str, download = False, user: UserRecord = Depends(get_c
             if media_type is None:
                 media_type, _ = mimetypes.guess_type(fname)
             if media_type is None:
-                media_type = mimesniff.what(LARGE_BLOB_DIR / file_record.file_id)
+                media_type = mimesniff.what(str((LARGE_BLOB_DIR / file_record.file_id).absolute()))
             return StreamingResponse(
                 await conn.read_file_stream(path), media_type=media_type, headers={
                     "Content-Disposition": f"{disposition}; filename={fname}", 

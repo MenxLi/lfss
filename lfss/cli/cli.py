@@ -14,7 +14,7 @@ def parse_arguments():
     sp_upload.add_argument("dst", help="Destination path", type=str)
     sp_upload.add_argument("-j", "--jobs", type=int, default=1, help="Number of concurrent uploads")
     sp_upload.add_argument("--interval", type=float, default=0, help="Interval between retries, only works with directory upload")
-    sp_upload.add_argument("--overwrite", action="store_true", help="Overwrite existing files")
+    sp_upload.add_argument("--conflict", choices=["overwrite", "abort", "skip"], default="abort", help="Conflict resolution")
     sp_upload.add_argument("--permission", type=FileReadPermission, default=FileReadPermission.UNSET, help="File permission")
     sp_upload.add_argument("--retries", type=int, default=0, help="Number of retries, only works with directory upload")
 
@@ -32,7 +32,7 @@ def main():
                 n_concurrent=args.jobs, 
                 n_reties=args.retries, 
                 interval=args.interval,
-                overwrite=args.overwrite, 
+                conflict=args.conflict,
                 permission=args.permission
             )
             if failed_upload:
@@ -44,7 +44,7 @@ def main():
                 connector.put(
                     args.dst, 
                     f.read(), 
-                    overwrite=args.overwrite, 
+                    conflict=args.conflict,
                     permission=args.permission
                     )
     else:

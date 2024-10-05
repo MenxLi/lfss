@@ -57,13 +57,13 @@ export default class Connector {
     * @returns {Promise<string>} - the promise of the request, the url of the file
     */
     async put(path, file, {
-        overwrite = false,
+        conflict = 'abort',
         permission = 0
     } = {}){
         if (path.startsWith('/')){ path = path.slice(1); }
         const fileBytes = await file.arrayBuffer();
         const dst = new URL(this.config.endpoint + '/' + path);
-        dst.searchParams.append('overwrite', overwrite);
+        dst.searchParams.append('conflict', conflict);
         dst.searchParams.append('permission', permission);
         const res = await fetch(dst.toString(), {
             method: 'PUT',

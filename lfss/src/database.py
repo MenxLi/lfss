@@ -49,6 +49,7 @@ class DBConnBase(ABC):
         if _g_conn is None:
             _g_conn = await aiosqlite.connect(DATA_HOME / 'lfss.db')
             await _g_conn.execute('PRAGMA journal_mode=memory')
+            await _g_conn.execute('PRAGMA page_size=16384')
 
     async def commit(self):
         await self.conn.commit()

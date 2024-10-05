@@ -34,13 +34,13 @@ class Connector:
             return response
         return f
 
-    def put(self, path: str, file_data: bytes, permission: int | FileReadPermission = 0, overwrite: bool = False):
+    def put(self, path: str, file_data: bytes, permission: int | FileReadPermission = 0, conflict: Literal['overwrite', 'abort', 'skip'] = 'abort'):
         """Uploads a file to the specified path."""
         if path.startswith('/'):
             path = path[1:]
         response = self._fetch('PUT', path, search_params={
             'permission': int(permission),
-            'overwrite': overwrite
+            'conflict': conflict
             })(
             data=file_data, 
             headers={'Content-Type': 'application/octet-stream'}

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Literal
 from functools import wraps
 
 from fastapi import FastAPI, APIRouter, Depends, Request, Response
@@ -179,7 +179,7 @@ async def get_file(path: str, download = False, user: UserRecord = Depends(get_c
 async def put_file(
     request: Request, 
     path: str, 
-    overwrite: Optional[bool] = False,
+    conflict: Literal["overwrite", "skip", "abort"] = "abort",
     permission: int = 0,
     user: UserRecord = Depends(get_current_user)):
     path = ensure_uri_compnents(path)
@@ -201,8 +201,12 @@ async def put_file(
     exists_flag = False
     file_record = await conn.file.get_file_record(path)
     if file_record:
-        if not overwrite:
+        if conflict == "abort":
             raise HTTPException(status_code=409, detail="File exists")
+        if conflict == "skip":
+            return Response(status_code=200, headers={
+                "Content-Type": "application/json",
+            }, content=json.dumps({"url": path}))
         # remove the old file
         exists_flag = True
         await conn.delete_file(path)

@@ -8,6 +8,8 @@ def parse_storage_size(s: str) -> int:
         return int(s[:-1]) * 1024 * 1024
     if s[-1] in 'Gg':
         return int(s[:-1]) * 1024 * 1024 * 1024
+    if s[-1] in 'Tt':
+        return int(s[:-1]) * 1024 * 1024 * 1024 * 1024
     return int(s)
 
 async def _main():

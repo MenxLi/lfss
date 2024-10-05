@@ -10,7 +10,7 @@ def test_put_get_delete(conn: Connector):
     random_ext = random.choice(['.txt', '.bin', '.jpg', '.png', '.mp4', ""])
 
     path = f'test/{random_path}{random_ext}'
-    random_data = _random_string(random.randint(1, 1024)).encode()
+    random_data = _random_string(random.randint(1, 1024)).encode('ascii') + '0'.encode('ascii') * random.randint(0, 1024*1024*128)
 
     try:
         assert conn.put(path, random_data)
@@ -23,16 +23,16 @@ def test_put_get_delete(conn: Connector):
         assert not conn.get(path)
         return True
     except Exception as e:
-        print(f"[error] Failed test for path: {path}")
+        print(f"[error] Failed test for path: {path}, size: {len(random_data)/1024/1024:.2f}MB: {e}")
         return False
 
 def concurrency_test(conn: Connector, n: int) -> int:
-    with ThreadPoolExecutor(max_workers=16) as executor:
+    with ThreadPoolExecutor(max_workers=4) as executor:
         results = list(executor.map(lambda _: test_put_get_delete(conn), range(n)))
     return sum(results)
 
 if __name__ == '__main__':
     conn = Connector()
-    n_tests = 1000
+    n_tests = 100
     n_success = concurrency_test(conn, n_tests)
     print(f"Success: {n_success}/{n_tests}")

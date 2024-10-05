@@ -12,6 +12,7 @@ include = ["Readme.md", "docs/*", "frontend/*"]
 python = ">=3.9"
 fastapi = "0.*"
 aiosqlite = "0.*"
+aiofiles = "23.*"
 mimesniff = "1.*"
 
 [tool.poetry.scripts]

@@ -2,6 +2,7 @@ from typing import Optional
 from functools import wraps
 
 from fastapi import FastAPI, APIRouter, Depends, Request, Response
+from fastapi.responses import StreamingResponse
 from fastapi.exceptions import HTTPException 
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,7 +15,7 @@ from contextlib import asynccontextmanager
 from .error import *
 from .log import get_logger
 from .stat import RequestDB
-from .config import MAX_BUNDLE_BYTES, MAX_FILE_BYTES
+from .config import MAX_BUNDLE_BYTES, MAX_FILE_BYTES, LARGE_BLOB_DIR, LARGE_FILE_BYTES
 from .utils import ensure_uri_compnents, format_last_modified, now_stamp
 from .database import Database, UserRecord, DECOY_USER, FileRecord, check_user_permission, FileReadPermission
 
@@ -141,19 +142,32 @@ async def get_file(path: str, download = False, user: UserRecord = Depends(get_c
     
     fname = path.split("/")[-1]
     async def send(media_type: Optional[str] = None, disposition = "attachment"):
-        fblob = await conn.read_file(path)
-        if media_type is None:
-            media_type, _ = mimetypes.guess_type(fname)
-        if media_type is None:
-            media_type = mimesniff.what(fblob)
-
-        return Response(
-            content=fblob, media_type=media_type, headers={
-                "Content-Disposition": f"{disposition}; filename={fname}", 
-                "Content-Length": str(len(fblob)), 
-                "Last-Modified": format_last_modified(file_record.create_time)
-            }
-        )
+        if not file_record.external:
+            fblob = await conn.read_file(path)
+            if media_type is None:
+                media_type, _ = mimetypes.guess_type(fname)
+            if media_type is None:
+                media_type = mimesniff.what(fblob)
+            return Response(
+                content=fblob, media_type=media_type, headers={
+                    "Content-Disposition": f"{disposition}; filename={fname}", 
+                    "Content-Length": str(len(fblob)), 
+                    "Last-Modified": format_last_modified(file_record.create_time)
+                }
+            )
+        
+        else:
+            if media_type is None:
+                media_type, _ = mimetypes.guess_type(fname)
+            if media_type is None:
+                media_type = mimesniff.what(LARGE_BLOB_DIR / file_record.file_id)
+            return StreamingResponse(
+                await conn.read_file_stream(path), media_type=media_type, headers={
+                    "Content-Disposition": f"{disposition}; filename={fname}", 
+                    "Content-Length": str(file_record.file_size),
+                    "Last-Modified": format_last_modified(file_record.create_time)
+                }
+            )
     
     if download:
         return await send('application/octet-stream', "attachment")
@@ -198,20 +212,25 @@ async def put_file(
     logger.debug(f"Content-Type: {content_type}")
     if content_type == "application/json":
         body = await request.json()
-        await conn.save_file(user.id, path, json.dumps(body).encode('utf-8'), permission = FileReadPermission(permission))
+        blobs = json.dumps(body).encode('utf-8')
     elif content_type == "application/x-www-form-urlencoded":
         # may not work...
         body = await request.form()
         file = body.get("file")
         if isinstance(file, str) or file is None:
             raise HTTPException(status_code=400, detail="Invalid form data, file required")
-        await conn.save_file(user.id, path, await file.read(), permission = FileReadPermission(permission))
+        blobs = await file.read()
     elif content_type == "application/octet-stream":
-        body = await request.body()
-        await conn.save_file(user.id, path, body, permission = FileReadPermission(permission))
+        blobs = await request.body()
     else:
-        body = await request.body()
-        await conn.save_file(user.id, path, body, permission = FileReadPermission(permission))
+        blobs = await request.body()
+    if len(blobs) > LARGE_FILE_BYTES:
+        async def blob_reader():
+            for b in range(0, len(blobs), 4096):
+                yield blobs[b:b+4096]
+        await conn.save_file(user.id, path, blob_reader(), permission = FileReadPermission(permission))
+    else:
+        await conn.save_file(user.id, path, blobs, permission = FileReadPermission(permission))
 
     # https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Methods/PUT
     if exists_flag:

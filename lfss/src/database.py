@@ -9,10 +9,11 @@ from functools import wraps
 from enum import IntEnum
 import zipfile, io, asyncio
 
-import aiosqlite
+import aiosqlite, aiofiles
+import aiofiles.os
 from asyncio import Lock
 
-from .config import DATA_HOME
+from .config import DATA_HOME, LARGE_BLOB_DIR
 from .log import get_logger
 from .utils import decode_uri_compnents
 from .error import *
@@ -47,7 +48,7 @@ class DBConnBase(ABC):
         global _g_conn
         if _g_conn is None:
             _g_conn = await aiosqlite.connect(DATA_HOME / 'lfss.db')
-            await _g_conn.execute('PRAGMA journal_mode=WAL')
+            await _g_conn.execute('PRAGMA journal_mode=memory')
 
     async def commit(self):
         await self.conn.commit()
@@ -191,10 +192,11 @@ class FileRecord:
     create_time: str
     access_time: str
     permission: FileReadPermission
+    external: bool
 
     def __str__(self):
         return  f"File {self.url} (owner={self.owner_id}, created at {self.create_time}, accessed at {self.access_time}, " + \
-                f"file_id={self.file_id}, permission={self.permission}, size={self.file_size})"
+                f"file_id={self.file_id}, permission={self.permission}, size={self.file_size}, external={self.external})"
 
 @dataclasses.dataclass
 class DirectoryRecord:
@@ -228,7 +230,9 @@ class FileConn(DBConnBase):
             file_size INTEGER,
             create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
             access_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            permission INTEGER DEFAULT 0
+            permission INTEGER DEFAULT 0, 
+            external BOOLEAN DEFAULT FALSE,
+            FOREIGN KEY(owner_id) REFERENCES user(id)
         )
         ''')
         await self.conn.execute('''
@@ -260,6 +264,16 @@ class FileConn(DBConnBase):
                     size = await cursor.fetchone()
                 if size is not None and size[0] is not None:
                     await self._user_size_inc(r[0], size[0])
+        
+        # backward compatibility, since 0.5.0
+        # 'external' means the file is not stored in the database, but in the external storage
+        async with self.conn.execute("SELECT * FROM fmeta") as cursor:
+            res = await cursor.fetchone()
+        if res and len(res) < 8:
+            self.logger.info("Updating fmeta table")
+            await self.conn.execute('''
+            ALTER TABLE fmeta ADD COLUMN external BOOLEAN DEFAULT FALSE
+            ''')
 
         return self
     
@@ -404,7 +418,8 @@ class FileConn(DBConnBase):
         owner_id: Optional[int] = None, 
         file_id: Optional[str] = None, 
         file_size: Optional[int] = None, 
-        permission: Optional[ FileReadPermission ] = None
+        permission: Optional[ FileReadPermission ] = None, 
+        external: Optional[bool] = None
         ):
 
         old = await self.get_file_record(url)
@@ -413,6 +428,7 @@ class FileConn(DBConnBase):
             # should delete the old blob if file_id is changed
             assert file_id is None, "Cannot update file id"
             assert file_size is None, "Cannot update file size"
+            assert external is None, "Cannot update external"
 
             if owner_id is None: owner_id = old.owner_id
             if permission is None: permission = old.permission
@@ -423,13 +439,13 @@ class FileConn(DBConnBase):
                 """, (owner_id, int(permission), url))
             self.logger.info(f"File {url} updated")
         else:
-            self.logger.debug(f"Creating fmeta {url}: permission={permission}, owner_id={owner_id}, file_id={file_id}, file_size={file_size}")
+            self.logger.debug(f"Creating fmeta {url}: permission={permission}, owner_id={owner_id}, file_id={file_id}, file_size={file_size}, external={external}")
             if permission is None:
                 permission = FileReadPermission.UNSET
-            assert owner_id is not None and file_id is not None and file_size is not None, "Missing required fields"
+            assert owner_id is not None and file_id is not None and file_size is not None and external is not None
             await self.conn.execute(
-                "INSERT INTO fmeta (url, owner_id, file_id, file_size, permission) VALUES (?, ?, ?, ?, ?)", 
-                (url, owner_id, file_id, file_size, int(permission))
+                "INSERT INTO fmeta (url, owner_id, file_id, file_size, permission, external) VALUES (?, ?, ?, ?, ?, ?)", 
+                (url, owner_id, file_id, file_size, int(permission), external)
                 )
             await self._user_size_inc(owner_id, file_size)
             self.logger.info(f"File {url} created")
@@ -486,12 +502,37 @@ class FileConn(DBConnBase):
     async def set_file_blob(self, file_id: str, blob: bytes):
         await self.conn.execute("INSERT OR REPLACE INTO fdata (file_id, data) VALUES (?, ?)", (file_id, blob))
     
+    @atomic
+    async def set_file_blob_external(self, file_id: str, stream: AsyncIterable[bytes])->int:
+        size_sum = 0
+        try:
+            async with aiofiles.open(LARGE_BLOB_DIR / file_id, 'wb') as f:
+                async for chunk in stream:
+                    size_sum += len(chunk)
+                    await f.write(chunk)
+        except Exception as e:
+            if (LARGE_BLOB_DIR / file_id).exists():
+                await aiofiles.os.remove(LARGE_BLOB_DIR / file_id)
+            raise
+        return size_sum
+    
     async def get_file_blob(self, file_id: str) -> Optional[bytes]:
         async with self.conn.execute("SELECT data FROM fdata WHERE file_id = ?", (file_id, )) as cursor:
             res = await cursor.fetchone()
         if res is None:
             return None
         return res[0]
+    
+    async def get_file_blob_external(self, file_id: str) -> AsyncIterable[bytes]:
+        assert (LARGE_BLOB_DIR / file_id).exists(), f"File {file_id} not found"
+        async with aiofiles.open(LARGE_BLOB_DIR / file_id, 'rb') as f:
+            async for chunk in f:
+                yield chunk
+    
+    @atomic
+    async def delete_file_blob_external(self, file_id: str):
+        if (LARGE_BLOB_DIR / file_id).exists():
+            await aiofiles.os.remove(LARGE_BLOB_DIR / file_id)
     
     @atomic
     async def delete_file_blob(self, file_id: str):
@@ -564,9 +605,15 @@ class Database:
         if _g_conn is not None:
             await _g_conn.rollback()
 
-    async def save_file(self, u: int | str, url: str, blob: bytes, permission: FileReadPermission = FileReadPermission.UNSET):
+    async def save_file(
+        self, u: int | str, url: str, 
+        blob: bytes | AsyncIterable[bytes], 
+        permission: FileReadPermission = FileReadPermission.UNSET
+        ):
+        """
+        if file_size is not provided, the blob must be bytes
+        """
         validate_url(url)
-        assert isinstance(blob, bytes), "blob must be bytes"
 
         user = await get_user(self, u)
         if user is None:
@@ -583,25 +630,48 @@ class Database:
                 if await get_user(self, first_component) is None:
                     raise PermissionDeniedError(f"Invalid path: {first_component} is not a valid username")
         
-        # check if fize_size is within limit
-        file_size = len(blob)
         user_size_used = await self.file.user_size(user.id)
-        if user_size_used + file_size > user.max_storage:
-            raise StorageExceededError(f"Unable to save file, user {user.username} has storage limit of {user.max_storage}, used {user_size_used}, requested {file_size}")
+        if isinstance(blob, bytes):
+            file_size = len(blob)
+            if user_size_used + file_size > user.max_storage:
+                raise StorageExceededError(f"Unable to save file, user {user.username} has storage limit of {user.max_storage}, used {user_size_used}, requested {file_size}")
+            f_id = uuid.uuid4().hex
+            async with transaction(self):
+                await self.file.set_file_blob(f_id, blob)
+                await self.file.set_file_record(
+                    url, owner_id=user.id, file_id=f_id, file_size=file_size, 
+                    permission=permission, external=False)
+                await self.user.set_active(user.username)
+        else:
+            assert isinstance(blob, AsyncIterable)
+            async with transaction(self):
+                f_id = uuid.uuid4().hex
+                file_size = await self.file.set_file_blob_external(f_id, blob)
+                if user_size_used + file_size > user.max_storage:
+                    await self.file.delete_file_blob_external(f_id)
+                    raise StorageExceededError(f"Unable to save file, user {user.username} has storage limit of {user.max_storage}, used {user_size_used}, requested {file_size}")
+                await self.file.set_file_record(
+                    url, owner_id=user.id, file_id=f_id, file_size=file_size, 
+                    permission=permission, external=True)
+                await self.user.set_active(user.username)
 
-        f_id = uuid.uuid4().hex
-        async with transaction(self):
-            await self.file.set_file_blob(f_id, blob)
-            await self.file.set_file_record(url, owner_id=user.id, file_id=f_id, file_size=file_size, permission=permission)
-            await self.user.set_active(user.username)
+    async def read_file_stream(self, url: str) -> AsyncIterable[bytes]:
+        validate_url(url)
+        r = await self.file.get_file_record(url)
+        if r is None:
+            raise FileNotFoundError(f"File {url} not found")
+        if not r.external:
+            raise ValueError(f"File {url} is not stored externally, should use read_file instead")
+        return self.file.get_file_blob_external(r.file_id)
 
-    # async def read_file_stream(self, url: str): ...
     async def read_file(self, url: str) -> bytes:
         validate_url(url)
 
         r = await self.file.get_file_record(url)
         if r is None:
             raise FileNotFoundError(f"File {url} not found")
+        if r.external:
+            raise ValueError(f"File {url} is stored externally, should use read_file_stream instead")
 
         f_id = r.file_id
         blob = await self.file.get_file_blob(f_id)
@@ -621,8 +691,11 @@ class Database:
             if r is None:
                 return None
             f_id = r.file_id
-            await self.file.delete_file_blob(f_id)
             await self.file.delete_file_record(url)
+            if r.external:
+                await self.file.delete_file_blob_external(f_id)
+            else:
+                await self.file.delete_file_blob(f_id)
             return r
     
     async def move_file(self, old_url: str, new_url: str):
@@ -632,10 +705,21 @@ class Database:
         async with transaction(self):
             await self.file.move_file(old_url, new_url)
 
-    async def __batch_delete_file_blobs(self, file_ids: list[str], batch_size: int = 512):
+    async def __batch_delete_file_blobs(self, file_records: list[FileRecord], batch_size: int = 512):
         # https://github.com/langchain-ai/langchain/issues/10321
-        for i in range(0, len(file_ids), batch_size):
-            await self.file.delete_file_blobs([r for r in file_ids[i:i+batch_size]])
+        internal_ids = []
+        external_ids = []
+        for r in file_records:
+            if r.external:
+                external_ids.append(r.file_id)
+            else:
+                internal_ids.append(r.file_id)
+        
+        for i in range(0, len(internal_ids), batch_size):
+            await self.file.delete_file_blobs([r for r in internal_ids[i:i+batch_size]])
+        for i in range(0, len(external_ids)):
+            await self.file.delete_file_blob_external(external_ids[i])
+            
 
     async def delete_path(self, url: str):
         validate_url(url, is_file=False)
@@ -644,7 +728,7 @@ class Database:
             records = await self.file.get_path_file_records(url)
             if not records:
                 return None
-            await self.__batch_delete_file_blobs([r.file_id for r in records])
+            await self.__batch_delete_file_blobs(records)
             await self.file.delete_path_records(url)
             return records
     
@@ -655,11 +739,11 @@ class Database:
         
         async with transaction(self):
             records = await self.file.get_user_file_records(user.id)
-            await self.__batch_delete_file_blobs([r.file_id for r in records])
+            await self.__batch_delete_file_blobs(records)
             await self.file.delete_user_file_records(user.id)
             await self.user.delete_user(user.username)
     
-    async def iter_path(self, top_url: str, urls: Optional[list[str]]) -> AsyncIterable[tuple[FileRecord, bytes]]:
+    async def iter_path(self, top_url: str, urls: Optional[list[str]]) -> AsyncIterable[tuple[FileRecord, bytes | AsyncIterable[bytes]]]:
         if urls is None:
             urls = [r.url for r in await self.file.list_path(top_url, flat=True)]
 
@@ -670,10 +754,13 @@ class Database:
             if r is None:
                 continue
             f_id = r.file_id
-            blob = await self.file.get_file_blob(f_id)
-            if blob is None:
-                self.logger.warning(f"Blob not found for {url}")
-                continue
+            if r.external:
+                blob = self.file.get_file_blob_external(f_id)
+            else:
+                blob = await self.file.get_file_blob(f_id)
+                if blob is None:
+                    self.logger.warning(f"Blob not found for {url}")
+                    continue
             yield r, blob
 
     async def zip_path(self, top_url: str, urls: Optional[list[str]]) -> io.BytesIO:
@@ -684,7 +771,12 @@ class Database:
             async for (r, blob) in self.iter_path(top_url, urls):
                 rel_path = r.url[len(top_url):]
                 rel_path = decode_uri_compnents(rel_path)
-                zf.writestr(rel_path, blob)
+                if r.external:
+                    assert isinstance(blob, AsyncIterable)
+                    zf.writestr(rel_path, b''.join([chunk async for chunk in blob]))
+                else:
+                    assert isinstance(blob, bytes)
+                    zf.writestr(rel_path, blob)
         buffer.seek(0)
         return buffer
 

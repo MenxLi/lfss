@@ -68,44 +68,57 @@ async def move_to_internal(f_id: str, flag: str = ''):
                 raise e
 
 
-async def _main():
+async def _main(batch_size: int = 10000):
 
     tasks = []
     start_time = time.time()
-    async with aiosqlite.connect(db_file) as conn:
-        exceeded_rows = await (await conn.execute( 
-            "SELECT file_id FROM fmeta WHERE file_size > ? AND external = 0",
-            (LARGE_FILE_BYTES,)
-        )).fetchall()
-        
-    for i in range(0, len(exceeded_rows)):
-        row = exceeded_rows[i]
-        f_id = row[0]
-        tasks.append(move_to_external(f_id, flag=f"[e-{i+1}/{len(exceeded_rows)}] "))
 
-    async with aiosqlite.connect(db_file) as conn:
-        under_rows = await (await conn.execute(
-            "SELECT file_id, file_size, external FROM fmeta WHERE file_size <= ? AND external = 1",
-            (LARGE_FILE_BYTES,)
-        )).fetchall()
+    e_cout = 0
+    batch_count = 0
+    while True:
+        async with aiosqlite.connect(db_file) as conn:
+            exceeded_rows = list(await (await conn.execute( 
+                "SELECT file_id FROM fmeta WHERE file_size > ? AND external = 0 LIMIT ? OFFSET ?",
+                (LARGE_FILE_BYTES, batch_size, batch_size * batch_count)
+            )).fetchall())
+            if not exceeded_rows:
+                break
+        e_cout += len(exceeded_rows)
+        for i in range(0, len(exceeded_rows)):
+            row = exceeded_rows[i]
+            f_id = row[0]
+            tasks.append(move_to_external(f_id, flag=f"[b{batch_count+1}-e{i+1}/{len(exceeded_rows)}] "))
+        await asyncio.gather(*tasks)
 
-    for i in range(0, len(under_rows)):
-        row = under_rows[i]
-        f_id = row[0]
-        tasks.append(move_to_internal(f_id, flag=f"[i-{i+1}/{len(under_rows)}] "))
-        
-    await asyncio.gather(*tasks)
+    i_count = 0
+    batch_count = 0
+    while True:
+        async with aiosqlite.connect(db_file) as conn:
+            under_rows = list(await (await conn.execute(
+                "SELECT file_id, file_size, external FROM fmeta WHERE file_size <= ? AND external = 1 LIMIT ? OFFSET ?",
+                (LARGE_FILE_BYTES, batch_size, batch_size * batch_count)
+            )).fetchall())
+            if not under_rows:
+                break
+        i_count += len(under_rows)
+        for i in range(0, len(under_rows)):
+            row = under_rows[i]
+            f_id = row[0]
+            tasks.append(move_to_internal(f_id, flag=f"[b{batch_count+1}-i{i+1}/{len(under_rows)}] "))
+        await asyncio.gather(*tasks)
+
     end_time = time.time()
     print(f"Balancing complete, took {end_time - start_time:.2f} seconds. "
-          f"{len(exceeded_rows)} files moved to external storage, {len(under_rows)} files moved to internal storage.")
+          f"{e_cout} files moved to external storage, {i_count} files moved to internal storage.")
             
 def main():
     global sem
     parser = argparse.ArgumentParser(description="Balance the storage by ensuring that large file thresholds are met.")
     parser.add_argument("-j", "--jobs", type=int, default=2, help="Number of concurrent jobs")
+    parser.add_argument("-b", "--batch-size", type=int, default=10000, help="Batch size for processing files")
     args = parser.parse_args()
     sem = Semaphore(args.jobs)
-    asyncio.run(_main())
+    asyncio.run(_main(args.batch_size))
 
 if __name__ == '__main__':
     main()

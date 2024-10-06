@@ -3,6 +3,7 @@ from typing import Optional, overload, Literal, AsyncIterable
 from abc import ABC, abstractmethod
 
 import urllib.parse
+from pathlib import Path
 import dataclasses, hashlib, uuid
 from contextlib import asynccontextmanager
 from functools import wraps
@@ -22,6 +23,15 @@ _g_conn: Optional[aiosqlite.Connection] = None
 
 def hash_credential(username, password):
     return hashlib.sha256((username + password).encode()).hexdigest()
+
+async def execute_sql(conn: aiosqlite.Connection, name: str):
+    this_dir = Path(__file__).parent
+    sql_dir = this_dir.parent / 'sql'
+    async with aiofiles.open(sql_dir / name, 'r') as f:
+        sql = await f.read()
+    sql = sql.split(';')
+    for s in sql:
+        await conn.execute(s)
 
 _atomic_lock = Lock()
 def atomic(func):
@@ -48,11 +58,8 @@ class DBConnBase(ABC):
         global _g_conn
         if _g_conn is None:
             _g_conn = await aiosqlite.connect(DATA_HOME / 'lfss.db')
-            await _g_conn.execute('PRAGMA journal_mode=MEMORY')
-            await _g_conn.execute('PRAGMA temp_store=MEMORY')
-            await _g_conn.execute('PRAGMA page_size=16384')
-            await _g_conn.execute('PRAGMA synchronous=NORMAL')
-            await _g_conn.execute('PRAGMA case_sensitive_like=OFF')
+            await execute_sql(_g_conn, 'pragma.sql')
+            await execute_sql(_g_conn, 'init.sql')
 
     async def commit(self):
         await self.conn.commit()
@@ -86,26 +93,6 @@ class UserConn(DBConnBase):
 
     async def init(self):
         await super().init()
-        # default to 1GB (1024x1024x1024 bytes)
-        await self.conn.execute('''
-        CREATE TABLE IF NOT EXISTS user (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username VARCHAR(255) UNIQUE NOT NULL,
-            credential VARCHAR(255) NOT NULL,
-            is_admin BOOLEAN DEFAULT FALSE,
-            create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
-            last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
-            max_storage INTEGER DEFAULT 1073741824,
-            permission INTEGER DEFAULT 0
-        )
-        ''')
-        await self.conn.execute('''
-        CREATE INDEX IF NOT EXISTS idx_user_username ON user(username)
-        ''')
-        await self.conn.execute('''
-        CREATE INDEX IF NOT EXISTS idx_user_credential ON user(credential)
-        ''')
-
         return self
     
     async def get_user(self, username: str) -> Optional[UserRecord]:
@@ -226,37 +213,6 @@ class FileConn(DBConnBase):
     
     async def init(self):
         await super().init()
-        await self.conn.execute('''
-        CREATE TABLE IF NOT EXISTS fmeta (
-            url VARCHAR(512) PRIMARY KEY,
-            owner_id INTEGER NOT NULL,
-            file_id VARCHAR(256) NOT NULL,
-            file_size INTEGER,
-            create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
-            access_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            permission INTEGER DEFAULT 0, 
-            external BOOLEAN DEFAULT FALSE,
-            FOREIGN KEY(owner_id) REFERENCES user(id)
-        )
-        ''')
-        await self.conn.execute('''
-        CREATE INDEX IF NOT EXISTS idx_fmeta_url ON fmeta(url)
-        ''')
-
-        await self.conn.execute('''
-        CREATE TABLE IF NOT EXISTS fdata (
-            file_id VARCHAR(256) PRIMARY KEY,
-            data BLOB
-        )
-        ''')
-
-        # user file size table
-        await self.conn.execute('''
-        CREATE TABLE IF NOT EXISTS usize (
-            user_id INTEGER PRIMARY KEY,
-            size INTEGER DEFAULT 0
-        )
-        ''')
         # backward compatibility, since 0.2.1
         async with self.conn.execute("SELECT * FROM user") as cursor:
             res = await cursor.fetchall()

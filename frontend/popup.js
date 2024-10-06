@@ -40,7 +40,7 @@ export function createFloatingWindow(innerHTML = '',  {
     return [floatingWindow, closeWindow];
 }
 
-/* select can be "last-filename" */
+/* select can be "last-filename" or "last-pathname" */
 export function showFloatingWindowLineInput(onSubmit = (v) => {}, {
     text = "",
     placeholder = "Enter text",
@@ -72,6 +72,7 @@ export function showFloatingWindowLineInput(onSubmit = (v) => {}, {
     };
 
     if (select === "last-filename") {
+        // select the last filename, e.g. "file" in "/path/to/file.txt"
         const inputVal = input.value;
         let lastSlash = inputVal.lastIndexOf("/");
         if (lastSlash === -1) {
@@ -83,6 +84,17 @@ export function showFloatingWindowLineInput(onSubmit = (v) => {}, {
             lastDot = fname.length;
         }
         input.setSelectionRange(lastSlash + 1, lastSlash + lastDot + 1);
+    }
+    else if (select === "last-pathname") {
+        // select the last pathname, e.g. "to" in "/path/to/<filename>"
+        const lastSlash = input.value.lastIndexOf("/");
+        const secondLastSlash = input.value.lastIndexOf("/", input.value.lastIndexOf("/") - 1);
+        if (secondLastSlash !== -1) {
+            input.setSelectionRange(secondLastSlash + 1, lastSlash);
+        }
+        else {
+            input.setSelectionRange(0, lastSlash);
+        }
     }
 
     return [floatingWindow, closeWindow];

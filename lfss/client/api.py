@@ -106,8 +106,8 @@ class Connector:
             headers={'Content-Type': 'application/www-form-urlencoded'}
         )
         
-    def move_file(self, path: str, new_path: str):
-        """Moves a file to a new location."""
+    def move(self, path: str, new_path: str):
+        """Move file or directory to a new path."""
         self._fetch('POST', '_api/meta', {'path': path, 'new_path': new_path})(
             headers = {'Content-Type': 'application/www-form-urlencoded'}
         )

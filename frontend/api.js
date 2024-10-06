@@ -191,7 +191,7 @@ export default class Connector {
      * @param {string} path - file path(url)
      * @param {string} newPath - new file path(url)
      */
-    async moveFile(path, newPath){
+    async move(path, newPath){
         if (path.startsWith('/')){ path = path.slice(1); }
         if (newPath.startsWith('/')){ newPath = newPath.slice(1); }
         const dst = new URL(this.config.endpoint + '/_api/meta');

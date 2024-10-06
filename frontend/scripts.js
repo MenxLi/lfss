@@ -5,6 +5,9 @@ import { formatSize, decodePathURI, ensurePathURI, copyToClipboard, getRandomStr
 
 const conn = new Connector();
 let userRecord = null;
+const ensureSlashEnd = (path) => {
+    return path.endsWith('/') ? path : path + '/';
+}
 
 const endpointInput = document.querySelector('input#endpoint');
 const tokenInput = document.querySelector('input#token');
@@ -267,15 +270,16 @@ function refreshFileList(){
                     tr.appendChild(accessTd);
                 }
                 {
+                    const dirurl = ensureSlashEnd(dir.url);
                     const actTd = document.createElement('td');
                     const actContainer = document.createElement('div');
                     actContainer.classList.add('action-container');
 
                     const showMetaButton = document.createElement('a');
-                    showMetaButton.textContent = 'Details';
+                    showMetaButton.textContent = 'Reveal';
                     showMetaButton.style.cursor = 'pointer';
                     showMetaButton.addEventListener('click', () => {
-                        const dirUrlEncap = dir.url + (dir.url.endsWith('/') ? '' : '/');
+                        const dirUrlEncap = dirurl;
                         conn.getMetadata(dirUrlEncap).then(
                             (meta) => {
                                 sizeTd.textContent = formatSize(meta.size);
@@ -286,6 +290,30 @@ function refreshFileList(){
                         showPopup('Fetching metadata...', {level: 'info', timeout: 3000});
                     });
                     actContainer.appendChild(showMetaButton);
+
+                    const moveButton = document.createElement('a');
+                    moveButton.textContent = 'Move';
+                    moveButton.style.cursor = 'pointer';
+                    moveButton.addEventListener('click', () => {
+                        showFloatingWindowLineInput((dstPath) => {
+                            dstPath = encodePathURI(dstPath);
+                            console.log("Moving", dirurl, "to", dstPath);
+                            conn.move(dirurl, dstPath)
+                                .then(() => {
+                                    refreshFileList();
+                                }, 
+                                (err) => {
+                                    showPopup('Failed to move path: ' + err, {level: 'error'});
+                                }
+                            );
+                        }, {
+                            text: 'Enter the destination path: ',
+                            placeholder: 'Destination path',
+                            value: decodePathURI(dirurl), 
+                            select: "last-pathname"
+                        });
+                    });
+                    actContainer.appendChild(moveButton);
 
                     const downloadButton = document.createElement('a');
                     downloadButton.textContent = 'Download';
@@ -409,10 +437,7 @@ function refreshFileList(){
                     moveButton.addEventListener('click', () => {
                         showFloatingWindowLineInput((dstPath) => {
                             dstPath = encodePathURI(dstPath);
-                            if (dstPath.endsWith('/')){
-                                dstPath = dstPath.slice(0, -1);
-                            }
-                            conn.moveFile(file.url, dstPath)
+                            conn.move(file.url, dstPath)
                                 .then(() => {
                                     refreshFileList();
                                 }, 

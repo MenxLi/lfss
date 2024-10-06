@@ -263,6 +263,7 @@ async def delete_file(path: str, user: UserRecord = Depends(get_current_user)):
     else:
         res = await conn.delete_file(path)
 
+    await conn.user.set_active(user.username)
     if res:
         return Response(status_code=200, content="Deleted")
     else:
@@ -335,26 +336,57 @@ async def update_file_meta(
     if user.id == 0:
         raise HTTPException(status_code=401, detail="Permission denied")
     path = ensure_uri_compnents(path)
-    file_record = await conn.file.get_file_record(path)
-    if not file_record:
-        logger.debug(f"Reject update meta request from {user.username} to {path}")
-        raise HTTPException(status_code=404, detail="File not found")
+    if path.startswith("/"):
+        path = path[1:]
+    await conn.user.set_active(user.username)
+
+    # file
+    if not path.endswith("/"):
+        file_record = await conn.file.get_file_record(path)
+        if not file_record:
+            logger.debug(f"Reject update meta request from {user.username} to {path}")
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        if not (user.is_admin or user.id == file_record.owner_id):
+            logger.debug(f"Reject update meta request from {user.username} to {path}")
+            raise HTTPException(status_code=403, detail="Permission denied")
+        
+        if perm is not None:
+            logger.info(f"Update permission of {path} to {perm}")
+            await conn.file.set_file_record(
+                url = file_record.url, 
+                permission = FileReadPermission(perm)
+            )
     
-    if not (user.is_admin or user.id == file_record.owner_id):
-        logger.debug(f"Reject update meta request from {user.username} to {path}")
-        raise HTTPException(status_code=403, detail="Permission denied")
+        if new_path is not None:
+            new_path = ensure_uri_compnents(new_path)
+            logger.info(f"Update path of {path} to {new_path}")
+            await conn.move_file(path, new_path)
     
-    if perm is not None:
-        logger.info(f"Update permission of {path} to {perm}")
-        await conn.file.set_file_record(
-            url = file_record.url, 
-            permission = FileReadPermission(perm)
-        )
-    
-    if new_path is not None:
-        new_path = ensure_uri_compnents(new_path)
-        logger.info(f"Update path of {path} to {new_path}")
-        await conn.move_file(path, new_path)
+    # directory
+    else:
+        assert perm is None, "Permission is not supported for directory"
+        if new_path is not None:
+            new_path = ensure_uri_compnents(new_path)
+            logger.info(f"Update path of {path} to {new_path}")
+            assert new_path.endswith("/"), "New path must end with /"
+            if new_path.startswith("/"):
+                new_path = new_path[1:]
+
+            # check if new path is under the user's directory
+            first_component = new_path.split("/")[0]
+            if not (first_component == user.username or user.is_admin):
+                raise HTTPException(status_code=403, detail="Permission denied, path must start with username")
+            elif user.is_admin:
+                _is_user = await conn.user.get_user(first_component)
+                if not _is_user:
+                    raise HTTPException(status_code=404, detail="User not found, path must start with username")
+
+            # check if old path is under the user's directory (non-admin)
+            if not path.startswith(f"{user.username}/") and not user.is_admin:
+                raise HTTPException(status_code=403, detail="Permission denied, path must start with username")
+            # currently only move own file, with overwrite
+            await conn.move_path(path, new_path, user_id = user.id)
 
     return Response(status_code=200, content="OK")
     

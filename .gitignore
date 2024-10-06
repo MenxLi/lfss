@@ -12,4 +12,5 @@ package-lock.json
 dist
 build
 
+_test
 .storage_data

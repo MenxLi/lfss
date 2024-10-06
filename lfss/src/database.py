@@ -331,7 +331,7 @@ class FileConn(DBConnBase):
         dirs = await asyncio.gather(*[get_dir(url + d) for d in dirs_str])
         return PathContents(dirs, files)
     
-    async def get_path_record(self, url: str) -> Optional[DirectoryRecord]:
+    async def get_path_record(self, url: str) -> DirectoryRecord:
         assert url.endswith('/'), "Path must end with /"
         async with self.conn.execute("""
             SELECT MIN(create_time) as create_time, 
@@ -420,6 +420,25 @@ class FileConn(DBConnBase):
             raise FileExistsError(f"File {new_url} already exists")
         async with self.conn.execute("UPDATE fmeta SET url = ?, create_time = CURRENT_TIMESTAMP WHERE url = ?", (new_url, old_url)):
             self.logger.info(f"Moved file {old_url} to {new_url}")
+    
+    @atomic
+    async def move_path(self, old_url: str, new_url: str, conflict_handler: Literal['skip', 'overwrite'] = 'overwrite', user_id: Optional[int] = None):
+        assert old_url.endswith('/'), "Old path must end with /"
+        assert new_url.endswith('/'), "New path must end with /"
+        if user_id is None:
+            async with self.conn.execute("SELECT * FROM fmeta WHERE url LIKE ?", (old_url + '%', )) as cursor:
+                res = await cursor.fetchall()
+        else:
+            async with self.conn.execute("SELECT * FROM fmeta WHERE url LIKE ? AND owner_id = ?", (old_url + '%', user_id)) as cursor:
+                res = await cursor.fetchall()
+        for r in res:
+            new_r = new_url + r[0][len(old_url):]
+            if conflict_handler == 'overwrite':
+                await self.conn.execute("DELETE FROM fmeta WHERE url = ?", (new_r, ))
+            elif conflict_handler == 'skip':
+                if (await self.conn.execute("SELECT url FROM fmeta WHERE url = ?", (new_r, ))) is not None:
+                    continue
+            await self.conn.execute("UPDATE fmeta SET url = ?, create_time = CURRENT_TIMESTAMP WHERE url = ?", (new_r, r[0]))
     
     async def log_access(self, url: str):
         await self.conn.execute("UPDATE fmeta SET access_time = CURRENT_TIMESTAMP WHERE url = ?", (url, ))
@@ -664,6 +683,13 @@ class Database:
 
         async with transaction(self):
             await self.file.move_file(old_url, new_url)
+    
+    async def move_path(self, old_url: str, new_url: str, user_id: Optional[int] = None):
+        validate_url(old_url, is_file=False)
+        validate_url(new_url, is_file=False)
+
+        async with transaction(self):
+            await self.file.move_path(old_url, new_url, 'overwrite', user_id)
 
     async def __batch_delete_file_blobs(self, file_records: list[FileRecord], batch_size: int = 512):
         # https://github.com/langchain-ai/langchain/issues/10321

@@ -128,11 +128,13 @@ uploadButton.addEventListener('click', () => {
         throw new Error('File name cannot end with /');
     }
     path = path + fileName;
+    showPopup('Uploading...', {level: 'info', timeout: 3000});
     conn.put(path, file)
         .then(() => {
             refreshFileList();
             uploadFileNameInput.value = '';
             onFileNameInpuChange();
+            showPopup('Upload success.', {level: 'success', timeout: 3000});
         }, 
         (err) => {
             showPopup('Failed to upload file: ' + err, {level: 'error', timeout: 5000});
@@ -191,9 +193,14 @@ Are you sure you want to proceed?
                 const path = dstPath + file.name;
                 promises.push(uploadFile(file, path));
             }
+            showPopup('Uploading multiple files...', {level: 'info', timeout: 3000});
             Promise.all(promises).then(
                 () => {
+                    showPopup('Upload success.', {level: 'success', timeout: 3000});
                     refreshFileList();
+                }, 
+                (err) => {
+                    showPopup('Failed to upload some files: ' + err, {level: 'error', timeout: 5000});
                 }
             );
         }

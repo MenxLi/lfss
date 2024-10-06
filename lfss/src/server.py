@@ -230,8 +230,9 @@ async def put_file(
         blobs = await request.body()
     if len(blobs) > LARGE_FILE_BYTES:
         async def blob_reader():
-            for b in range(0, len(blobs), 4096):
-                yield blobs[b:b+4096]
+            chunk_size = 16 * 1024 * 1024    # 16MB
+            for b in range(0, len(blobs), chunk_size):
+                yield blobs[b:b+chunk_size]
         await conn.save_file(user.id, path, blob_reader(), permission = FileReadPermission(permission))
     else:
         await conn.save_file(user.id, path, blobs, permission = FileReadPermission(permission))

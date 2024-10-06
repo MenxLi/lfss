@@ -10,6 +10,7 @@ if not DATA_HOME.exists():
 LARGE_BLOB_DIR = DATA_HOME / 'large_blobs'
 LARGE_BLOB_DIR.mkdir(exist_ok=True)
 
-LARGE_FILE_BYTES = 64 * 1024 * 1024   # 64MB
+# https://sqlite.org/fasterthanfs.html
+LARGE_FILE_BYTES = 16 * 1024 * 1024   # 16MB
 MAX_FILE_BYTES = 1024 * 1024 * 1024   # 1GB
 MAX_BUNDLE_BYTES = 1024 * 1024 * 1024   # 1GB

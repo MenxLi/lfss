@@ -36,8 +36,6 @@ class Connector:
 
     def put(self, path: str, file_data: bytes, permission: int | FileReadPermission = 0, conflict: Literal['overwrite', 'abort', 'skip'] = 'abort'):
         """Uploads a file to the specified path."""
-        if path.startswith('/'):
-            path = path[1:]
         response = self._fetch('PUT', path, search_params={
             'permission': int(permission),
             'conflict': conflict
@@ -47,20 +45,41 @@ class Connector:
         )
         return response.json()
     
-    def get(self, path: str) -> Optional[bytes]:
-        """Downloads a file from the specified path."""
+    def put_json(self, path: str, data: dict, permission: int | FileReadPermission = 0, conflict: Literal['overwrite', 'abort', 'skip'] = 'abort'):
+        """Uploads a JSON file to the specified path."""
+        assert path.endswith('.json'), "Path must end with .json"
+        response = self._fetch('PUT', path, search_params={
+            'permission': int(permission),
+            'conflict': conflict
+            })(
+            json=data, 
+            headers={'Content-Type': 'application/json'}
+        )
+        return response.json()
+    
+    def _get(self, path: str) -> Optional[requests.Response]:
         try:
             response = self._fetch('GET', path)()
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
                 return None
             raise e
+        return response
+
+    def get(self, path: str) -> Optional[bytes]:
+        """Downloads a file from the specified path."""
+        response = self._get(path)
+        if response is None: return None
         return response.content
+
+    def get_json(self, path: str) -> Optional[dict]:
+        response = self._get(path)
+        if response is None: return None
+        assert response.headers['Content-Type'] == 'application/json'
+        return response.json()
     
     def delete(self, path: str):
         """Deletes the file at the specified path."""
-        if path.startswith('/'):
-            path = path[1:]
         self._fetch('DELETE', path)()
     
     def get_metadata(self, path: str) -> Optional[FileRecord | DirectoryRecord]:

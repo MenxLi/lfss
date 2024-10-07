@@ -2,14 +2,14 @@
 Balance the storage by ensuring that large file thresholds are met.
 """
 
-from lfss.src.config import DATA_HOME, LARGE_BLOB_DIR, LARGE_FILE_BYTES
+from lfss.src.config import LARGE_BLOB_DIR, LARGE_FILE_BYTES
 import argparse, time
 from functools import wraps
 from asyncio import Semaphore
-import aiosqlite, aiofiles, asyncio
+import aiofiles, asyncio
+from lfss.src.database import transaction, connection
 
 sem = Semaphore(1)
-db_file = DATA_HOME / 'lfss.db'
 
 def _get_sem():
     return sem
@@ -23,7 +23,8 @@ def barriered(func):
 
 @barriered
 async def move_to_external(f_id: str, flag: str = ''):
-    async with aiosqlite.connect(db_file, timeout = 60) as c:
+    # async with aiosqlite.connect(db_file, timeout = 60) as c:
+    async with transaction() as c:
         async with c.execute( "SELECT data FROM blobs.fdata WHERE file_id = ?", (f_id,)) as cursor:
             blob_row = await cursor.fetchone()
             if blob_row is None:
@@ -47,7 +48,7 @@ async def move_to_external(f_id: str, flag: str = ''):
 
 @barriered
 async def move_to_internal(f_id: str, flag: str = ''):
-    async with aiosqlite.connect(db_file, timeout = 60) as c:
+    async with transaction() as c:
         if not (LARGE_BLOB_DIR / f_id).exists():
             print(f"{flag}File {f_id} not found in external storage")
             return
@@ -76,7 +77,7 @@ async def _main(batch_size: int = 10000):
     e_cout = 0
     batch_count = 0
     while True:
-        async with aiosqlite.connect(db_file) as conn:
+        async with connection() as conn:
             exceeded_rows = list(await (await conn.execute( 
                 "SELECT file_id FROM fmeta WHERE file_size > ? AND external = 0 LIMIT ? OFFSET ?",
                 (LARGE_FILE_BYTES, batch_size, batch_size * batch_count)
@@ -93,7 +94,7 @@ async def _main(batch_size: int = 10000):
     i_count = 0
     batch_count = 0
     while True:
-        async with aiosqlite.connect(db_file) as conn:
+        async with connection() as conn:
             under_rows = list(await (await conn.execute(
                 "SELECT file_id, file_size, external FROM fmeta WHERE file_size <= ? AND external = 1 LIMIT ? OFFSET ?",
                 (LARGE_FILE_BYTES, batch_size, batch_size * batch_count)

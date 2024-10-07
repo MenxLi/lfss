@@ -1,5 +1,6 @@
 import argparse, asyncio
-from ..src.database import Database, FileReadPermission
+from contextlib import asynccontextmanager
+from ..src.database import Database, FileReadPermission, transaction, UserConn
 
 def parse_storage_size(s: str) -> int:
     if s[-1] in 'Kk':
@@ -42,49 +43,48 @@ async def _main():
     sp_list.add_argument("-l", "--long", action="store_true")
     
     args = parser.parse_args()
-    conn = await Database().init()
+
+    @asynccontextmanager
+    async def get_uconn():
+        async with transaction() as conn:
+            yield UserConn(conn)
     
-    try:
-        if args.subparser_name == 'add':
-            await conn.user.create_user(args.username, args.password, args.admin, max_storage=args.max_storage, permission=args.permission)
-            user = await conn.user.get_user(args.username)
+    if args.subparser_name == 'add':
+        async with get_uconn() as uconn:
+            await uconn.create_user(args.username, args.password, args.admin, max_storage=args.max_storage, permission=args.permission)
+            user = await uconn.get_user(args.username)
             assert user is not None
             print('User created, credential:', user.credential)
-        
-        if args.subparser_name == 'delete':
-            user = await conn.user.get_user(args.username)
+    
+    if args.subparser_name == 'delete':
+        async with get_uconn() as uconn:
+            user = await uconn.get_user(args.username)
+        if user is None:
+            print('User not found')
+            exit(1)
+        else:
+            db = await Database().init()
+            await db.delete_user(user.id)
+        print('User deleted')
+    
+    if args.subparser_name == 'set':
+        async with get_uconn() as uconn:
+            user = await uconn.get_user(args.username)
             if user is None:
                 print('User not found')
                 exit(1)
-            else:
-                await conn.delete_user(user.id)
-            print('User deleted')
-        
-        if args.subparser_name == 'set':
-            user = await conn.user.get_user(args.username)
-            if user is None:
-                print('User not found')
-                exit(1)
-            await conn.user.update_user(user.username, args.password, args.admin, max_storage=args.max_storage, permission=args.permission)
-            user = await conn.user.get_user(args.username)
+            await uconn.update_user(user.username, args.password, args.admin, max_storage=args.max_storage, permission=args.permission)
+            user = await uconn.get_user(args.username)
             assert user is not None
             print('User updated, credential:', user.credential)
-        
-        if args.subparser_name == 'list':
-            async for user in conn.user.all():
+    
+    if args.subparser_name == 'list':
+        async with get_uconn() as uconn:
+            async for user in uconn.all():
                 print(user)
                 if args.long:
                     print('  ', user.credential)
         
-        await conn.commit()
-    
-    except Exception as e:
-        conn.logger.error(f'Error: {e}')
-        await conn.rollback()
-
-    finally:
-        await conn.close()
-
 def main():
     asyncio.run(_main())
 

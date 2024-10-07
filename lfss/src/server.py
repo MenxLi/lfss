@@ -17,20 +17,20 @@ from .log import get_logger
 from .stat import RequestDB
 from .config import MAX_BUNDLE_BYTES, MAX_FILE_BYTES, LARGE_FILE_BYTES
 from .utils import ensure_uri_compnents, format_last_modified, now_stamp
-from .database import Database, UserRecord, DECOY_USER, FileRecord, check_user_permission, FileReadPermission
+from .database import Database, UserRecord, DECOY_USER, FileRecord, check_user_permission, FileReadPermission, connection, UserConn, FileConn, transaction
 
 logger = get_logger("server", term_level="DEBUG")
 logger_failed_request = get_logger("failed_requests", term_level="INFO")
-conn = Database()
+db = Database()
 req_conn = RequestDB()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global conn
-    await asyncio.gather(conn.init(), req_conn.init())
+    global db
+    await asyncio.gather(db.init(), req_conn.init())
     yield
-    await asyncio.gather(conn.commit(), req_conn.commit())
-    await asyncio.gather(conn.close(), req_conn.close())
+    await asyncio.gather(req_conn.commit())
+    await asyncio.gather(req_conn.close())
 
 def handle_exception(fn):
     @wraps(fn)
@@ -58,13 +58,15 @@ async def get_current_user(
     First try to get the user from the bearer token, 
     if not found, try to get the user from the query parameter
     """
-    if token:
-        user = await conn.user.get_user_by_credential(token.credentials)
-    else:
-        if not q_token:
-            return DECOY_USER
+    async with connection() as conn:
+        uconn = UserConn(conn)
+        if token:
+            user = await uconn.get_user_by_credential(token.credentials)
         else:
-            user = await conn.user.get_user_by_credential(q_token)
+            if not q_token:
+                return DECOY_USER
+            else:
+                user = await uconn.get_user_by_credential(q_token)
 
     if not user:
         raise HTTPException(status_code=401, detail="Invalid token")
@@ -116,25 +118,31 @@ async def get_file(path: str, download = False, user: UserRecord = Depends(get_c
     if path == "": path = "/"
     if path.endswith("/"):
         # return file under the path as json
-        if user.id == 0:
-            raise HTTPException(status_code=403, detail="Permission denied, credential required")
-        if path == "/":
-            return {
-                "dirs": await conn.file.list_root(user.username) \
-                    if not user.is_admin else await conn.file.list_root(),
-                "files": []
-            }
+        async with connection() as conn:
+            fconn = FileConn(conn)
+            if user.id == 0:
+                raise HTTPException(status_code=403, detail="Permission denied, credential required")
+            if path == "/":
+                return {
+                    "dirs": await fconn.list_root(user.username) \
+                        if not user.is_admin else await fconn.list_root(),
+                    "files": []
+                }
 
-        if not path.startswith(f"{user.username}/") and not user.is_admin:
-            raise HTTPException(status_code=403, detail="Permission denied, path must start with username")
+            if not path.startswith(f"{user.username}/") and not user.is_admin:
+                raise HTTPException(status_code=403, detail="Permission denied, path must start with username")
 
-        return await conn.file.list_path(path, flat = False)
+            return await fconn.list_path(path, flat = False)
     
-    file_record = await conn.file.get_file_record(path)
-    if not file_record:
-        raise HTTPException(status_code=404, detail="File not found")
+    async with connection() as conn:
+        fconn = FileConn(conn)
+        file_record = await fconn.get_file_record(path)
+        if not file_record:
+            raise HTTPException(status_code=404, detail="File not found")
 
-    owner = await conn.user.get_user_by_id(file_record.owner_id)
+        uconn = UserConn(conn)
+        owner = await uconn.get_user_by_id(file_record.owner_id)
+
     assert owner is not None, "Owner not found"
     allow_access, reason = check_user_permission(user, owner, file_record)
     if not allow_access:
@@ -145,7 +153,7 @@ async def get_file(path: str, download = False, user: UserRecord = Depends(get_c
         if media_type is None:
             media_type = file_record.mime_type
         if not file_record.external:
-            fblob = await conn.read_file(path)
+            fblob = await db.read_file(path)
             return Response(
                 content=fblob, media_type=media_type, headers={
                     "Content-Disposition": f"{disposition}; filename={fname}", 
@@ -155,7 +163,7 @@ async def get_file(path: str, download = False, user: UserRecord = Depends(get_c
             )
         else:
             return StreamingResponse(
-                await conn.read_file_stream(path), media_type=media_type, headers={
+                await db.read_file_stream(path), media_type=media_type, headers={
                     "Content-Disposition": f"{disposition}; filename={fname}", 
                     "Content-Length": str(file_record.file_size),
                     "Last-Modified": format_last_modified(file_record.create_time)
@@ -192,7 +200,10 @@ async def put_file(
     
     logger.info(f"PUT {path}, user: {user.username}")
     exists_flag = False
-    file_record = await conn.file.get_file_record(path)
+    async with connection() as conn:
+        fconn = FileConn(conn)
+        file_record = await fconn.get_file_record(path)
+
     if file_record:
         if conflict == "abort":
             raise HTTPException(status_code=409, detail="File exists")
@@ -202,7 +213,7 @@ async def put_file(
             }, content=json.dumps({"url": path}))
         # remove the old file
         exists_flag = True
-        await conn.delete_file(path)
+        await db.delete_file(path)
     
     # check content-type
     content_type = request.headers.get("Content-Type")
@@ -236,9 +247,9 @@ async def put_file(
             chunk_size = 16 * 1024 * 1024    # 16MB
             for b in range(0, len(blobs), chunk_size):
                 yield blobs[b:b+chunk_size]
-        await conn.save_file(user.id, path, blob_reader(), permission = FileReadPermission(permission), mime_type = mime_t)
+        await db.save_file(user.id, path, blob_reader(), permission = FileReadPermission(permission), mime_type = mime_t)
     else:
-        await conn.save_file(user.id, path, blobs, permission = FileReadPermission(permission), mime_type=mime_t)
+        await db.save_file(user.id, path, blobs, permission = FileReadPermission(permission), mime_type=mime_t)
 
     # https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Methods/PUT
     if exists_flag:
@@ -262,11 +273,11 @@ async def delete_file(path: str, user: UserRecord = Depends(get_current_user)):
     logger.info(f"DELETE {path}, user: {user.username}")
 
     if path.endswith("/"):
-        res = await conn.delete_path(path)
+        res = await db.delete_path(path)
     else:
-        res = await conn.delete_file(path)
+        res = await db.delete_file(path)
 
-    await conn.user.set_active(user.username)
+    await db.record_user_activity(user.username)
     if res:
         return Response(status_code=200, content="Deleted")
     else:
@@ -291,14 +302,14 @@ async def bundle_files(path: str, user: UserRecord = Depends(get_current_user)):
         owner_id = file_record.owner_id
         owner = owner_records_cache.get(owner_id, None)
         if owner is None:
-            owner = await conn.user.get_user_by_id(owner_id)
-            assert owner is not None, f"File owner not found: id={owner_id}"
             owner_records_cache[owner_id] = owner
             
         allow_access, _ = check_user_permission(user, owner, file_record)
         return allow_access
     
-    files = await conn.file.list_path(path, flat = True)
+    async with connection() as conn:
+        fconn = FileConn(conn)
+        files = await fconn.list_path(path, flat = True)
     files = [f for f in files if await is_access_granted(f)]
     if len(files) == 0:
         raise HTTPException(status_code=404, detail="No files found")
@@ -309,7 +320,7 @@ async def bundle_files(path: str, user: UserRecord = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Too large to zip")
 
     file_paths = [f.url for f in files]
-    zip_buffer = await conn.zip_path(path, file_paths)
+    zip_buffer = await db.zip_path(path, file_paths)
     return Response(
         content=zip_buffer.getvalue(), media_type="application/zip", headers={
             "Content-Disposition": f"attachment; filename=bundle.zip", 
@@ -322,8 +333,11 @@ async def bundle_files(path: str, user: UserRecord = Depends(get_current_user)):
 async def get_file_meta(path: str, user: UserRecord = Depends(get_current_user)):
     logger.info(f"GET meta({path}), user: {user.username}")
     path = ensure_uri_compnents(path)
-    get_fn = conn.file.get_file_record if not path.endswith("/") else conn.file.get_path_record
-    record = await get_fn(path)
+    async with connection() as conn:
+        fconn = FileConn(conn)
+        get_fn = fconn.get_file_record if not path.endswith("/") else fconn.get_path_record
+        record = await get_fn(path)
+
     if not record:
         raise HTTPException(status_code=404, detail="Path not found")
     return record
@@ -341,30 +355,22 @@ async def update_file_meta(
     path = ensure_uri_compnents(path)
     if path.startswith("/"):
         path = path[1:]
-    await conn.user.set_active(user.username)
+    await db.record_user_activity(user.username)
 
     # file
     if not path.endswith("/"):
-        file_record = await conn.file.get_file_record(path)
-        if not file_record:
-            logger.debug(f"Reject update meta request from {user.username} to {path}")
-            raise HTTPException(status_code=404, detail="File not found")
-        
-        if not (user.is_admin or user.id == file_record.owner_id):
-            logger.debug(f"Reject update meta request from {user.username} to {path}")
-            raise HTTPException(status_code=403, detail="Permission denied")
-        
         if perm is not None:
             logger.info(f"Update permission of {path} to {perm}")
-            await conn.file.update_file_record(
-                url = file_record.url, 
+            await db.update_file_record(
+                user = user,
+                url = path, 
                 permission = FileReadPermission(perm)
             )
     
         if new_path is not None:
             new_path = ensure_uri_compnents(new_path)
             logger.info(f"Update path of {path} to {new_path}")
-            await conn.move_file(path, new_path)
+            await db.move_file(path, new_path)
     
     # directory
     else:
@@ -372,24 +378,8 @@ async def update_file_meta(
         if new_path is not None:
             new_path = ensure_uri_compnents(new_path)
             logger.info(f"Update path of {path} to {new_path}")
-            assert new_path.endswith("/"), "New path must end with /"
-            if new_path.startswith("/"):
-                new_path = new_path[1:]
-
-            # check if new path is under the user's directory
-            first_component = new_path.split("/")[0]
-            if not (first_component == user.username or user.is_admin):
-                raise HTTPException(status_code=403, detail="Permission denied, path must start with username")
-            elif user.is_admin:
-                _is_user = await conn.user.get_user(first_component)
-                if not _is_user:
-                    raise HTTPException(status_code=404, detail="User not found, path must start with username")
-
-            # check if old path is under the user's directory (non-admin)
-            if not path.startswith(f"{user.username}/") and not user.is_admin:
-                raise HTTPException(status_code=403, detail="Permission denied, path must start with username")
             # currently only move own file, with overwrite
-            await conn.move_path(path, new_path, user_id = user.id)
+            await db.move_path(user, path, new_path)
 
     return Response(status_code=200, content="OK")
     

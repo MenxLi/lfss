@@ -1,26 +1,22 @@
 
 from typing import Optional, overload, Literal, AsyncIterable
-from abc import ABC, abstractmethod
+from abc import ABC
 import os
 
 import urllib.parse
 from pathlib import Path
 import hashlib, uuid
 from contextlib import asynccontextmanager
-from functools import wraps
 import zipfile, io, asyncio
 
 import aiosqlite, aiofiles
 import aiofiles.os
-from asyncio import Lock
 
 from .datatype import UserRecord, FileReadPermission, FileRecord, DirectoryRecord, PathContents
 from .config import DATA_HOME, LARGE_BLOB_DIR
 from .log import get_logger
 from .utils import decode_uri_compnents
 from .error import *
-
-_g_conn: Optional[aiosqlite.Connection] = None
 
 def hash_credential(username, password):
     return hashlib.sha256((username + password).encode()).hexdigest()
@@ -34,51 +30,45 @@ async def execute_sql(conn: aiosqlite.Connection, name: str):
     for s in sql:
         await conn.execute(s)
 
-_atomic_lock = Lock()
-def atomic(func):
-    """ Ensure non-reentrancy """
-    @wraps(func)
-    async def wrapper(*args, **kwargs):
-        async with _atomic_lock:
-            return await func(*args, **kwargs)
-    return wrapper
-    
-class DBConnBase(ABC):
+async def get_connection() -> aiosqlite.Connection:
+    if not os.environ.get('SQLITE_TEMPDIR'):
+        os.environ['SQLITE_TEMPDIR'] = str(DATA_HOME)
+    # large blobs are stored in a separate database, should be more efficient
+    conn = await aiosqlite.connect(DATA_HOME / 'index.db', timeout = 60)
+    async with conn.cursor() as c:
+        await c.execute(f"ATTACH DATABASE ? AS blobs", (str(DATA_HOME/'blobs.db'), ))
+    await execute_sql(conn, 'pragma.sql')
+    return conn
+
+class DBObjectBase(ABC):
     logger = get_logger('database', global_instance=True)
+    _conn: aiosqlite.Connection
+
+    def set_connection(self, conn: aiosqlite.Connection):
+        self._conn = conn
 
     @property
     def conn(self)->aiosqlite.Connection:
-        global _g_conn
-        if _g_conn is None:
-            raise ValueError('Connection not initialized, did you forget to call super().init()?')
-        return _g_conn
-
-    @abstractmethod
-    async def init(self):
-        """Should return self"""
-        global _g_conn
-        if _g_conn is None:
-            if not os.environ.get('SQLITE_TEMPDIR'):
-                os.environ['SQLITE_TEMPDIR'] = str(DATA_HOME)
-            # large blobs are stored in a separate database, should be more efficient
-            _g_conn = await aiosqlite.connect(DATA_HOME / 'index.db')
-            async with _g_conn.cursor() as c:
-                await c.execute(f"ATTACH DATABASE ? AS blobs", (str(DATA_HOME/'blobs.db'), ))
-            await execute_sql(_g_conn, 'pragma.sql')
-            await execute_sql(_g_conn, 'init.sql')
+        if not hasattr(self, '_conn'):
+            raise ValueError("Connection not set")
+        return self._conn
 
     async def commit(self):
         await self.conn.commit()
 
 DECOY_USER = UserRecord(0, 'decoy', 'decoy', False, '2021-01-01 00:00:00', '2021-01-01 00:00:00', 0, FileReadPermission.PRIVATE)
-class UserConn(DBConnBase):
+class UserConn(DBObjectBase):
+
+    def __init__(self, conn: aiosqlite.Connection) -> None:
+        super().__init__()
+        self.set_connection(conn)
 
     @staticmethod
     def parse_record(record) -> UserRecord:
         return UserRecord(*record)
 
-    async def init(self):
-        await super().init()
+    async def init(self, conn: aiosqlite.Connection):
+        self.set_connection(conn)
         return self
     
     async def get_user(self, username: str) -> Optional[UserRecord]:
@@ -102,7 +92,6 @@ class UserConn(DBConnBase):
         if res is None: return None
         return self.parse_record(res)
     
-    @atomic
     async def create_user(
         self, username: str, password: str, is_admin: bool = False, 
         max_storage: int = 1073741824, permission: FileReadPermission = FileReadPermission.UNSET
@@ -118,7 +107,6 @@ class UserConn(DBConnBase):
             assert cursor.lastrowid is not None
             return cursor.lastrowid
     
-    @atomic
     async def update_user(
         self, username: str, password: Optional[str] = None, is_admin: Optional[bool] = None, 
         max_storage: Optional[int] = None, permission: Optional[FileReadPermission] = None
@@ -151,23 +139,25 @@ class UserConn(DBConnBase):
             async for record in cursor:
                 yield self.parse_record(record)
     
-    @atomic
     async def set_active(self, username: str):
         await self.conn.execute("UPDATE user SET last_active = CURRENT_TIMESTAMP WHERE username = ?", (username, ))
     
-    @atomic
     async def delete_user(self, username: str):
         await self.conn.execute("DELETE FROM user WHERE username = ?", (username, ))
         self.logger.info(f"Delete user {username}")
 
-class FileConn(DBConnBase):
+class FileConn(DBObjectBase):
+
+    def __init__(self, conn: aiosqlite.Connection) -> None:
+        super().__init__()
+        self.set_connection(conn)
 
     @staticmethod
     def parse_record(record) -> FileRecord:
         return FileRecord(*record)
     
-    async def init(self):
-        await super().init()
+    def init(self, conn: aiosqlite.Connection):
+        self.set_connection(conn)
         return self
     
     async def get_file_record(self, url: str) -> Optional[FileRecord]:
@@ -305,7 +295,6 @@ class FileConn(DBConnBase):
         assert res is not None
         return res[0] or 0
     
-    @atomic
     async def update_file_record(
         self, url, owner_id: Optional[int] = None, permission: Optional[FileReadPermission] = None
         ):
@@ -321,7 +310,6 @@ class FileConn(DBConnBase):
             )
         self.logger.info(f"Updated file {url}")
     
-    @atomic
     async def set_file_record(
         self, url: str, 
         owner_id: int, 
@@ -342,7 +330,6 @@ class FileConn(DBConnBase):
         await self._user_size_inc(owner_id, file_size)
         self.logger.info(f"File {url} created")
     
-    @atomic
     async def move_file(self, old_url: str, new_url: str):
         old = await self.get_file_record(old_url)
         if old is None:
@@ -353,7 +340,6 @@ class FileConn(DBConnBase):
         async with self.conn.execute("UPDATE fmeta SET url = ?, create_time = CURRENT_TIMESTAMP WHERE url = ?", (new_url, old_url)):
             self.logger.info(f"Moved file {old_url} to {new_url}")
     
-    @atomic
     async def move_path(self, old_url: str, new_url: str, conflict_handler: Literal['skip', 'overwrite'] = 'overwrite', user_id: Optional[int] = None):
         assert old_url.endswith('/'), "Old path must end with /"
         assert new_url.endswith('/'), "New path must end with /"
@@ -375,7 +361,6 @@ class FileConn(DBConnBase):
     async def log_access(self, url: str):
         await self.conn.execute("UPDATE fmeta SET access_time = CURRENT_TIMESTAMP WHERE url = ?", (url, ))
     
-    @atomic
     async def delete_file_record(self, url: str):
         file_record = await self.get_file_record(url)
         if file_record is None: return
@@ -383,7 +368,6 @@ class FileConn(DBConnBase):
         await self._user_size_dec(file_record.owner_id, file_record.file_size)
         self.logger.info(f"Deleted fmeta {url}")
     
-    @atomic
     async def delete_user_file_records(self, owner_id: int):
         async with self.conn.execute("SELECT * FROM fmeta WHERE owner_id = ?", (owner_id, )) as cursor:
             res = await cursor.fetchall()
@@ -391,7 +375,6 @@ class FileConn(DBConnBase):
         await self.conn.execute("DELETE FROM usize WHERE user_id = ?", (owner_id, ))
         self.logger.info(f"Deleted {len(res)} files for user {owner_id}") # type: ignore
     
-    @atomic
     async def delete_path_records(self, path: str):
         """Delete all records with url starting with path"""
         async with self.conn.execute("SELECT * FROM fmeta WHERE url LIKE ?", (path + '%', )) as cursor:
@@ -409,11 +392,9 @@ class FileConn(DBConnBase):
         await self.conn.execute("DELETE FROM fmeta WHERE url LIKE ?", (path + '%', ))
         self.logger.info(f"Deleted {len(all_f_rec)} files for path {path}") # type: ignore
     
-    @atomic
     async def set_file_blob(self, file_id: str, blob: bytes):
         await self.conn.execute("INSERT OR REPLACE INTO blobs.fdata (file_id, data) VALUES (?, ?)", (file_id, blob))
     
-    @atomic
     async def set_file_blob_external(self, file_id: str, stream: AsyncIterable[bytes])->int:
         size_sum = 0
         try:
@@ -440,16 +421,13 @@ class FileConn(DBConnBase):
             async for chunk in f:
                 yield chunk
     
-    @atomic
     async def delete_file_blob_external(self, file_id: str):
         if (LARGE_BLOB_DIR / file_id).exists():
             await aiofiles.os.remove(LARGE_BLOB_DIR / file_id)
     
-    @atomic
     async def delete_file_blob(self, file_id: str):
         await self.conn.execute("DELETE FROM blobs.fdata WHERE file_id = ?", (file_id, ))
     
-    @atomic
     async def delete_file_blobs(self, file_ids: list[str]):
         await self.conn.execute("DELETE FROM blobs.fdata WHERE file_id IN ({})".format(','.join(['?'] * len(file_ids))), file_ids)
 
@@ -469,53 +447,59 @@ def validate_url(url: str, is_file = True):
     if not ret:
         raise InvalidPathError(f"Invalid URL: {url}")
 
-async def get_user(db: "Database", user: int | str) -> Optional[UserRecord]:
+async def get_user(conn: aiosqlite.Connection, user: int | str) -> Optional[UserRecord]:
+    uconn = UserConn(conn)
     if isinstance(user, str):
-        return await db.user.get_user(user)
+        return await uconn.get_user(user)
     elif isinstance(user, int):
-        return await db.user.get_user_by_id(user)
+        return await uconn.get_user_by_id(user)
     else:
         return None
 
-_transaction_lock = Lock()
 @asynccontextmanager
-async def transaction(db: "Database"):
+async def connection():
+    conn = await get_connection()
     try:
-        await _transaction_lock.acquire()
-        yield
-        await db.commit()
-    except Exception as e:
-        db.logger.error(f"Error in transaction: {e}")
-        await db.rollback()
-        raise e
+        yield conn
     finally:
-        _transaction_lock.release()
+        await conn.close()
 
+@asynccontextmanager
+async def transaction():
+    async with connection() as conn:
+        try:
+            yield conn
+            await conn.commit()
+        except Exception as e:
+            get_logger('database', global_instance=True).error(f"Error in transaction: {e}, rollback.")
+            await conn.rollback()
+            raise e
+
+# mostly transactional operations
 class Database:
-    user: UserConn = UserConn()
-    file: FileConn = FileConn()
     logger = get_logger('database', global_instance=True)
 
     async def init(self):
-        async with transaction(self):
-            await self.user.init()
-            await self.file.init()
+        async with transaction() as conn:
+            await execute_sql(conn, 'init.sql')
         return self
     
-    async def commit(self):
-        global _g_conn
-        if _g_conn is not None:
-            await _g_conn.commit()
+    async def record_user_activity(self, u: str):
+        async with transaction() as conn:
+            uconn = UserConn(conn)
+            await uconn.set_active(u)
     
-    async def close(self):
-        global _g_conn
-        if _g_conn: await _g_conn.close()
+    async def update_file_record(self, user: UserRecord, url: str, permission: FileReadPermission):
+        validate_url(url)
+        async with transaction() as conn:
+            fconn = FileConn(conn)
+            r = await fconn.get_file_record(url)
+            if r is None:
+                raise PathNotFoundError(f"File {url} not found")
+            if r.owner_id != user.id and not user.is_admin:
+                raise PermissionDeniedError(f"Permission denied: {user.username} cannot update file {url}")
+            await fconn.update_file_record(url, permission=permission)
     
-    async def rollback(self):
-        global _g_conn
-        if _g_conn is not None:
-            await _g_conn.rollback()
-
     async def save_file(
         self, u: int | str, url: str, 
         blob: bytes | AsyncIterable[bytes], 
@@ -526,105 +510,130 @@ class Database:
         if file_size is not provided, the blob must be bytes
         """
         validate_url(url)
-
-        user = await get_user(self, u)
-        if user is None:
-            return
-        
-        # check if the user is the owner of the path, or is admin
-        if url.startswith('/'):
-            url = url[1:]
-        first_component = url.split('/')[0]
-        if first_component != user.username:
-            if not user.is_admin:
-                raise PermissionDeniedError(f"Permission denied: {user.username} cannot write to {url}")
-            else:
-                if await get_user(self, first_component) is None:
-                    raise PermissionDeniedError(f"Invalid path: {first_component} is not a valid username")
-        
-        user_size_used = await self.file.user_size(user.id)
-        if isinstance(blob, bytes):
-            file_size = len(blob)
-            if user_size_used + file_size > user.max_storage:
-                raise StorageExceededError(f"Unable to save file, user {user.username} has storage limit of {user.max_storage}, used {user_size_used}, requested {file_size}")
-            f_id = uuid.uuid4().hex
-            async with transaction(self):
-                await self.file.set_file_blob(f_id, blob)
-                await self.file.set_file_record(
+        async with transaction() as conn:
+            uconn = UserConn(conn)
+            fconn = FileConn(conn)
+            user = await get_user(conn, u)
+            if user is None:
+                return
+            
+            # check if the user is the owner of the path, or is admin
+            if url.startswith('/'):
+                url = url[1:]
+            first_component = url.split('/')[0]
+            if first_component != user.username:
+                if not user.is_admin:
+                    raise PermissionDeniedError(f"Permission denied: {user.username} cannot write to {url}")
+                else:
+                    if await get_user(conn, first_component) is None:
+                        raise PermissionDeniedError(f"Invalid path: {first_component} is not a valid username")
+            
+            user_size_used = await fconn.user_size(user.id)
+            if isinstance(blob, bytes):
+                file_size = len(blob)
+                if user_size_used + file_size > user.max_storage:
+                    raise StorageExceededError(f"Unable to save file, user {user.username} has storage limit of {user.max_storage}, used {user_size_used}, requested {file_size}")
+                f_id = uuid.uuid4().hex
+                await fconn.set_file_blob(f_id, blob)
+                await fconn.set_file_record(
                     url, owner_id=user.id, file_id=f_id, file_size=file_size, 
                     permission=permission, external=False, mime_type=mime_type)
-                await self.user.set_active(user.username)
-        else:
-            assert isinstance(blob, AsyncIterable)
-            async with transaction(self):
+            else:
+                assert isinstance(blob, AsyncIterable)
                 f_id = uuid.uuid4().hex
-                file_size = await self.file.set_file_blob_external(f_id, blob)
+                file_size = await fconn.set_file_blob_external(f_id, blob)
                 if user_size_used + file_size > user.max_storage:
-                    await self.file.delete_file_blob_external(f_id)
+                    await fconn.delete_file_blob_external(f_id)
                     raise StorageExceededError(f"Unable to save file, user {user.username} has storage limit of {user.max_storage}, used {user_size_used}, requested {file_size}")
-                await self.file.set_file_record(
+                await fconn.set_file_record(
                     url, owner_id=user.id, file_id=f_id, file_size=file_size, 
                     permission=permission, external=True, mime_type=mime_type)
-                await self.user.set_active(user.username)
+            await uconn.set_active(user.username)
 
     async def read_file_stream(self, url: str) -> AsyncIterable[bytes]:
         validate_url(url)
-        r = await self.file.get_file_record(url)
-        if r is None:
-            raise FileNotFoundError(f"File {url} not found")
-        if not r.external:
-            raise ValueError(f"File {url} is not stored externally, should use read_file instead")
-        return self.file.get_file_blob_external(r.file_id)
+        async with connection() as conn:
+            fconn = FileConn(conn)
+            r = await fconn.get_file_record(url)
+            if r is None:
+                raise FileNotFoundError(f"File {url} not found")
+            if not r.external:
+                raise ValueError(f"File {url} is not stored externally, should use read_file instead")
+            return fconn.get_file_blob_external(r.file_id)
 
     async def read_file(self, url: str) -> bytes:
         validate_url(url)
 
-        r = await self.file.get_file_record(url)
-        if r is None:
-            raise FileNotFoundError(f"File {url} not found")
-        if r.external:
-            raise ValueError(f"File {url} is stored externally, should use read_file_stream instead")
+        async with transaction() as conn:
+            fconn = FileConn(conn)
+            r = await fconn.get_file_record(url)
+            if r is None:
+                raise FileNotFoundError(f"File {url} not found")
+            if r.external:
+                raise ValueError(f"File {url} is stored externally, should use read_file_stream instead")
 
-        f_id = r.file_id
-        blob = await self.file.get_file_blob(f_id)
-        if blob is None:
-            raise FileNotFoundError(f"File {url} data not found")
-        
-        async with transaction(self):
-            await self.file.log_access(url)
+            f_id = r.file_id
+            blob = await fconn.get_file_blob(f_id)
+            if blob is None:
+                raise FileNotFoundError(f"File {url} data not found")
+            await fconn.log_access(url)
 
         return blob
 
     async def delete_file(self, url: str) -> Optional[FileRecord]:
         validate_url(url)
 
-        async with transaction(self):
-            r = await self.file.get_file_record(url)
+        async with transaction() as conn:
+            fconn = FileConn(conn)
+            r = await fconn.get_file_record(url)
             if r is None:
                 return None
             f_id = r.file_id
-            await self.file.delete_file_record(url)
+            await fconn.delete_file_record(url)
             if r.external:
-                await self.file.delete_file_blob_external(f_id)
+                await fconn.delete_file_blob_external(f_id)
             else:
-                await self.file.delete_file_blob(f_id)
+                await fconn.delete_file_blob(f_id)
             return r
     
     async def move_file(self, old_url: str, new_url: str):
         validate_url(old_url)
         validate_url(new_url)
 
-        async with transaction(self):
-            await self.file.move_file(old_url, new_url)
+        async with transaction() as conn:
+            fconn = FileConn(conn)
+            await fconn.move_file(old_url, new_url)
     
-    async def move_path(self, old_url: str, new_url: str, user_id: Optional[int] = None):
+    async def move_path(self, user: UserRecord, old_url: str, new_url: str):
         validate_url(old_url, is_file=False)
         validate_url(new_url, is_file=False)
 
-        async with transaction(self):
-            await self.file.move_path(old_url, new_url, 'overwrite', user_id)
+        if new_url.startswith('/'):
+            new_url = new_url[1:]
+        if old_url.startswith('/'):
+            old_url = old_url[1:]
+        assert old_url != new_url, "Old and new path must be different"
+        assert old_url.endswith('/'), "Old path must end with /"
+        assert new_url.endswith('/'), "New path must end with /"
 
-    async def __batch_delete_file_blobs(self, file_records: list[FileRecord], batch_size: int = 512):
+        async with transaction() as conn:
+            first_component = new_url.split('/')[0]
+            if not (first_component == user.username or user.is_admin):
+                raise PermissionDeniedError(f"Permission denied: path must start with {user.username}")
+            elif user.is_admin:
+                uconn = UserConn(conn)
+                _is_user = await uconn.get_user(first_component)
+                if not _is_user:
+                    raise PermissionDeniedError(f"Invalid path: {first_component} is not a valid username")
+            
+            # check if old path is under user's directory (non-admin)
+            if not old_url.startswith(user.username + '/') and not user.is_admin:
+                raise PermissionDeniedError(f"Permission denied: {user.username} cannot move path {old_url}")
+
+            fconn = FileConn(conn)
+            await fconn.move_path(old_url, new_url, 'overwrite', user.id)
+
+    async def __batch_delete_file_blobs(self, fconn: FileConn, file_records: list[FileRecord], batch_size: int = 512):
         # https://github.com/langchain-ai/langchain/issues/10321
         internal_ids = []
         external_ids = []
@@ -635,52 +644,57 @@ class Database:
                 internal_ids.append(r.file_id)
         
         for i in range(0, len(internal_ids), batch_size):
-            await self.file.delete_file_blobs([r for r in internal_ids[i:i+batch_size]])
+            await fconn.delete_file_blobs([r for r in internal_ids[i:i+batch_size]])
         for i in range(0, len(external_ids)):
-            await self.file.delete_file_blob_external(external_ids[i])
+            await fconn.delete_file_blob_external(external_ids[i])
             
 
     async def delete_path(self, url: str):
         validate_url(url, is_file=False)
 
-        async with transaction(self):
-            records = await self.file.get_path_file_records(url)
+        async with transaction() as conn:
+            fconn = FileConn(conn)
+            records = await fconn.get_path_file_records(url)
             if not records:
                 return None
-            await self.__batch_delete_file_blobs(records)
-            await self.file.delete_path_records(url)
+            await self.__batch_delete_file_blobs(fconn, records)
+            await fconn.delete_path_records(url)
             return records
     
     async def delete_user(self, u: str | int):
-        user = await get_user(self, u)
-        if user is None:
-            return
-        
-        async with transaction(self):
-            records = await self.file.get_user_file_records(user.id)
-            await self.__batch_delete_file_blobs(records)
-            await self.file.delete_user_file_records(user.id)
-            await self.user.delete_user(user.username)
+        async with transaction() as conn:
+            user = await get_user(conn, u)
+            if user is None:
+                return
+
+            fconn = FileConn(conn)
+            records = await fconn.get_user_file_records(user.id)
+            await self.__batch_delete_file_blobs(fconn, records)
+            await fconn.delete_user_file_records(user.id)
+            uconn = UserConn(conn)
+            await uconn.delete_user(user.username)
     
     async def iter_path(self, top_url: str, urls: Optional[list[str]]) -> AsyncIterable[tuple[FileRecord, bytes | AsyncIterable[bytes]]]:
-        if urls is None:
-            urls = [r.url for r in await self.file.list_path(top_url, flat=True)]
+        async with connection() as conn:
+            fconn = FileConn(conn)
+            if urls is None:
+                urls = [r.url for r in await fconn.list_path(top_url, flat=True)]
 
-        for url in urls:
-            if not url.startswith(top_url):
-                continue
-            r = await self.file.get_file_record(url)
-            if r is None:
-                continue
-            f_id = r.file_id
-            if r.external:
-                blob = self.file.get_file_blob_external(f_id)
-            else:
-                blob = await self.file.get_file_blob(f_id)
-                if blob is None:
-                    self.logger.warning(f"Blob not found for {url}")
+            for url in urls:
+                if not url.startswith(top_url):
                     continue
-            yield r, blob
+                r = await fconn.get_file_record(url)
+                if r is None:
+                    continue
+                f_id = r.file_id
+                if r.external:
+                    blob = fconn.get_file_blob_external(f_id)
+                else:
+                    blob = await fconn.get_file_blob(f_id)
+                    if blob is None:
+                        self.logger.warning(f"Blob not found for {url}")
+                        continue
+                yield r, blob
 
     async def zip_path(self, top_url: str, urls: Optional[list[str]]) -> io.BytesIO:
         if top_url.startswith('/'):

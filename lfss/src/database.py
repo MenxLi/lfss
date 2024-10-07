@@ -57,8 +57,9 @@ class DBConnBase(ABC):
     async def init(self):
         """Should return self"""
         global _g_conn
-        os.environ['SQLITE_TEMP_DIRECTORY'] = str(DATA_HOME)
         if _g_conn is None:
+            if not os.environ.get('SQLITE_TEMPDIR'):
+                os.environ['SQLITE_TEMPDIR'] = str(DATA_HOME)
             # large blobs are stored in a separate database, should be more efficient
             _g_conn = await aiosqlite.connect(DATA_HOME / 'index.db')
             async with _g_conn.cursor() as c:

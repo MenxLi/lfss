@@ -36,6 +36,7 @@ class Connector:
 
     def put(self, path: str, file_data: bytes, permission: int | FileReadPermission = 0, conflict: Literal['overwrite', 'abort', 'skip'] = 'abort'):
         """Uploads a file to the specified path."""
+        assert isinstance(file_data, bytes), "file_data must be bytes"
         response = self._fetch('PUT', path, search_params={
             'permission': int(permission),
             'conflict': conflict

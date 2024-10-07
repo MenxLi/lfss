@@ -34,9 +34,18 @@ class Connector:
             return response
         return f
 
-    def put(self, path: str, file_data: bytes, permission: int | FileReadPermission = 0, conflict: Literal['overwrite', 'abort', 'skip'] = 'abort'):
+    def put(self, path: str, file_data: bytes, permission: int | FileReadPermission = 0, conflict: Literal['overwrite', 'abort', 'skip', 'skip-ahead'] = 'abort'):
         """Uploads a file to the specified path."""
         assert isinstance(file_data, bytes), "file_data must be bytes"
+
+        # Skip ahead by checking if the file already exists
+        if conflict == 'skip-ahead':
+            exists = self.get_metadata(path)
+            if exists is None:
+                conflict = 'skip'
+            else:
+                return {'status': 'skipped', 'path': path}
+
         response = self._fetch('PUT', path, search_params={
             'permission': int(permission),
             'conflict': conflict
@@ -46,9 +55,19 @@ class Connector:
         )
         return response.json()
     
-    def put_json(self, path: str, data: dict, permission: int | FileReadPermission = 0, conflict: Literal['overwrite', 'abort', 'skip'] = 'abort'):
+    def put_json(self, path: str, data: dict, permission: int | FileReadPermission = 0, conflict: Literal['overwrite', 'abort', 'skip', 'skip-ahead'] = 'abort'):
         """Uploads a JSON file to the specified path."""
         assert path.endswith('.json'), "Path must end with .json"
+        assert isinstance(data, dict), "data must be a dict"
+
+        # Skip ahead by checking if the file already exists
+        if conflict == 'skip-ahead':
+            exists = self.get_metadata(path)
+            if exists is None:
+                conflict = 'skip'
+            else:
+                return {'status': 'skipped', 'path': path}
+
         response = self._fetch('PUT', path, search_params={
             'permission': int(permission),
             'conflict': conflict

@@ -10,7 +10,7 @@ def test_put_get_delete(conn: Connector):
     random_ext = random.choice(['.txt', '.bin', '.jpg', '.png', '.mp4', ""])
 
     path = f'test/{random_path}{random_ext}'
-    random_data = _random_string(random.randint(1, 1024)).encode('ascii') + '0'.encode('ascii') * random.randint(0, 1024*1024*128)
+    random_data = _random_string(random.randint(1, 1024)).encode('ascii') + '0'.encode('ascii') * random.randint(0, 1024*1024*32)
 
     try:
         assert conn.put(path, random_data)

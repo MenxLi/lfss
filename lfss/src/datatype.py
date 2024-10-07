@@ -25,7 +25,7 @@ class UserRecord:
 class FileRecord:
     url: str
     owner_id: int
-    file_id: str      # defines mapping from fmata to fdata
+    file_id: str      # defines mapping from fmata to blobs.fdata
     file_size: int
     create_time: str
     access_time: str

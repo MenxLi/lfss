@@ -1,6 +1,7 @@
 
 from typing import Optional, overload, Literal, AsyncIterable
 from abc import ABC, abstractmethod
+import os
 
 import urllib.parse
 from pathlib import Path
@@ -56,8 +57,12 @@ class DBConnBase(ABC):
     async def init(self):
         """Should return self"""
         global _g_conn
+        os.environ['SQLITE_TEMP_DIRECTORY'] = str(DATA_HOME)
         if _g_conn is None:
-            _g_conn = await aiosqlite.connect(DATA_HOME / 'lfss.db')
+            # large blobs are stored in a separate database, should be more efficient
+            _g_conn = await aiosqlite.connect(DATA_HOME / 'index.db')
+            async with _g_conn.cursor() as c:
+                await c.execute(f"ATTACH DATABASE ? AS blobs", (str(DATA_HOME/'blobs.db'), ))
             await execute_sql(_g_conn, 'pragma.sql')
             await execute_sql(_g_conn, 'init.sql')
 
@@ -207,7 +212,7 @@ class FileConn(DBConnBase):
                 if mime_type is None:
                     # try to sniff the file
                     if not external:
-                        async with self.conn.execute("SELECT data FROM fdata WHERE file_id = ?", (f_id, )) as cursor:
+                        async with self.conn.execute("SELECT data FROM blobs.fdata WHERE file_id = ?", (f_id, )) as cursor:
                             blob = await cursor.fetchone()
                         assert blob is not None
                         blob = blob[0]
@@ -459,7 +464,7 @@ class FileConn(DBConnBase):
     
     @atomic
     async def set_file_blob(self, file_id: str, blob: bytes):
-        await self.conn.execute("INSERT OR REPLACE INTO fdata (file_id, data) VALUES (?, ?)", (file_id, blob))
+        await self.conn.execute("INSERT OR REPLACE INTO blobs.fdata (file_id, data) VALUES (?, ?)", (file_id, blob))
     
     @atomic
     async def set_file_blob_external(self, file_id: str, stream: AsyncIterable[bytes])->int:
@@ -476,7 +481,7 @@ class FileConn(DBConnBase):
         return size_sum
     
     async def get_file_blob(self, file_id: str) -> Optional[bytes]:
-        async with self.conn.execute("SELECT data FROM fdata WHERE file_id = ?", (file_id, )) as cursor:
+        async with self.conn.execute("SELECT data FROM blobs.fdata WHERE file_id = ?", (file_id, )) as cursor:
             res = await cursor.fetchone()
         if res is None:
             return None
@@ -495,11 +500,11 @@ class FileConn(DBConnBase):
     
     @atomic
     async def delete_file_blob(self, file_id: str):
-        await self.conn.execute("DELETE FROM fdata WHERE file_id = ?", (file_id, ))
+        await self.conn.execute("DELETE FROM blobs.fdata WHERE file_id = ?", (file_id, ))
     
     @atomic
     async def delete_file_blobs(self, file_ids: list[str]):
-        await self.conn.execute("DELETE FROM fdata WHERE file_id IN ({})".format(','.join(['?'] * len(file_ids))), file_ids)
+        await self.conn.execute("DELETE FROM blobs.fdata WHERE file_id IN ({})".format(','.join(['?'] * len(file_ids))), file_ids)
 
 def validate_url(url: str, is_file = True):
     prohibited_chars = ['..', ';', "'", '"', '\\', '\0', '\n', '\r', '\t', '\x0b', '\x0c']

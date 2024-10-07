@@ -7,6 +7,7 @@ DATA_HOME = Path(os.environ.get('LFSS_DATA', __default_dir))
 if not DATA_HOME.exists():
     DATA_HOME.mkdir()
     print(f"[init] Created data home at {DATA_HOME}")
+DATA_HOME = DATA_HOME.resolve().absolute()
 LARGE_BLOB_DIR = DATA_HOME / 'large_blobs'
 LARGE_BLOB_DIR.mkdir(exist_ok=True)
 

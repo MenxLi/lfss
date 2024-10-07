@@ -1,3 +1,9 @@
+PRAGMA journal_mode=MEMROY;
+PRAGMA temp_store=MEMORY;
+PRAGMA page_size=4096;
+PRAGMA synchronous=NORMAL;
+PRAGMA case_sensitive_like=ON;
+
 CREATE TABLE IF NOT EXISTS user (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username VARCHAR(256) UNIQUE NOT NULL,
@@ -22,11 +28,6 @@ CREATE TABLE IF NOT EXISTS fmeta (
     FOREIGN KEY(owner_id) REFERENCES user(id)
 );
 
-CREATE TABLE IF NOT EXISTS fdata (
-    file_id CHAR(32) PRIMARY KEY,
-    data BLOB
-);
-
 CREATE TABLE IF NOT EXISTS usize (
     user_id INTEGER PRIMARY KEY,
     size INTEGER DEFAULT 0
@@ -37,3 +38,8 @@ CREATE INDEX IF NOT EXISTS idx_fmeta_url ON fmeta(url);
 CREATE INDEX IF NOT EXISTS idx_user_username ON user(username);
 
 CREATE INDEX IF NOT EXISTS idx_user_credential ON user(credential);
+
+CREATE TABLE IF NOT EXISTS blobs.fdata (
+    file_id CHAR(32) PRIMARY KEY,
+    data BLOB
+);

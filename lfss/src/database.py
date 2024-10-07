@@ -192,6 +192,29 @@ class FileConn(DBConnBase):
             await self.conn.execute('''
             ALTER TABLE fmeta ADD COLUMN mime_type TEXT DEFAULT 'application/octet-stream'
             ''')
+            # check all mime types
+            import mimetypes, mimesniff
+            async with self.conn.execute("SELECT url, file_id, external FROM fmeta") as cursor:
+                res = await cursor.fetchall()
+            async with self.conn.execute("SELECT count(*) FROM fmeta") as cursor:
+                count = await cursor.fetchone()
+                assert count is not None
+            for counter, r in enumerate(res, start=1):
+                print(f"Checking mimetype for {counter}/{count[0]}")
+                url, f_id, external = r
+                fname = url.split('/')[-1]
+                mime_type, _ = mimetypes.guess_type(fname)
+                if mime_type is None:
+                    # try to sniff the file
+                    if not external:
+                        async with self.conn.execute("SELECT data FROM fdata WHERE file_id = ?", (f_id, )) as cursor:
+                            blob = await cursor.fetchone()
+                        assert blob is not None
+                        blob = blob[0]
+                        mime_type = mimesniff.what(blob)
+                    else:
+                        mime_type = mimesniff.what(LARGE_BLOB_DIR / f_id)
+                await self.conn.execute("UPDATE fmeta SET mime_type = ? WHERE url = ?", (mime_type, url))
 
         return self
     

@@ -168,60 +168,6 @@ class FileConn(DBConnBase):
     
     async def init(self):
         await super().init()
-        # backward compatibility, since 0.2.1
-        async with self.conn.execute("SELECT * FROM user") as cursor:
-            res = await cursor.fetchall()
-        for r in res:
-            async with self.conn.execute("SELECT user_id FROM usize WHERE user_id = ?", (r[0], )) as cursor:
-                size = await cursor.fetchone()
-            if size is None:
-                async with self.conn.execute("SELECT SUM(file_size) FROM fmeta WHERE owner_id = ?", (r[0], )) as cursor:
-                    size = await cursor.fetchone()
-                if size is not None and size[0] is not None:
-                    await self._user_size_inc(r[0], size[0])
-        
-        # backward compatibility, since 0.5.0
-        # 'external' means the file is not stored in the database, but in the external storage
-        async with self.conn.execute("SELECT * FROM fmeta") as cursor:
-            res = await cursor.fetchone()
-        if res and len(res) < 8:
-            self.logger.info("Updating fmeta table")
-            await self.conn.execute('''
-            ALTER TABLE fmeta ADD COLUMN external BOOLEAN DEFAULT FALSE
-            ''')
-
-        # backward compatibility, since 0.6.0
-        async with self.conn.execute("SELECT * FROM fmeta") as cursor:
-            res = await cursor.fetchone()
-        if res and len(res) < 9:
-            self.logger.info("Updating fmeta table")
-            await self.conn.execute('''
-            ALTER TABLE fmeta ADD COLUMN mime_type TEXT DEFAULT 'application/octet-stream'
-            ''')
-            # check all mime types
-            import mimetypes, mimesniff
-            async with self.conn.execute("SELECT url, file_id, external FROM fmeta") as cursor:
-                res = await cursor.fetchall()
-            async with self.conn.execute("SELECT count(*) FROM fmeta") as cursor:
-                count = await cursor.fetchone()
-                assert count is not None
-            for counter, r in enumerate(res, start=1):
-                print(f"Checking mimetype for {counter}/{count[0]}")
-                url, f_id, external = r
-                fname = url.split('/')[-1]
-                mime_type, _ = mimetypes.guess_type(fname)
-                if mime_type is None:
-                    # try to sniff the file
-                    if not external:
-                        async with self.conn.execute("SELECT data FROM blobs.fdata WHERE file_id = ?", (f_id, )) as cursor:
-                            blob = await cursor.fetchone()
-                        assert blob is not None
-                        blob = blob[0]
-                        mime_type = mimesniff.what(blob)
-                    else:
-                        mime_type = mimesniff.what(LARGE_BLOB_DIR / f_id)
-                await self.conn.execute("UPDATE fmeta SET mime_type = ? WHERE url = ?", (mime_type, url))
-
         return self
     
     async def get_file_record(self, url: str) -> Optional[FileRecord]:

@@ -8,6 +8,7 @@ from functools import wraps
 from asyncio import Semaphore
 import aiofiles, asyncio
 from lfss.src.database import transaction, connection
+from lfss.src.connection_pool import global_entrance
 
 sem = Semaphore(1)
 
@@ -69,6 +70,7 @@ async def move_to_internal(f_id: str, flag: str = ''):
                 raise e
 
 
+@global_entrance()
 async def _main(batch_size: int = 10000):
 
     tasks = []

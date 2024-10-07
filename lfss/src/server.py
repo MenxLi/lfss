@@ -17,7 +17,8 @@ from .log import get_logger
 from .stat import RequestDB
 from .config import MAX_BUNDLE_BYTES, MAX_FILE_BYTES, LARGE_FILE_BYTES
 from .utils import ensure_uri_compnents, format_last_modified, now_stamp
-from .database import Database, UserRecord, DECOY_USER, FileRecord, check_user_permission, FileReadPermission, connection, UserConn, FileConn, transaction
+from .connection_pool import global_connection_init, global_connection_close, connection
+from .database import Database, UserRecord, DECOY_USER, FileRecord, check_user_permission, FileReadPermission, UserConn, FileConn
 
 logger = get_logger("server", term_level="DEBUG")
 logger_failed_request = get_logger("failed_requests", term_level="INFO")
@@ -27,10 +28,13 @@ req_conn = RequestDB()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db
-    await asyncio.gather(db.init(), req_conn.init())
-    yield
-    await asyncio.gather(req_conn.commit())
-    await asyncio.gather(req_conn.close())
+    try:
+        await global_connection_init()
+        await asyncio.gather(db.init(), req_conn.init())
+        yield
+        await req_conn.commit()
+    finally:
+        await asyncio.gather(req_conn.close(), global_connection_close())
 
 def handle_exception(fn):
     @wraps(fn)

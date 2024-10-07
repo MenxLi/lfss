@@ -1,44 +1,23 @@
 
 from typing import Optional, overload, Literal, AsyncIterable
 from abc import ABC
-import os
 
 import urllib.parse
-from pathlib import Path
 import hashlib, uuid
-from contextlib import asynccontextmanager
 import zipfile, io, asyncio
 
 import aiosqlite, aiofiles
 import aiofiles.os
 
+from .connection_pool import execute_sql, connection, transaction
 from .datatype import UserRecord, FileReadPermission, FileRecord, DirectoryRecord, PathContents
-from .config import DATA_HOME, LARGE_BLOB_DIR
+from .config import LARGE_BLOB_DIR
 from .log import get_logger
 from .utils import decode_uri_compnents
 from .error import *
 
 def hash_credential(username, password):
     return hashlib.sha256((username + password).encode()).hexdigest()
-
-async def execute_sql(conn: aiosqlite.Connection, name: str):
-    this_dir = Path(__file__).parent
-    sql_dir = this_dir.parent / 'sql'
-    async with aiofiles.open(sql_dir / name, 'r') as f:
-        sql = await f.read()
-    sql = sql.split(';')
-    for s in sql:
-        await conn.execute(s)
-
-async def get_connection() -> aiosqlite.Connection:
-    if not os.environ.get('SQLITE_TEMPDIR'):
-        os.environ['SQLITE_TEMPDIR'] = str(DATA_HOME)
-    # large blobs are stored in a separate database, should be more efficient
-    conn = await aiosqlite.connect(DATA_HOME / 'index.db', timeout = 60)
-    async with conn.cursor() as c:
-        await c.execute(f"ATTACH DATABASE ? AS blobs", (str(DATA_HOME/'blobs.db'), ))
-    await execute_sql(conn, 'pragma.sql')
-    return conn
 
 class DBObjectBase(ABC):
     logger = get_logger('database', global_instance=True)
@@ -455,25 +434,6 @@ async def get_user(conn: aiosqlite.Connection, user: int | str) -> Optional[User
         return await uconn.get_user_by_id(user)
     else:
         return None
-
-@asynccontextmanager
-async def connection():
-    conn = await get_connection()
-    try:
-        yield conn
-    finally:
-        await conn.close()
-
-@asynccontextmanager
-async def transaction():
-    async with connection() as conn:
-        try:
-            yield conn
-            await conn.commit()
-        except Exception as e:
-            get_logger('database', global_instance=True).error(f"Error in transaction: {e}, rollback.")
-            await conn.rollback()
-            raise e
 
 # mostly transactional operations
 class Database:

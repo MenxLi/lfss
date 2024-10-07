@@ -1,6 +1,7 @@
 import argparse, asyncio
 from contextlib import asynccontextmanager
 from ..src.database import Database, FileReadPermission, transaction, UserConn
+from ..src.connection_pool import global_entrance
 
 def parse_storage_size(s: str) -> int:
     if s[-1] in 'Kk':
@@ -13,6 +14,7 @@ def parse_storage_size(s: str) -> int:
         return int(s[:-1]) * 1024 * 1024 * 1024 * 1024
     return int(s)
 
+@global_entrance(1)
 async def _main():
     parser = argparse.ArgumentParser()
     sp = parser.add_subparsers(dest='subparser_name', required=True)

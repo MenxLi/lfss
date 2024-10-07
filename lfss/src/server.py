@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from .error import *
 from .log import get_logger
 from .stat import RequestDB
-from .config import MAX_BUNDLE_BYTES, MAX_FILE_BYTES, LARGE_BLOB_DIR, LARGE_FILE_BYTES
+from .config import MAX_BUNDLE_BYTES, MAX_FILE_BYTES, LARGE_FILE_BYTES
 from .utils import ensure_uri_compnents, format_last_modified, now_stamp
 from .database import Database, UserRecord, DECOY_USER, FileRecord, check_user_permission, FileReadPermission
 
@@ -142,12 +142,10 @@ async def get_file(path: str, download = False, user: UserRecord = Depends(get_c
     
     fname = path.split("/")[-1]
     async def send(media_type: Optional[str] = None, disposition = "attachment"):
+        if media_type is None:
+            media_type = file_record.mime_type
         if not file_record.external:
             fblob = await conn.read_file(path)
-            if media_type is None:
-                media_type, _ = mimetypes.guess_type(fname)
-            if media_type is None:
-                media_type = mimesniff.what(fblob)
             return Response(
                 content=fblob, media_type=media_type, headers={
                     "Content-Disposition": f"{disposition}; filename={fname}", 
@@ -155,12 +153,7 @@ async def get_file(path: str, download = False, user: UserRecord = Depends(get_c
                     "Last-Modified": format_last_modified(file_record.create_time)
                 }
             )
-        
         else:
-            if media_type is None:
-                media_type, _ = mimetypes.guess_type(fname)
-            if media_type is None:
-                media_type = mimesniff.what(str((LARGE_BLOB_DIR / file_record.file_id).absolute()))
             return StreamingResponse(
                 await conn.read_file_stream(path), media_type=media_type, headers={
                     "Content-Disposition": f"{disposition}; filename={fname}", 
@@ -228,14 +221,24 @@ async def put_file(
         blobs = await request.body()
     else:
         blobs = await request.body()
+    
+    # check file type
+    assert not path.endswith("/"), "Path must be a file"
+    fname = path.split("/")[-1]
+    mime_t, _ = mimetypes.guess_type(fname)
+    if mime_t is None:
+        mime_t = mimesniff.what(blobs)
+    if mime_t is None:
+        mime_t = "application/octet-stream"
+
     if len(blobs) > LARGE_FILE_BYTES:
         async def blob_reader():
             chunk_size = 16 * 1024 * 1024    # 16MB
             for b in range(0, len(blobs), chunk_size):
                 yield blobs[b:b+chunk_size]
-        await conn.save_file(user.id, path, blob_reader(), permission = FileReadPermission(permission))
+        await conn.save_file(user.id, path, blob_reader(), permission = FileReadPermission(permission), mime_type = mime_t)
     else:
-        await conn.save_file(user.id, path, blobs, permission = FileReadPermission(permission))
+        await conn.save_file(user.id, path, blobs, permission = FileReadPermission(permission), mime_type=mime_t)
 
     # https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Methods/PUT
     if exists_flag:
@@ -353,7 +356,7 @@ async def update_file_meta(
         
         if perm is not None:
             logger.info(f"Update permission of {path} to {perm}")
-            await conn.file.set_file_record(
+            await conn.file.update_file_record(
                 url = file_record.url, 
                 permission = FileReadPermission(perm)
             )

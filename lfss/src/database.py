@@ -4,16 +4,16 @@ from abc import ABC, abstractmethod
 
 import urllib.parse
 from pathlib import Path
-import dataclasses, hashlib, uuid
+import hashlib, uuid
 from contextlib import asynccontextmanager
 from functools import wraps
-from enum import IntEnum
 import zipfile, io, asyncio
 
 import aiosqlite, aiofiles
 import aiofiles.os
 from asyncio import Lock
 
+from .datatype import UserRecord, FileReadPermission, FileRecord, DirectoryRecord, PathContents
 from .config import DATA_HOME, LARGE_BLOB_DIR
 from .log import get_logger
 from .utils import decode_uri_compnents
@@ -63,26 +63,6 @@ class DBConnBase(ABC):
 
     async def commit(self):
         await self.conn.commit()
-
-class FileReadPermission(IntEnum):
-    UNSET = 0           # not set
-    PUBLIC = 1          # accessible by anyone
-    PROTECTED = 2       # accessible by any user
-    PRIVATE = 3         # accessible by owner only (including admin)
-
-@dataclasses.dataclass
-class UserRecord:
-    id: int
-    username: str
-    credential: str
-    is_admin: bool
-    create_time: str
-    last_active: str
-    max_storage: int
-    permission: 'FileReadPermission'
-
-    def __str__(self):
-        return f"User {self.username} (id={self.id}, admin={self.is_admin}, created at {self.create_time}, last active at {self.last_active}, storage={self.max_storage}, permission={self.permission})"
 
 DECOY_USER = UserRecord(0, 'decoy', 'decoy', False, '2021-01-01 00:00:00', '2021-01-01 00:00:00', 0, FileReadPermission.PRIVATE)
 class UserConn(DBConnBase):
@@ -174,37 +154,6 @@ class UserConn(DBConnBase):
         await self.conn.execute("DELETE FROM user WHERE username = ?", (username, ))
         self.logger.info(f"Delete user {username}")
 
-@dataclasses.dataclass
-class FileRecord:
-    url: str
-    owner_id: int
-    file_id: str      # defines mapping from fmata to fdata
-    file_size: int
-    create_time: str
-    access_time: str
-    permission: FileReadPermission
-    external: bool
-
-    def __str__(self):
-        return  f"File {self.url} (owner={self.owner_id}, created at {self.create_time}, accessed at {self.access_time}, " + \
-                f"file_id={self.file_id}, permission={self.permission}, size={self.file_size}, external={self.external})"
-
-@dataclasses.dataclass
-class DirectoryRecord:
-    url: str
-    size: int
-    create_time: str = ""
-    update_time: str = ""
-    access_time: str = ""
-
-    def __str__(self):
-        return f"Directory {self.url} (size={self.size})"
-
-@dataclasses.dataclass
-class PathContents:
-    dirs: list[DirectoryRecord]
-    files: list[FileRecord]
-    
 class FileConn(DBConnBase):
 
     @staticmethod
@@ -233,6 +182,15 @@ class FileConn(DBConnBase):
             self.logger.info("Updating fmeta table")
             await self.conn.execute('''
             ALTER TABLE fmeta ADD COLUMN external BOOLEAN DEFAULT FALSE
+            ''')
+
+        # backward compatibility, since 0.6.0
+        async with self.conn.execute("SELECT * FROM fmeta") as cursor:
+            res = await cursor.fetchone()
+        if res and len(res) < 9:
+            self.logger.info("Updating fmeta table")
+            await self.conn.execute('''
+            ALTER TABLE fmeta ADD COLUMN mime_type TEXT DEFAULT 'application/octet-stream'
             ''')
 
         return self
@@ -373,42 +331,41 @@ class FileConn(DBConnBase):
         return res[0] or 0
     
     @atomic
+    async def update_file_record(
+        self, url, owner_id: Optional[int] = None, permission: Optional[FileReadPermission] = None
+        ):
+        old = await self.get_file_record(url)
+        assert old is not None, f"File {url} not found"
+        if owner_id is None:
+            owner_id = old.owner_id
+        if permission is None:
+            permission = old.permission
+        await self.conn.execute(
+            "UPDATE fmeta SET owner_id = ?, permission = ? WHERE url = ?", 
+            (owner_id, int(permission), url)
+            )
+        self.logger.info(f"Updated file {url}")
+    
+    @atomic
     async def set_file_record(
         self, url: str, 
-        owner_id: Optional[int] = None, 
-        file_id: Optional[str] = None, 
-        file_size: Optional[int] = None, 
-        permission: Optional[ FileReadPermission ] = None, 
-        external: Optional[bool] = None
+        owner_id: int, 
+        file_id:str, 
+        file_size: int, 
+        permission: FileReadPermission, 
+        external: bool, 
+        mime_type: str
         ):
-
-        old = await self.get_file_record(url)
-        if old is not None:
-            self.logger.debug(f"Updating fmeta {url}: permission={permission}, owner_id={owner_id}")
-            # should delete the old blob if file_id is changed
-            assert file_id is None, "Cannot update file id"
-            assert file_size is None, "Cannot update file size"
-            assert external is None, "Cannot update external"
-
-            if owner_id is None: owner_id = old.owner_id
-            if permission is None: permission = old.permission
-            await self.conn.execute(
-                """
-                UPDATE fmeta SET owner_id = ?, permission = ?, 
-                access_time = CURRENT_TIMESTAMP WHERE url = ?
-                """, (owner_id, int(permission), url))
-            self.logger.info(f"File {url} updated")
-        else:
-            self.logger.debug(f"Creating fmeta {url}: permission={permission}, owner_id={owner_id}, file_id={file_id}, file_size={file_size}, external={external}")
-            if permission is None:
-                permission = FileReadPermission.UNSET
-            assert owner_id is not None and file_id is not None and file_size is not None and external is not None
-            await self.conn.execute(
-                "INSERT INTO fmeta (url, owner_id, file_id, file_size, permission, external) VALUES (?, ?, ?, ?, ?, ?)", 
-                (url, owner_id, file_id, file_size, int(permission), external)
-                )
-            await self._user_size_inc(owner_id, file_size)
-            self.logger.info(f"File {url} created")
+        self.logger.debug(f"Creating fmeta {url}: permission={permission}, owner_id={owner_id}, file_id={file_id}, file_size={file_size}, external={external}, mime_type={mime_type}")
+        if permission is None:
+            permission = FileReadPermission.UNSET
+        assert owner_id is not None and file_id is not None and file_size is not None and external is not None
+        await self.conn.execute(
+            "INSERT INTO fmeta (url, owner_id, file_id, file_size, permission, external, mime_type) VALUES (?, ?, ?, ?, ?, ?, ?)", 
+            (url, owner_id, file_id, file_size, int(permission), external, mime_type)
+            )
+        await self._user_size_inc(owner_id, file_size)
+        self.logger.info(f"File {url} created")
     
     @atomic
     async def move_file(self, old_url: str, new_url: str):
@@ -587,7 +544,8 @@ class Database:
     async def save_file(
         self, u: int | str, url: str, 
         blob: bytes | AsyncIterable[bytes], 
-        permission: FileReadPermission = FileReadPermission.UNSET
+        permission: FileReadPermission = FileReadPermission.UNSET, 
+        mime_type: str = 'application/octet-stream'
         ):
         """
         if file_size is not provided, the blob must be bytes
@@ -619,7 +577,7 @@ class Database:
                 await self.file.set_file_blob(f_id, blob)
                 await self.file.set_file_record(
                     url, owner_id=user.id, file_id=f_id, file_size=file_size, 
-                    permission=permission, external=False)
+                    permission=permission, external=False, mime_type=mime_type)
                 await self.user.set_active(user.username)
         else:
             assert isinstance(blob, AsyncIterable)
@@ -631,7 +589,7 @@ class Database:
                     raise StorageExceededError(f"Unable to save file, user {user.username} has storage limit of {user.max_storage}, used {user_size_used}, requested {file_size}")
                 await self.file.set_file_record(
                     url, owner_id=user.id, file_id=f_id, file_size=file_size, 
-                    permission=permission, external=True)
+                    permission=permission, external=True, mime_type=mime_type)
                 await self.user.set_active(user.username)
 
     async def read_file_stream(self, url: str) -> AsyncIterable[bytes]:

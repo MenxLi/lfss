@@ -2,7 +2,7 @@ from typing import Optional, Literal
 import os
 import requests
 import urllib.parse
-from lfss.src.database import (
+from lfss.src.datatype import (
     FileReadPermission, FileRecord, DirectoryRecord, UserRecord, PathContents
     )
 

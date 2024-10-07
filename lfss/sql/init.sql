@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS user (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username VARCHAR(255) UNIQUE NOT NULL,
-    credential VARCHAR(255) NOT NULL,
+    username VARCHAR(256) UNIQUE NOT NULL,
+    credential VARCHAR(256) NOT NULL,
     is_admin BOOLEAN DEFAULT FALSE,
     create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
     last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
@@ -10,19 +10,20 @@ CREATE TABLE IF NOT EXISTS user (
 );
 
 CREATE TABLE IF NOT EXISTS fmeta (
-    url VARCHAR(512) PRIMARY KEY,
+    url VARCHAR(1024) PRIMARY KEY,
     owner_id INTEGER NOT NULL,
-    file_id VARCHAR(256) NOT NULL,
+    file_id CHAR(32) NOT NULL,
     file_size INTEGER,
     create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
     access_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     permission INTEGER DEFAULT 0, 
-    external BOOLEAN DEFAULT FALSE,
+    external BOOLEAN DEFAULT FALSE, 
+    mime_type VARCHAR(256) DEFAULT 'application/octet-stream',
     FOREIGN KEY(owner_id) REFERENCES user(id)
 );
 
 CREATE TABLE IF NOT EXISTS fdata (
-    file_id VARCHAR(256) PRIMARY KEY,
+    file_id CHAR(32) PRIMARY KEY,
     data BLOB
 );
 

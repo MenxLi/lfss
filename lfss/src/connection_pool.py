@@ -74,11 +74,8 @@ class SqlConnectionPool:
             raise Exception("Write connection is not available")
 
         async with self._lock:
-            i = 0
             for c in self._connections:
-                i += 1
                 if c.is_available:
-                    print(f"Got connection {i}/{len(self._connections)}, sem: {self._sem._value}")
                     c.is_available = False
                     return c
         raise Exception("No available connections, impossible?")

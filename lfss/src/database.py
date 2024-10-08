@@ -9,7 +9,7 @@ import zipfile, io, asyncio
 import aiosqlite, aiofiles
 import aiofiles.os
 
-from .connection_pool import execute_sql, connection, transaction
+from .connection_pool import execute_sql, unique_cursor, transaction
 from .datatype import UserRecord, FileReadPermission, FileRecord, DirectoryRecord, PathContents
 from .config import LARGE_BLOB_DIR
 from .log import get_logger
@@ -21,52 +21,52 @@ def hash_credential(username, password):
 
 class DBObjectBase(ABC):
     logger = get_logger('database', global_instance=True)
-    _conn: aiosqlite.Connection
+    _cur: aiosqlite.Cursor
 
-    def set_connection(self, conn: aiosqlite.Connection):
-        self._conn = conn
+    def set_cursor(self, cur: aiosqlite.Cursor):
+        self._cur = cur
 
     @property
-    def conn(self)->aiosqlite.Connection:
-        if not hasattr(self, '_conn'):
+    def cur(self)->aiosqlite.Cursor:
+        if not hasattr(self, '_cur'):
             raise ValueError("Connection not set")
-        return self._conn
+        return self._cur
 
-    async def commit(self):
-        await self.conn.commit()
+    # async def commit(self):
+    #     await self.conn.commit()
 
 DECOY_USER = UserRecord(0, 'decoy', 'decoy', False, '2021-01-01 00:00:00', '2021-01-01 00:00:00', 0, FileReadPermission.PRIVATE)
 class UserConn(DBObjectBase):
 
-    def __init__(self, conn: aiosqlite.Connection) -> None:
+    def __init__(self, cur: aiosqlite.Cursor) -> None:
         super().__init__()
-        self.set_connection(conn)
+        self.set_cursor(cur)
 
     @staticmethod
     def parse_record(record) -> UserRecord:
         return UserRecord(*record)
 
-    async def init(self, conn: aiosqlite.Connection):
-        self.set_connection(conn)
+    async def init(self, cur: aiosqlite.Cursor):
+        self.set_cursor(cur)
         return self
     
     async def get_user(self, username: str) -> Optional[UserRecord]:
-        async with self.conn.execute("SELECT * FROM user WHERE username = ?", (username, )) as cursor:
-            res = await cursor.fetchone()
+        await self.cur.execute("SELECT * FROM user WHERE username = ?", (username, ))
+        res = await self.cur.fetchone()
         
         if res is None: return None
         return self.parse_record(res)
     
     async def get_user_by_id(self, user_id: int) -> Optional[UserRecord]:
-        async with self.conn.execute("SELECT * FROM user WHERE id = ?", (user_id, )) as cursor:
-            res = await cursor.fetchone()
+        await self.cur.execute("SELECT * FROM user WHERE id = ?", (user_id, ))
+        res = await self.cur.fetchone()
         
         if res is None: return None
         return self.parse_record(res)
     
     async def get_user_by_credential(self, credential: str) -> Optional[UserRecord]:
-        async with self.conn.execute("SELECT * FROM user WHERE credential = ?", (credential, )) as cursor:
-            res = await cursor.fetchone()
+        await self.cur.execute("SELECT * FROM user WHERE credential = ?", (credential, ))
+        res = await self.cur.fetchone()
         
         if res is None: return None
         return self.parse_record(res)
@@ -81,10 +81,10 @@ class UserConn(DBObjectBase):
         self.logger.debug(f"Creating user {username}")
         credential = hash_credential(username, password)
         assert await self.get_user(username) is None, "Duplicate username"
-        async with self.conn.execute("INSERT INTO user (username, credential, is_admin, max_storage, permission) VALUES (?, ?, ?, ?, ?)", (username, credential, is_admin, max_storage, permission)) as cursor:
-            self.logger.info(f"User {username} created")
-            assert cursor.lastrowid is not None
-            return cursor.lastrowid
+        await self.cur.execute("INSERT INTO user (username, credential, is_admin, max_storage, permission) VALUES (?, ?, ?, ?, ?)", (username, credential, is_admin, max_storage, permission))
+        self.logger.info(f"User {username} created")
+        assert self.cur.lastrowid is not None
+        return self.cur.lastrowid
     
     async def update_user(
         self, username: str, password: Optional[str] = None, is_admin: Optional[bool] = None, 
@@ -107,60 +107,60 @@ class UserConn(DBObjectBase):
         if max_storage is None: max_storage = current_record.max_storage
         if permission is None: permission = current_record.permission
         
-        await self.conn.execute(
+        await self.cur.execute(
             "UPDATE user SET credential = ?, is_admin = ?, max_storage = ?, permission = ? WHERE username = ?", 
             (credential, is_admin, max_storage, int(permission), username)
             )
         self.logger.info(f"User {username} updated")
     
     async def all(self):
-        async with self.conn.execute("SELECT * FROM user") as cursor:
-            async for record in cursor:
-                yield self.parse_record(record)
+        await self.cur.execute("SELECT * FROM user")
+        for record in await self.cur.fetchall():
+            yield self.parse_record(record)
     
     async def set_active(self, username: str):
-        await self.conn.execute("UPDATE user SET last_active = CURRENT_TIMESTAMP WHERE username = ?", (username, ))
+        await self.cur.execute("UPDATE user SET last_active = CURRENT_TIMESTAMP WHERE username = ?", (username, ))
     
     async def delete_user(self, username: str):
-        await self.conn.execute("DELETE FROM user WHERE username = ?", (username, ))
+        await self.cur.execute("DELETE FROM user WHERE username = ?", (username, ))
         self.logger.info(f"Delete user {username}")
 
 class FileConn(DBObjectBase):
 
-    def __init__(self, conn: aiosqlite.Connection) -> None:
+    def __init__(self, cur: aiosqlite.Cursor) -> None:
         super().__init__()
-        self.set_connection(conn)
+        self.set_cursor(cur)
 
     @staticmethod
     def parse_record(record) -> FileRecord:
         return FileRecord(*record)
     
-    def init(self, conn: aiosqlite.Connection):
-        self.set_connection(conn)
+    def init(self, cur: aiosqlite.Cursor):
+        self.set_cursor(cur)
         return self
     
     async def get_file_record(self, url: str) -> Optional[FileRecord]:
-        async with self.conn.execute("SELECT * FROM fmeta WHERE url = ?", (url, )) as cursor:
-            res = await cursor.fetchone()
+        cursor = await self.cur.execute("SELECT * FROM fmeta WHERE url = ?", (url, ))
+        res = await cursor.fetchone()
         if res is None:
             return None
         return self.parse_record(res)
     
     async def get_file_records(self, urls: list[str]) -> list[FileRecord]:
-        async with self.conn.execute("SELECT * FROM fmeta WHERE url IN ({})".format(','.join(['?'] * len(urls))), urls) as cursor:
-            res = await cursor.fetchall()
+        await self.cur.execute("SELECT * FROM fmeta WHERE url IN ({})".format(','.join(['?'] * len(urls))), urls)
+        res = await self.cur.fetchall()
         if res is None:
             return []
         return [self.parse_record(r) for r in res]
     
     async def get_user_file_records(self, owner_id: int) -> list[FileRecord]:
-        async with self.conn.execute("SELECT * FROM fmeta WHERE owner_id = ?", (owner_id, )) as cursor:
-            res = await cursor.fetchall()
+        await self.cur.execute("SELECT * FROM fmeta WHERE owner_id = ?", (owner_id, ))
+        res = await self.cur.fetchall()
         return [self.parse_record(r) for r in res]
     
     async def get_path_file_records(self, url: str) -> list[FileRecord]:
-        async with self.conn.execute("SELECT * FROM fmeta WHERE url LIKE ?", (url + '%', )) as cursor:
-            res = await cursor.fetchall()
+        await self.cur.execute("SELECT * FROM fmeta WHERE url LIKE ?", (url + '%', ))
+        res = await self.cur.fetchall()
         return [self.parse_record(r) for r in res]
 
     async def list_root(self, *usernames: str) -> list[DirectoryRecord]:
@@ -169,8 +169,8 @@ class FileConn(DBObjectBase):
         """
         if not usernames:
             # list all users
-            async with self.conn.execute("SELECT username FROM user") as cursor:
-                res = await cursor.fetchall()
+            await self.cur.execute("SELECT username FROM user")
+            res = await self.cur.fetchall()
             dirnames = [u[0] + '/' for u in res]
             dirs = [DirectoryRecord(u, await self.path_size(u, include_subpath=True)) for u in dirnames]
             return dirs
@@ -197,24 +197,24 @@ class FileConn(DBObjectBase):
             # users cannot be queried using '/', because we store them without '/' prefix, 
             # so we need to handle this case separately, 
             if flat:
-                async with self.conn.execute("SELECT * FROM fmeta") as cursor:
-                    res = await cursor.fetchall()
+                cursor = await self.cur.execute("SELECT * FROM fmeta")
+                res = await cursor.fetchall()
                 return [self.parse_record(r) for r in res]
 
             else:
                 return PathContents(await self.list_root(), [])
         
         if flat:
-            async with self.conn.execute("SELECT * FROM fmeta WHERE url LIKE ?", (url + '%', )) as cursor:
-                res = await cursor.fetchall()
+            cursor = await self.cur.execute("SELECT * FROM fmeta WHERE url LIKE ?", (url + '%', ))
+            res = await cursor.fetchall()
             return [self.parse_record(r) for r in res]
 
-        async with self.conn.execute("SELECT * FROM fmeta WHERE url LIKE ? AND url NOT LIKE ?", (url + '%', url + '%/%')) as cursor:
-            res = await cursor.fetchall()
+        cursor = await self.cur.execute("SELECT * FROM fmeta WHERE url LIKE ? AND url NOT LIKE ?", (url + '%', url + '%/%'))
+        res = await cursor.fetchall()
         files = [self.parse_record(r) for r in res]
 
         # substr indexing starts from 1
-        async with self.conn.execute(
+        cursor = await self.cur.execute(
             """
             SELECT DISTINCT 
                 SUBSTR(
@@ -225,8 +225,8 @@ class FileConn(DBObjectBase):
                 FROM fmeta WHERE url LIKE ?
             """, 
             (url, url, url + '%')
-            ) as cursor:
-            res = await cursor.fetchall()
+            )
+        res = await cursor.fetchall()
         dirs_str = [r[0] + '/' for r in res if r[0] != '/']
         async def get_dir(dir_url):
             return DirectoryRecord(dir_url, -1)
@@ -235,42 +235,42 @@ class FileConn(DBObjectBase):
     
     async def get_path_record(self, url: str) -> DirectoryRecord:
         assert url.endswith('/'), "Path must end with /"
-        async with self.conn.execute("""
+        cursor = await self.cur.execute("""
             SELECT MIN(create_time) as create_time, 
                 MAX(create_time) as update_time, 
                 MAX(access_time) as access_time 
             FROM fmeta 
             WHERE url LIKE ?
-        """, (url + '%', )) as cursor:
-            result = await cursor.fetchone()
-            if result is None or any(val is None for val in result):
-                raise PathNotFoundError(f"Path {url} not found")
-            create_time, update_time, access_time = result
+        """, (url + '%', ))
+        result = await cursor.fetchone()
+        if result is None or any(val is None for val in result):
+            raise PathNotFoundError(f"Path {url} not found")
+        create_time, update_time, access_time = result
         p_size = await self.path_size(url, include_subpath=True)
         return DirectoryRecord(url, p_size, create_time=create_time, update_time=update_time, access_time=access_time)
     
     async def user_size(self, user_id: int) -> int:
-        async with self.conn.execute("SELECT size FROM usize WHERE user_id = ?", (user_id, )) as cursor:
-            res = await cursor.fetchone()
+        cursor = await self.cur.execute("SELECT size FROM usize WHERE user_id = ?", (user_id, ))
+        res = await cursor.fetchone()
         if res is None:
             return -1
         return res[0]
     async def _user_size_inc(self, user_id: int, inc: int):
         self.logger.debug(f"Increasing user {user_id} size by {inc}")
-        await self.conn.execute("INSERT OR REPLACE INTO usize (user_id, size) VALUES (?, COALESCE((SELECT size FROM usize WHERE user_id = ?), 0) + ?)", (user_id, user_id, inc))
+        await self.cur.execute("INSERT OR REPLACE INTO usize (user_id, size) VALUES (?, COALESCE((SELECT size FROM usize WHERE user_id = ?), 0) + ?)", (user_id, user_id, inc))
     async def _user_size_dec(self, user_id: int, dec: int):
         self.logger.debug(f"Decreasing user {user_id} size by {dec}")
-        await self.conn.execute("INSERT OR REPLACE INTO usize (user_id, size) VALUES (?, COALESCE((SELECT size FROM usize WHERE user_id = ?), 0) - ?)", (user_id, user_id, dec))
+        await self.cur.execute("INSERT OR REPLACE INTO usize (user_id, size) VALUES (?, COALESCE((SELECT size FROM usize WHERE user_id = ?), 0) - ?)", (user_id, user_id, dec))
     
     async def path_size(self, url: str, include_subpath = False) -> int:
         if not url.endswith('/'):
             url += '/'
         if not include_subpath:
-            async with self.conn.execute("SELECT SUM(file_size) FROM fmeta WHERE url LIKE ? AND url NOT LIKE ?", (url + '%', url + '%/%')) as cursor:
-                res = await cursor.fetchone()
+            cursor = await self.cur.execute("SELECT SUM(file_size) FROM fmeta WHERE url LIKE ? AND url NOT LIKE ?", (url + '%', url + '%/%'))
+            res = await cursor.fetchone()
         else:
-            async with self.conn.execute("SELECT SUM(file_size) FROM fmeta WHERE url LIKE ?", (url + '%', )) as cursor:
-                res = await cursor.fetchone()
+            cursor = await self.cur.execute("SELECT SUM(file_size) FROM fmeta WHERE url LIKE ?", (url + '%', ))
+            res = await cursor.fetchone()
         assert res is not None
         return res[0] or 0
     
@@ -283,7 +283,7 @@ class FileConn(DBObjectBase):
             owner_id = old.owner_id
         if permission is None:
             permission = old.permission
-        await self.conn.execute(
+        await self.cur.execute(
             "UPDATE fmeta SET owner_id = ?, permission = ? WHERE url = ?", 
             (owner_id, int(permission), url)
             )
@@ -302,7 +302,7 @@ class FileConn(DBObjectBase):
         if permission is None:
             permission = FileReadPermission.UNSET
         assert owner_id is not None and file_id is not None and file_size is not None and external is not None
-        await self.conn.execute(
+        await self.cur.execute(
             "INSERT INTO fmeta (url, owner_id, file_id, file_size, permission, external, mime_type) VALUES (?, ?, ?, ?, ?, ?, ?)", 
             (url, owner_id, file_id, file_size, int(permission), external, mime_type)
             )
@@ -316,63 +316,63 @@ class FileConn(DBObjectBase):
         new_exists = await self.get_file_record(new_url)
         if new_exists is not None:
             raise FileExistsError(f"File {new_url} already exists")
-        async with self.conn.execute("UPDATE fmeta SET url = ?, create_time = CURRENT_TIMESTAMP WHERE url = ?", (new_url, old_url)):
-            self.logger.info(f"Moved file {old_url} to {new_url}")
+        await self.cur.execute("UPDATE fmeta SET url = ?, create_time = CURRENT_TIMESTAMP WHERE url = ?", (new_url, old_url))
+        self.logger.info(f"Moved file {old_url} to {new_url}")
     
     async def move_path(self, old_url: str, new_url: str, conflict_handler: Literal['skip', 'overwrite'] = 'overwrite', user_id: Optional[int] = None):
         assert old_url.endswith('/'), "Old path must end with /"
         assert new_url.endswith('/'), "New path must end with /"
         if user_id is None:
-            async with self.conn.execute("SELECT * FROM fmeta WHERE url LIKE ?", (old_url + '%', )) as cursor:
-                res = await cursor.fetchall()
+            cursor = await self.cur.execute("SELECT * FROM fmeta WHERE url LIKE ?", (old_url + '%', ))
+            res = await cursor.fetchall()
         else:
-            async with self.conn.execute("SELECT * FROM fmeta WHERE url LIKE ? AND owner_id = ?", (old_url + '%', user_id)) as cursor:
-                res = await cursor.fetchall()
+            cursor = await self.cur.execute("SELECT * FROM fmeta WHERE url LIKE ? AND owner_id = ?", (old_url + '%', user_id))
+            res = await cursor.fetchall()
         for r in res:
             new_r = new_url + r[0][len(old_url):]
             if conflict_handler == 'overwrite':
-                await self.conn.execute("DELETE FROM fmeta WHERE url = ?", (new_r, ))
+                await self.cur.execute("DELETE FROM fmeta WHERE url = ?", (new_r, ))
             elif conflict_handler == 'skip':
-                if (await self.conn.execute("SELECT url FROM fmeta WHERE url = ?", (new_r, ))) is not None:
+                if (await self.cur.execute("SELECT url FROM fmeta WHERE url = ?", (new_r, ))) is not None:
                     continue
-            await self.conn.execute("UPDATE fmeta SET url = ?, create_time = CURRENT_TIMESTAMP WHERE url = ?", (new_r, r[0]))
+            await self.cur.execute("UPDATE fmeta SET url = ?, create_time = CURRENT_TIMESTAMP WHERE url = ?", (new_r, r[0]))
     
     async def log_access(self, url: str):
-        await self.conn.execute("UPDATE fmeta SET access_time = CURRENT_TIMESTAMP WHERE url = ?", (url, ))
+        await self.cur.execute("UPDATE fmeta SET access_time = CURRENT_TIMESTAMP WHERE url = ?", (url, ))
     
     async def delete_file_record(self, url: str):
         file_record = await self.get_file_record(url)
         if file_record is None: return
-        await self.conn.execute("DELETE FROM fmeta WHERE url = ?", (url, ))
+        await self.cur.execute("DELETE FROM fmeta WHERE url = ?", (url, ))
         await self._user_size_dec(file_record.owner_id, file_record.file_size)
         self.logger.info(f"Deleted fmeta {url}")
     
     async def delete_user_file_records(self, owner_id: int):
-        async with self.conn.execute("SELECT * FROM fmeta WHERE owner_id = ?", (owner_id, )) as cursor:
-            res = await cursor.fetchall()
-        await self.conn.execute("DELETE FROM fmeta WHERE owner_id = ?", (owner_id, ))
-        await self.conn.execute("DELETE FROM usize WHERE user_id = ?", (owner_id, ))
+        cursor = await self.cur.execute("SELECT * FROM fmeta WHERE owner_id = ?", (owner_id, ))
+        res = await cursor.fetchall()
+        await self.cur.execute("DELETE FROM fmeta WHERE owner_id = ?", (owner_id, ))
+        await self.cur.execute("DELETE FROM usize WHERE user_id = ?", (owner_id, ))
         self.logger.info(f"Deleted {len(res)} files for user {owner_id}") # type: ignore
     
     async def delete_path_records(self, path: str):
         """Delete all records with url starting with path"""
-        async with self.conn.execute("SELECT * FROM fmeta WHERE url LIKE ?", (path + '%', )) as cursor:
-            all_f_rec = await cursor.fetchall()
+        cursor = await self.cur.execute("SELECT * FROM fmeta WHERE url LIKE ?", (path + '%', ))
+        all_f_rec = await cursor.fetchall()
         
         # update user size
-        async with self.conn.execute("SELECT DISTINCT owner_id FROM fmeta WHERE url LIKE ?", (path + '%', )) as cursor:
-            res = await cursor.fetchall()
-            for r in res:
-                async with self.conn.execute("SELECT SUM(file_size) FROM fmeta WHERE owner_id = ? AND url LIKE ?", (r[0], path + '%')) as cursor:
-                    size = await cursor.fetchone()
-                if size is not None:
-                    await self._user_size_dec(r[0], size[0])
+        cursor = await self.cur.execute("SELECT DISTINCT owner_id FROM fmeta WHERE url LIKE ?", (path + '%', ))
+        res = await cursor.fetchall()
+        for r in res:
+            cursor = await self.cur.execute("SELECT SUM(file_size) FROM fmeta WHERE owner_id = ? AND url LIKE ?", (r[0], path + '%'))
+            size = await cursor.fetchone()
+            if size is not None:
+                await self._user_size_dec(r[0], size[0])
         
-        await self.conn.execute("DELETE FROM fmeta WHERE url LIKE ?", (path + '%', ))
+        await self.cur.execute("DELETE FROM fmeta WHERE url LIKE ?", (path + '%', ))
         self.logger.info(f"Deleted {len(all_f_rec)} files for path {path}") # type: ignore
     
     async def set_file_blob(self, file_id: str, blob: bytes):
-        await self.conn.execute("INSERT OR REPLACE INTO blobs.fdata (file_id, data) VALUES (?, ?)", (file_id, blob))
+        await self.cur.execute("INSERT OR REPLACE INTO blobs.fdata (file_id, data) VALUES (?, ?)", (file_id, blob))
     
     async def set_file_blob_external(self, file_id: str, stream: AsyncIterable[bytes])->int:
         size_sum = 0
@@ -388,8 +388,8 @@ class FileConn(DBObjectBase):
         return size_sum
     
     async def get_file_blob(self, file_id: str) -> Optional[bytes]:
-        async with self.conn.execute("SELECT data FROM blobs.fdata WHERE file_id = ?", (file_id, )) as cursor:
-            res = await cursor.fetchone()
+        cursor = await self.cur.execute("SELECT data FROM blobs.fdata WHERE file_id = ?", (file_id, ))
+        res = await cursor.fetchone()
         if res is None:
             return None
         return res[0]
@@ -405,10 +405,10 @@ class FileConn(DBObjectBase):
             await aiofiles.os.remove(LARGE_BLOB_DIR / file_id)
     
     async def delete_file_blob(self, file_id: str):
-        await self.conn.execute("DELETE FROM blobs.fdata WHERE file_id = ?", (file_id, ))
+        await self.cur.execute("DELETE FROM blobs.fdata WHERE file_id = ?", (file_id, ))
     
     async def delete_file_blobs(self, file_ids: list[str]):
-        await self.conn.execute("DELETE FROM blobs.fdata WHERE file_id IN ({})".format(','.join(['?'] * len(file_ids))), file_ids)
+        await self.cur.execute("DELETE FROM blobs.fdata WHERE file_id IN ({})".format(','.join(['?'] * len(file_ids))), file_ids)
 
 def validate_url(url: str, is_file = True):
     prohibited_chars = ['..', ';', "'", '"', '\\', '\0', '\n', '\r', '\t', '\x0b', '\x0c']
@@ -426,8 +426,8 @@ def validate_url(url: str, is_file = True):
     if not ret:
         raise InvalidPathError(f"Invalid URL: {url}")
 
-async def get_user(conn: aiosqlite.Connection, user: int | str) -> Optional[UserRecord]:
-    uconn = UserConn(conn)
+async def get_user(cur: aiosqlite.Cursor, user: int | str) -> Optional[UserRecord]:
+    uconn = UserConn(cur)
     if isinstance(user, str):
         return await uconn.get_user(user)
     elif isinstance(user, int):
@@ -470,10 +470,10 @@ class Database:
         if file_size is not provided, the blob must be bytes
         """
         validate_url(url)
-        async with transaction() as conn:
-            uconn = UserConn(conn)
-            fconn = FileConn(conn)
-            user = await get_user(conn, u)
+        async with transaction() as cur:
+            uconn = UserConn(cur)
+            fconn = FileConn(cur)
+            user = await get_user(cur, u)
             if user is None:
                 return
             
@@ -485,7 +485,7 @@ class Database:
                 if not user.is_admin:
                     raise PermissionDeniedError(f"Permission denied: {user.username} cannot write to {url}")
                 else:
-                    if await get_user(conn, first_component) is None:
+                    if await get_user(cur, first_component) is None:
                         raise PermissionDeniedError(f"Invalid path: {first_component} is not a valid username")
             
             user_size_used = await fconn.user_size(user.id)
@@ -512,8 +512,8 @@ class Database:
 
     async def read_file_stream(self, url: str) -> AsyncIterable[bytes]:
         validate_url(url)
-        async with connection() as conn:
-            fconn = FileConn(conn)
+        async with unique_cursor() as cur:
+            fconn = FileConn(cur)
             r = await fconn.get_file_record(url)
             if r is None:
                 raise FileNotFoundError(f"File {url} not found")
@@ -524,8 +524,8 @@ class Database:
     async def read_file(self, url: str) -> bytes:
         validate_url(url)
 
-        async with transaction() as conn:
-            fconn = FileConn(conn)
+        async with transaction() as cur:
+            fconn = FileConn(cur)
             r = await fconn.get_file_record(url)
             if r is None:
                 raise FileNotFoundError(f"File {url} not found")
@@ -543,8 +543,8 @@ class Database:
     async def delete_file(self, url: str) -> Optional[FileRecord]:
         validate_url(url)
 
-        async with transaction() as conn:
-            fconn = FileConn(conn)
+        async with transaction() as cur:
+            fconn = FileConn(cur)
             r = await fconn.get_file_record(url)
             if r is None:
                 return None
@@ -560,8 +560,8 @@ class Database:
         validate_url(old_url)
         validate_url(new_url)
 
-        async with transaction() as conn:
-            fconn = FileConn(conn)
+        async with transaction() as cur:
+            fconn = FileConn(cur)
             await fconn.move_file(old_url, new_url)
     
     async def move_path(self, user: UserRecord, old_url: str, new_url: str):
@@ -576,12 +576,12 @@ class Database:
         assert old_url.endswith('/'), "Old path must end with /"
         assert new_url.endswith('/'), "New path must end with /"
 
-        async with transaction() as conn:
+        async with transaction() as cur:
             first_component = new_url.split('/')[0]
             if not (first_component == user.username or user.is_admin):
                 raise PermissionDeniedError(f"Permission denied: path must start with {user.username}")
             elif user.is_admin:
-                uconn = UserConn(conn)
+                uconn = UserConn(cur)
                 _is_user = await uconn.get_user(first_component)
                 if not _is_user:
                     raise PermissionDeniedError(f"Invalid path: {first_component} is not a valid username")
@@ -590,7 +590,7 @@ class Database:
             if not old_url.startswith(user.username + '/') and not user.is_admin:
                 raise PermissionDeniedError(f"Permission denied: {user.username} cannot move path {old_url}")
 
-            fconn = FileConn(conn)
+            fconn = FileConn(cur)
             await fconn.move_path(old_url, new_url, 'overwrite', user.id)
 
     async def __batch_delete_file_blobs(self, fconn: FileConn, file_records: list[FileRecord], batch_size: int = 512):
@@ -612,8 +612,8 @@ class Database:
     async def delete_path(self, url: str):
         validate_url(url, is_file=False)
 
-        async with transaction() as conn:
-            fconn = FileConn(conn)
+        async with transaction() as cur:
+            fconn = FileConn(cur)
             records = await fconn.get_path_file_records(url)
             if not records:
                 return None
@@ -622,21 +622,21 @@ class Database:
             return records
     
     async def delete_user(self, u: str | int):
-        async with transaction() as conn:
-            user = await get_user(conn, u)
+        async with transaction() as cur:
+            user = await get_user(cur, u)
             if user is None:
                 return
 
-            fconn = FileConn(conn)
+            fconn = FileConn(cur)
             records = await fconn.get_user_file_records(user.id)
             await self.__batch_delete_file_blobs(fconn, records)
             await fconn.delete_user_file_records(user.id)
-            uconn = UserConn(conn)
+            uconn = UserConn(cur)
             await uconn.delete_user(user.username)
     
     async def iter_path(self, top_url: str, urls: Optional[list[str]]) -> AsyncIterable[tuple[FileRecord, bytes | AsyncIterable[bytes]]]:
-        async with connection() as conn:
-            fconn = FileConn(conn)
+        async with unique_cursor() as cur:
+            fconn = FileConn(cur)
             if urls is None:
                 urls = [r.url for r in await fconn.list_path(top_url, flat=True)]
 

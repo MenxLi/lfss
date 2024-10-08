@@ -7,7 +7,7 @@ import argparse, time
 from functools import wraps
 from asyncio import Semaphore
 import aiofiles, asyncio
-from lfss.src.database import transaction, connection
+from lfss.src.database import transaction, unique_cursor
 from lfss.src.connection_pool import global_entrance
 
 sem = Semaphore(1)
@@ -79,7 +79,7 @@ async def _main(batch_size: int = 10000):
     e_cout = 0
     batch_count = 0
     while True:
-        async with connection() as conn:
+        async with unique_cursor() as conn:
             exceeded_rows = list(await (await conn.execute( 
                 "SELECT file_id FROM fmeta WHERE file_size > ? AND external = 0 LIMIT ? OFFSET ?",
                 (LARGE_FILE_BYTES, batch_size, batch_size * batch_count)
@@ -96,7 +96,7 @@ async def _main(batch_size: int = 10000):
     i_count = 0
     batch_count = 0
     while True:
-        async with connection() as conn:
+        async with unique_cursor() as conn:
             under_rows = list(await (await conn.execute(
                 "SELECT file_id, file_size, external FROM fmeta WHERE file_size <= ? AND external = 1 LIMIT ? OFFSET ?",
                 (LARGE_FILE_BYTES, batch_size, batch_size * batch_count)

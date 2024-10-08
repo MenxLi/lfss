@@ -17,7 +17,7 @@ from .log import get_logger
 from .stat import RequestDB
 from .config import MAX_BUNDLE_BYTES, MAX_FILE_BYTES, LARGE_FILE_BYTES
 from .utils import ensure_uri_compnents, format_last_modified, now_stamp
-from .connection_pool import global_connection_init, global_connection_close, connection
+from .connection_pool import global_connection_init, global_connection_close, unique_cursor
 from .database import Database, UserRecord, DECOY_USER, FileRecord, check_user_permission, FileReadPermission, UserConn, FileConn
 
 logger = get_logger("server", term_level="DEBUG")
@@ -29,7 +29,7 @@ req_conn = RequestDB()
 async def lifespan(app: FastAPI):
     global db
     try:
-        await global_connection_init()
+        await global_connection_init(size = 1)
         await asyncio.gather(db.init(), req_conn.init())
         yield
         await req_conn.commit()
@@ -62,7 +62,7 @@ async def get_current_user(
     First try to get the user from the bearer token, 
     if not found, try to get the user from the query parameter
     """
-    async with connection() as conn:
+    async with unique_cursor() as conn:
         uconn = UserConn(conn)
         if token:
             user = await uconn.get_user_by_credential(token.credentials)
@@ -122,7 +122,7 @@ async def get_file(path: str, download = False, user: UserRecord = Depends(get_c
     if path == "": path = "/"
     if path.endswith("/"):
         # return file under the path as json
-        async with connection() as conn:
+        async with unique_cursor() as conn:
             fconn = FileConn(conn)
             if user.id == 0:
                 raise HTTPException(status_code=403, detail="Permission denied, credential required")
@@ -138,7 +138,7 @@ async def get_file(path: str, download = False, user: UserRecord = Depends(get_c
 
             return await fconn.list_path(path, flat = False)
     
-    async with connection() as conn:
+    async with unique_cursor() as conn:
         fconn = FileConn(conn)
         file_record = await fconn.get_file_record(path)
         if not file_record:
@@ -204,7 +204,7 @@ async def put_file(
     
     logger.info(f"PUT {path}, user: {user.username}")
     exists_flag = False
-    async with connection() as conn:
+    async with unique_cursor() as conn:
         fconn = FileConn(conn)
         file_record = await fconn.get_file_record(path)
 
@@ -311,7 +311,7 @@ async def bundle_files(path: str, user: UserRecord = Depends(get_current_user)):
         allow_access, _ = check_user_permission(user, owner, file_record)
         return allow_access
     
-    async with connection() as conn:
+    async with unique_cursor() as conn:
         fconn = FileConn(conn)
         files = await fconn.list_path(path, flat = True)
     files = [f for f in files if await is_access_granted(f)]
@@ -337,7 +337,7 @@ async def bundle_files(path: str, user: UserRecord = Depends(get_current_user)):
 async def get_file_meta(path: str, user: UserRecord = Depends(get_current_user)):
     logger.info(f"GET meta({path}), user: {user.username}")
     path = ensure_uri_compnents(path)
-    async with connection() as conn:
+    async with unique_cursor() as conn:
         fconn = FileConn(conn)
         get_fn = fconn.get_file_record if not path.endswith("/") else fconn.get_path_record
         record = await get_fn(path)

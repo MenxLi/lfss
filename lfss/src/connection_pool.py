@@ -1,6 +1,5 @@
 import os
 from pathlib import Path
-from typing import Optional
 import aiosqlite, aiofiles
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -10,7 +9,7 @@ from functools import wraps
 from .log import get_logger
 from .config import DATA_HOME
 
-async def execute_sql(conn: aiosqlite.Connection, name: str):
+async def execute_sql(conn: aiosqlite.Connection | aiosqlite.Cursor, name: str):
     this_dir = Path(__file__).parent
     sql_dir = this_dir.parent / 'sql'
     async with aiofiles.open(sql_dir / name, 'r') as f:
@@ -49,25 +48,32 @@ class SqlConnectionPool:
             self._connections.append(SqlConnection(conn))
         self._sem = Semaphore(size)
     
+    @property
+    def size(self):
+        return len(self._connections)
+    @property
+    def sem(self):
+        return self._sem
+    
     async def get(self) -> SqlConnection:
         if len(self._connections) == 0:
             raise Exception("No available connections, please init the pool first")
 
-        await self._sem.acquire()
         async with self._lock:
+            i = 0
             for c in self._connections:
+                i += 1
                 if c.is_available:
-                    assert c.conn.in_transaction == False
-                    assert c.conn.is_alive()
+                    print(f"Got connection {i}/{len(self._connections)}, sem: {self._sem._value}")
                     c.is_available = False
                     return c
         raise Exception("No available connections, impossible?")
     
     async def release(self, conn: SqlConnection):
         async with self._lock:
-            assert conn in self._connections
+            if not conn in self._connections:
+                raise Exception("Connection not in pool")
             conn.is_available = True
-        self._sem.release()
     
     async def close(self):
         for c in self._connections:
@@ -99,20 +105,22 @@ def global_entrance(n_connections: int = 8):
     return decorator
 
 @asynccontextmanager
-async def connection():
-    connection_obj = await g_pool.get()
-    try:
-        yield connection_obj.conn
-    finally:
-        await g_pool.release(connection_obj)
+async def unique_cursor():
+    async with g_pool.sem:
+        connection_obj = await g_pool.get()
+        try:
+            yield await connection_obj.conn.cursor()
+        finally:
+            await g_pool.release(connection_obj)
 
 @asynccontextmanager
 async def transaction():
-    async with connection() as conn:
+    async with unique_cursor() as cur:
         try:
-            yield conn
-            await conn.commit()
+            await cur.execute('BEGIN')
+            yield cur
+            await cur.execute('COMMIT')
         except Exception as e:
             get_logger('database', global_instance=True).error(f"Error in transaction: {e}, rollback.")
-            await conn.rollback()
+            await cur.execute('ROLLBACK')
             raise e

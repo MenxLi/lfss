@@ -132,7 +132,7 @@ uploadButton.addEventListener('click', () => {
     }
     path = path + fileName;
     showPopup('Uploading...', {level: 'info', timeout: 3000});
-    conn.put(path, file)
+    conn.put(path, file, {'conflict': 'overwrite'})
         .then(() => {
             refreshFileList();
             uploadFileNameInput.value = '';

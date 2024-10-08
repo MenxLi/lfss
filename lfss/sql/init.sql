@@ -1,9 +1,3 @@
-PRAGMA journal_mode=MEMROY;
-PRAGMA temp_store=MEMORY;
-PRAGMA page_size=4096;
-PRAGMA synchronous=NORMAL;
-PRAGMA case_sensitive_like=ON;
-
 CREATE TABLE IF NOT EXISTS user (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username VARCHAR(256) UNIQUE NOT NULL,

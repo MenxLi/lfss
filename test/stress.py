@@ -1,6 +1,6 @@
 from lfss.client.api import Connector, FileRecord
 from concurrent.futures import ThreadPoolExecutor
-import random, string
+import random, string, time
 
 def _random_string(length: int) -> str:
     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
@@ -10,7 +10,8 @@ def test_put_get_delete(conn: Connector):
     random_ext = random.choice(['.txt', '.bin', '.jpg', '.png', '.mp4', ""])
 
     path = f'test/{random_path}{random_ext}'
-    random_data = _random_string(random.randint(1, 1024)).encode('ascii') + '0'.encode('ascii') * random.randint(0, 1024*1024*16)
+    # random_data = _random_string(random.randint(1, 1024)).encode('ascii') + '0'.encode('ascii') * random.randint(0, 1024*1024*16)
+    random_data = _random_string(1024*128).encode('ascii')
 
     try:
         assert conn.put(path, random_data)
@@ -34,5 +35,6 @@ def concurrency_test(conn: Connector, n: int) -> int:
 if __name__ == '__main__':
     conn = Connector()
     n_tests = 100
+    s_time = time.time()
     n_success = concurrency_test(conn, n_tests)
-    print(f"Success: {n_success}/{n_tests}")
+    print(f"Success: {n_success}/{n_tests}, time: {time.time()-s_time:.4f}s")

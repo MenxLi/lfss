@@ -158,11 +158,6 @@ class FileConn(DBObjectBase):
         res = await self.cur.fetchall()
         return [self.parse_record(r) for r in res]
     
-    async def get_path_file_records(self, url: str) -> list[FileRecord]:
-        await self.cur.execute("SELECT * FROM fmeta WHERE url LIKE ?", (url + '%', ))
-        res = await self.cur.fetchall()
-        return [self.parse_record(r) for r in res]
-
     async def list_root(self, *usernames: str) -> list[DirectoryRecord]:
         """
         Efficiently list users' directories, if usernames is empty, list all users' directories.
@@ -354,11 +349,8 @@ class FileConn(DBObjectBase):
         await self.cur.execute("DELETE FROM usize WHERE user_id = ?", (owner_id, ))
         self.logger.info(f"Deleted {len(res)} files for user {owner_id}") # type: ignore
     
-    async def delete_path_records(self, path: str):
+    async def delete_path_records(self, path: str, under_user_id: Optional[int] = None) -> list[FileRecord]:
         """Delete all records with url starting with path"""
-        cursor = await self.cur.execute("SELECT * FROM fmeta WHERE url LIKE ?", (path + '%', ))
-        all_f_rec = await cursor.fetchall()
-        
         # update user size
         cursor = await self.cur.execute("SELECT DISTINCT owner_id FROM fmeta WHERE url LIKE ?", (path + '%', ))
         res = await cursor.fetchall()
@@ -368,8 +360,16 @@ class FileConn(DBObjectBase):
             if size is not None:
                 await self._user_size_dec(r[0], size[0])
         
-        await self.cur.execute("DELETE FROM fmeta WHERE url LIKE ?", (path + '%', ))
+        # if any new records are created here, the size update may be inconsistent
+        # but it's not a big deal...
+        
+        if under_user_id is None:
+            res = await self.cur.execute("DELETE FROM fmeta WHERE url LIKE ? RETURNING *", (path + '%', ))
+        else:
+            res = await self.cur.execute("DELETE FROM fmeta WHERE url LIKE ? AND owner_id = ? RETURNING *", (path + '%', under_user_id))
+        all_f_rec = await res.fetchall()
         self.logger.info(f"Deleted {len(all_f_rec)} files for path {path}") # type: ignore
+        return [self.parse_record(r) for r in all_f_rec]
     
     async def set_file_blob(self, file_id: str, blob: bytes):
         await self.cur.execute("INSERT OR REPLACE INTO blobs.fdata (file_id, data) VALUES (?, ?)", (file_id, blob))
@@ -546,7 +546,7 @@ class Database:
 
         return blob
 
-    async def delete_file(self, url: str) -> Optional[FileRecord]:
+    async def delete_file(self, url: str, assure_user: Optional[UserRecord] = None) -> Optional[FileRecord]:
         validate_url(url)
 
         async with transaction() as cur:
@@ -554,6 +554,9 @@ class Database:
             r = await fconn.get_file_record(url)
             if r is None:
                 return None
+            if assure_user is not None:
+                if r.owner_id != assure_user.id:
+                    raise PermissionDeniedError(f"Permission denied: {assure_user.username} cannot delete file {url}")
             f_id = r.file_id
             await fconn.delete_file_record(url)
             if r.external:
@@ -562,12 +565,18 @@ class Database:
                 await fconn.delete_file_blob(f_id)
             return r
     
-    async def move_file(self, old_url: str, new_url: str):
+    async def move_file(self, old_url: str, new_url: str, ensure_user: Optional[UserRecord] = None):
         validate_url(old_url)
         validate_url(new_url)
 
         async with transaction() as cur:
             fconn = FileConn(cur)
+            r = await fconn.get_file_record(old_url)
+            if r is None:
+                raise FileNotFoundError(f"File {old_url} not found")
+            if ensure_user is not None:
+                if r.owner_id != ensure_user.id:
+                    raise PermissionDeniedError(f"Permission denied: {ensure_user.username} cannot move file {old_url}")
             await fconn.move_file(old_url, new_url)
     
     async def move_path(self, user: UserRecord, old_url: str, new_url: str):
@@ -615,16 +624,16 @@ class Database:
             await fconn.delete_file_blob_external(external_ids[i])
             
 
-    async def delete_path(self, url: str):
+    async def delete_path(self, url: str, under_user: Optional[UserRecord] = None) -> Optional[list[FileRecord]]:
         validate_url(url, is_file=False)
+        user_id = under_user.id if under_user is not None else None
 
         async with transaction() as cur:
             fconn = FileConn(cur)
-            records = await fconn.get_path_file_records(url)
+            records = await fconn.delete_path_records(url, user_id)
             if not records:
                 return None
             await self.__batch_delete_file_blobs(fconn, records)
-            await fconn.delete_path_records(url)
             return records
     
     async def delete_user(self, u: str | int):

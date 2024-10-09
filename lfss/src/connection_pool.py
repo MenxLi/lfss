@@ -139,6 +139,7 @@ async def unique_cursor(is_write: bool = False):
             finally:
                 await g_pool.release(connection_obj)
 
+# todo: add exclusive transaction option
 @asynccontextmanager
 async def transaction():
     async with unique_cursor(is_write=True) as cur:

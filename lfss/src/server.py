@@ -76,6 +76,11 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Invalid token")
     return user
 
+async def registered_user(user: UserRecord = Depends(get_current_user)):
+    if user.id == 0:
+        raise HTTPException(status_code=401, detail="Permission denied")
+    return user
+
 app = FastAPI(docs_url=None, redoc_url=None, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
@@ -186,11 +191,8 @@ async def put_file(
     path: str, 
     conflict: Literal["overwrite", "skip", "abort"] = "abort",
     permission: int = 0,
-    user: UserRecord = Depends(get_current_user)):
+    user: UserRecord = Depends(registered_user)):
     path = ensure_uri_compnents(path)
-    if user.id == 0:
-        logger.debug("Reject put request from DECOY_USER")
-        raise HTTPException(status_code=401, detail="Permission denied")
     if not path.startswith(f"{user.username}/") and not user.is_admin:
         logger.debug(f"Reject put request from {user.username} to {path}")
         raise HTTPException(status_code=403, detail="Permission denied")
@@ -217,6 +219,8 @@ async def put_file(
             }, content=json.dumps({"url": path}))
         # remove the old file
         exists_flag = True
+        if not user.is_admin and not file_record.owner_id == user.id:
+            raise HTTPException(status_code=403, detail="Permission denied, cannot overwrite other's file")
         await db.delete_file(path)
     
     # check content-type
@@ -267,19 +271,17 @@ async def put_file(
 
 @router_fs.delete("/{path:path}")
 @handle_exception
-async def delete_file(path: str, user: UserRecord = Depends(get_current_user)):
+async def delete_file(path: str, user: UserRecord = Depends(registered_user)):
     path = ensure_uri_compnents(path)
-    if user.id == 0:
-        raise HTTPException(status_code=401, detail="Permission denied")
     if not path.startswith(f"{user.username}/") and not user.is_admin:
         raise HTTPException(status_code=403, detail="Permission denied")
     
     logger.info(f"DELETE {path}, user: {user.username}")
 
     if path.endswith("/"):
-        res = await db.delete_path(path)
+        res = await db.delete_path(path, user if not user.is_admin else None)
     else:
-        res = await db.delete_file(path)
+        res = await db.delete_file(path, user if not user.is_admin else None)
 
     await db.record_user_activity(user.username)
     if res:
@@ -291,10 +293,8 @@ router_api = APIRouter(prefix="/_api")
 
 @router_api.get("/bundle")
 @handle_exception
-async def bundle_files(path: str, user: UserRecord = Depends(get_current_user)):
+async def bundle_files(path: str, user: UserRecord = Depends(registered_user)):
     logger.info(f"GET bundle({path}), user: {user.username}")
-    if user.id == 0:
-        raise HTTPException(status_code=401, detail="Permission denied")
     path = ensure_uri_compnents(path)
     assert path.endswith("/") or path == ""
 
@@ -338,7 +338,7 @@ async def bundle_files(path: str, user: UserRecord = Depends(get_current_user)):
 
 @router_api.get("/meta")
 @handle_exception
-async def get_file_meta(path: str, user: UserRecord = Depends(get_current_user)):
+async def get_file_meta(path: str, user: UserRecord = Depends(registered_user)):
     logger.info(f"GET meta({path}), user: {user.username}")
     path = ensure_uri_compnents(path)
     async with unique_cursor() as conn:
@@ -356,10 +356,8 @@ async def update_file_meta(
     path: str, 
     perm: Optional[int] = None, 
     new_path: Optional[str] = None,
-    user: UserRecord = Depends(get_current_user)
+    user: UserRecord = Depends(registered_user)
     ):
-    if user.id == 0:
-        raise HTTPException(status_code=401, detail="Permission denied")
     path = ensure_uri_compnents(path)
     if path.startswith("/"):
         path = path[1:]
@@ -378,7 +376,7 @@ async def update_file_meta(
         if new_path is not None:
             new_path = ensure_uri_compnents(new_path)
             logger.info(f"Update path of {path} to {new_path}")
-            await db.move_file(path, new_path)
+            await db.move_file(path, new_path, user)
     
     # directory
     else:
@@ -393,9 +391,7 @@ async def update_file_meta(
     
 @router_api.get("/whoami")
 @handle_exception
-async def whoami(user: UserRecord = Depends(get_current_user)):
-    if user.id == 0:
-        raise HTTPException(status_code=401, detail="Login required")
+async def whoami(user: UserRecord = Depends(registered_user)):
     user.credential = "__HIDDEN__"
     return user
 

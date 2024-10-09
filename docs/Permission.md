@@ -1,22 +1,12 @@
 
 # Permission System
-There are two roles in the system: Admin and User (you can treat then as buckets).  
+There are two roles in the system: Admin and User ('user' are like 'bucket' to some extent).
 
-## `PUT` and `DELETE` permissions
-Non-login user don't have `PUT/DELETE` permissions.  
-Every user can have `PUT/DELETE` permissions of files under its own `/<user>/` path.  
-The admin can have `PUT/DELETE` permissions of files of all users.
+## File access with `GET` permission
+The `GET` is used to access the file (if path is not ending with `/`), or to list the files under a path (if path is ending with `/`).  
 
-## `GET` permissions
-The `GET` is used to access the file (if path is not ending with `/`), or to list the files under a path (if path is ending with `/`). 
-
-### Path-listing
-- Non-login users cannot list any files.
-- All users can list the files under their own path 
-- Admins can list the files under other users' path. 
-
-### File-access
-For accessing file content, the user must have `GET` permission of the file, which is determined by the `permission` field of both the owner and the file. 
+### File access
+For accessing file content, the user must have `GET` permission of the file, which is determined by the `permission` field of both the owner and the file.   
 (Note: The owner of the file is the user who created the file, may not necessarily be the user under whose path the file is stored.)   
 
 There are four types of permissions: `unset`, `public`, `protected`, `private`.
@@ -27,3 +17,21 @@ Non-admin users can access files based on:
 - If the file is `private`, then only the owner can access it.
 - If the file is `unset`, then the file's permission is inherited from the owner's permission.
 - If both the owner and the file have `unset` permission, then the file is `public`.
+
+### Path-listing
+- Non-login users cannot list any files.
+- All users can list the files under their own path 
+- Admins can list the files under other users' path. 
+
+## File creation with `PUT` permission
+The `PUT` is used to create a file. 
+- Non-login user don't have `PUT` permission.  
+- Every user can have `PUT` permission of files under its own `/<user>/` path.  
+- The admin can have `PUT` permission of files of all users.
+
+## `DELETE` and moving permissions
+- Non-login user don't have `DELETE`/move permission.
+- Every user can have `DELETE`/move permission that they own.
+- The admin can have `DELETE` permission of files of all users
+(The admin can't move files of other users, because move does not change the owner of the file. 
+If move is allowed, then its equivalent to create file on behalf of other users.)

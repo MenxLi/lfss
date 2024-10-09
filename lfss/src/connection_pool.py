@@ -66,26 +66,27 @@ class SqlConnectionPool:
         if len(self._connections) == 0:
             raise Exception("No available connections, please init the pool first")
         
-        if w:
-            assert self._w_connection
-            if self._w_connection.is_available:
-                self._w_connection.is_available = False
-                return self._w_connection
-            raise Exception("Write connection is not available")
-
         async with self._lock:
-            for c in self._connections:
-                if c.is_available:
-                    c.is_available = False
-                    return c
+            if w:
+                assert self._w_connection
+                if self._w_connection.is_available:
+                    self._w_connection.is_available = False
+                    return self._w_connection
+                raise Exception("Write connection is not available")
+
+            else:
+                for c in self._connections:
+                    if c.is_available:
+                        c.is_available = False
+                        return c
         raise Exception("No available connections, impossible?")
     
     async def release(self, conn: SqlConnection):
-        if conn == self._w_connection:
-            conn.is_available = True
-            return
-
         async with self._lock:
+            if conn == self._w_connection:
+                conn.is_available = True
+                return
+
             if not conn in self._connections:
                 raise Exception("Connection not in pool")
             conn.is_available = True

@@ -519,7 +519,13 @@ class Database:
                 raise FileNotFoundError(f"File {url} not found")
             if not r.external:
                 raise ValueError(f"File {url} is not stored externally, should use read_file instead")
-            return fconn.get_file_blob_external(r.file_id)
+            ret = fconn.get_file_blob_external(r.file_id)
+
+        async with transaction() as w_cur:
+            await FileConn(w_cur).log_access(url)
+        
+        return ret
+
 
     async def read_file(self, url: str) -> bytes:
         validate_url(url)

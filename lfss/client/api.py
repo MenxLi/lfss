@@ -17,7 +17,7 @@ class Connector:
             "token": token
         }
     
-    def _fetch(
+    def _fetch_factory(
         self, method: Literal['GET', 'POST', 'PUT', 'DELETE'], 
         path: str, search_params: dict = {}
     ):
@@ -46,7 +46,7 @@ class Connector:
             else:
                 return {'status': 'skipped', 'path': path}
 
-        response = self._fetch('PUT', path, search_params={
+        response = self._fetch_factory('PUT', path, search_params={
             'permission': int(permission),
             'conflict': conflict
             })(
@@ -68,7 +68,7 @@ class Connector:
             else:
                 return {'status': 'skipped', 'path': path}
 
-        response = self._fetch('PUT', path, search_params={
+        response = self._fetch_factory('PUT', path, search_params={
             'permission': int(permission),
             'conflict': conflict
             })(
@@ -79,7 +79,7 @@ class Connector:
     
     def _get(self, path: str) -> Optional[requests.Response]:
         try:
-            response = self._fetch('GET', path)()
+            response = self._fetch_factory('GET', path)()
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
                 return None
@@ -100,12 +100,12 @@ class Connector:
     
     def delete(self, path: str):
         """Deletes the file at the specified path."""
-        self._fetch('DELETE', path)()
+        self._fetch_factory('DELETE', path)()
     
     def get_metadata(self, path: str) -> Optional[FileRecord | DirectoryRecord]:
         """Gets the metadata for the file at the specified path."""
         try:
-            response = self._fetch('GET', '_api/meta', {'path': path})()
+            response = self._fetch_factory('GET', '_api/meta', {'path': path})()
             if path.endswith('/'):
                 return DirectoryRecord(**response.json())
             else:
@@ -117,22 +117,22 @@ class Connector:
     
     def list_path(self, path: str) -> PathContents:
         assert path.endswith('/')
-        response = self._fetch('GET', path)()
+        response = self._fetch_factory('GET', path)()
         return PathContents(**response.json())
 
     def set_file_permission(self, path: str, permission: int | FileReadPermission):
         """Sets the file permission for the specified path."""
-        self._fetch('POST', '_api/meta', {'path': path, 'perm': int(permission)})(
+        self._fetch_factory('POST', '_api/meta', {'path': path, 'perm': int(permission)})(
             headers={'Content-Type': 'application/www-form-urlencoded'}
         )
         
     def move(self, path: str, new_path: str):
         """Move file or directory to a new path."""
-        self._fetch('POST', '_api/meta', {'path': path, 'new_path': new_path})(
+        self._fetch_factory('POST', '_api/meta', {'path': path, 'new_path': new_path})(
             headers = {'Content-Type': 'application/www-form-urlencoded'}
         )
         
     def whoami(self) -> UserRecord:
         """Gets information about the current user."""
-        response = self._fetch('GET', '_api/whoami')()
+        response = self._fetch_factory('GET', '_api/whoami')()
         return UserRecord(**response.json())

@@ -301,11 +301,15 @@ async def bundle_files(path: str, user: UserRecord = Depends(get_current_user)):
     if not path == "" and path[0] == "/":   # adapt to both /path and path
         path = path[1:]
     
-    owner_records_cache = {}     # cache owner records, ID -> UserRecord
+    owner_records_cache: dict[int, UserRecord] = {}     # cache owner records, ID -> UserRecord
     async def is_access_granted(file_record: FileRecord):
         owner_id = file_record.owner_id
         owner = owner_records_cache.get(owner_id, None)
         if owner is None:
+            async with unique_cursor() as conn:
+                uconn = UserConn(conn)
+                owner = await uconn.get_user_by_id(owner_id)
+                assert owner is not None, "Owner not found"
             owner_records_cache[owner_id] = owner
             
         allow_access, _ = check_user_permission(user, owner, file_record)

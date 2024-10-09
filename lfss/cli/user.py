@@ -45,6 +45,7 @@ async def _main():
     sp_list.add_argument("-l", "--long", action="store_true")
     
     args = parser.parse_args()
+    db = await Database().init()
 
     @asynccontextmanager
     async def get_uconn():
@@ -65,7 +66,6 @@ async def _main():
             print('User not found')
             exit(1)
         else:
-            db = await Database().init()
             await db.delete_user(user.id)
         print('User deleted')
     

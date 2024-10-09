@@ -1,5 +1,5 @@
 from lfss.client import Connector, upload_directory
-from lfss.src.database import FileReadPermission
+from lfss.src.datatype import FileReadPermission
 from pathlib import Path
 import argparse
 

@@ -2,8 +2,8 @@
 [![PyPI](https://img.shields.io/pypi/v/lfss)](https://pypi.org/project/lfss/)
 
 My experiment on a lightweight file/object storage service.  
-It stores small files and metadata in sqlite, large files in the filesystem, and serves them through a simple REST API.  
-Tested on 2 million files, and it works fine... thanks to the sqlite database!
+It stores small files and metadata in sqlite, large files in the filesystem.  
+Tested on 2 million files, and it works fine... 
 
 Usage: 
 ```sh

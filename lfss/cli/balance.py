@@ -24,28 +24,19 @@ def barriered(func):
 
 @barriered
 async def move_to_external(f_id: str, flag: str = ''):
-    # async with aiosqlite.connect(db_file, timeout = 60) as c:
     async with transaction() as c:
-        async with c.execute( "SELECT data FROM blobs.fdata WHERE file_id = ?", (f_id,)) as cursor:
-            blob_row = await cursor.fetchone()
-            if blob_row is None:
-                print(f"{flag}File {f_id} not found in blobs.fdata")
-                return
+        cursor = await c.execute( "SELECT data FROM blobs.fdata WHERE file_id = ?", (f_id,))
+        blob_row = await cursor.fetchone()
+        if blob_row is None:
+            print(f"{flag}File {f_id} not found in blobs.fdata")
+            return
         await c.execute("BEGIN")
         blob: bytes = blob_row[0]
-        try:
-            async with aiofiles.open(LARGE_BLOB_DIR / f_id, 'wb') as f:
-                await f.write(blob)
-            await c.execute( "UPDATE fmeta SET external = 1 WHERE file_id = ?", (f_id,))
-            await c.execute( "DELETE FROM blobs.fdata WHERE file_id = ?", (f_id,))
-            await c.commit()
-            print(f"{flag}Moved {f_id} to external storage")
-        except Exception as e:
-            await c.rollback()
-            print(f"{flag}Error moving {f_id}: {e}")
-
-            if isinstance(e, KeyboardInterrupt):
-                raise e
+        async with aiofiles.open(LARGE_BLOB_DIR / f_id, 'wb') as f:
+            await f.write(blob)
+        await c.execute( "UPDATE fmeta SET external = 1 WHERE file_id = ?", (f_id,))
+        await c.execute( "DELETE FROM blobs.fdata WHERE file_id = ?", (f_id,))
+        print(f"{flag}Moved {f_id} to external storage")
 
 @barriered
 async def move_to_internal(f_id: str, flag: str = ''):
@@ -56,19 +47,10 @@ async def move_to_internal(f_id: str, flag: str = ''):
         async with aiofiles.open(LARGE_BLOB_DIR / f_id, 'rb') as f:
             blob = await f.read()
 
-        await c.execute("BEGIN")
-        try:
-            await c.execute("INSERT INTO blobs.fdata (file_id, data) VALUES (?, ?)", (f_id, blob))
-            await c.execute("UPDATE fmeta SET external = 0 WHERE file_id = ?", (f_id,))
-            await c.commit()
-            (LARGE_BLOB_DIR / f_id).unlink(missing_ok=True)
-            print(f"{flag}Moved {f_id} to internal storage")
-        except Exception as e:
-            await c.rollback()
-            print(f"{flag}Error moving {f_id}: {e}")
-            if isinstance(e, KeyboardInterrupt):
-                raise e
-
+        await c.execute("INSERT INTO blobs.fdata (file_id, data) VALUES (?, ?)", (f_id, blob))
+        await c.execute("UPDATE fmeta SET external = 0 WHERE file_id = ?", (f_id,))
+        (LARGE_BLOB_DIR / f_id).unlink(missing_ok=True)
+        print(f"{flag}Moved {f_id} to internal storage")
 
 @global_entrance()
 async def _main(batch_size: int = 10000):

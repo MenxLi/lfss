@@ -3,7 +3,7 @@ from typing import Optional, overload, Literal, AsyncIterable
 from abc import ABC
 
 import urllib.parse
-import hashlib, uuid
+import uuid
 import zipfile, io, asyncio
 
 import aiosqlite, aiofiles
@@ -11,13 +11,10 @@ import aiofiles.os
 
 from .connection_pool import execute_sql, unique_cursor, transaction
 from .datatype import UserRecord, FileReadPermission, FileRecord, DirectoryRecord, PathContents
-from .config import LARGE_BLOB_DIR
+from .config import LARGE_BLOB_DIR, hash_credential
 from .log import get_logger
 from .utils import decode_uri_compnents
 from .error import *
-
-def hash_credential(username, password):
-    return hashlib.sha256((username + password).encode()).hexdigest()
 
 class DBObjectBase(ABC):
     logger = get_logger('database', global_instance=True)

@@ -118,7 +118,9 @@ class Connector:
     def list_path(self, path: str) -> PathContents:
         assert path.endswith('/')
         response = self._fetch_factory('GET', path)()
-        return PathContents(**response.json())
+        dirs = [DirectoryRecord(**d) for d in response.json()['dirs']]
+        files = [FileRecord(**f) for f in response.json()['files']]
+        return PathContents(dirs=dirs, files=files)
 
     def set_file_permission(self, path: str, permission: int | FileReadPermission):
         """Sets the file permission for the specified path."""

@@ -15,6 +15,10 @@ aiosqlite = "0.*"
 aiofiles = "23.*"
 mimesniff = "1.*"
 
+[tool.poetry.dev-dependencies]
+pytest = "*"
+pytest-html = "*"
+
 [tool.poetry.scripts]
 lfss-serve = "lfss.cli.serve:main"
 lfss-user = "lfss.cli.user:main"

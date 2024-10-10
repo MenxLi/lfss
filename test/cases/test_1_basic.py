@@ -1,21 +1,10 @@
 import pytest
 import subprocess
-from lfss.client import Connector
-from lfss.src.config import hash_credential
+from .common import get_conn, upload_basic, create_server_context
 from lfss.src.datatype import FileReadPermission
-from ..start_server import Server
-from ..config import SANDBOX_DIR, SERVER_PORT, clear_sandbox
+from ..config import SANDBOX_DIR
 
-@pytest.fixture(scope='session')
-def server():
-    s = Server()
-    s.start(cwd=str(SANDBOX_DIR), port=SERVER_PORT)
-    yield s
-    s.stop()
-    clear_sandbox()
-
-def get_conn(username, password = 'test'):
-    return Connector(f"http://localhost:{SERVER_PORT}", token=hash_credential(username, password))
+server = create_server_context()
 
 def test_user_creation(server):
     s = subprocess.check_output(['lfss-user', 'add', 'u0', 'test', '--admin', '--max-storage', '1G'], cwd=SANDBOX_DIR)
@@ -34,24 +23,25 @@ def test_user_creation(server):
     s = s.decode()
     assert 'User created' in s, "User creation failed"
 
-def upload_basic(username: str):
-    c = get_conn(username)
-    c.put(f'{username}/test1.txt', b'hello world 1')
-    c.put(f'{username}/a/test2.txt', b'hello world 2')
-    c.put(f'{username}/a/test3.txt', b'hello world 3')
-    c.put(f'{username}/a/b/test4.txt', b'hello world 4')
-    p_list = c.list_path(f'{username}/')
-    assert len(p_list.dirs) == 1, "Directory count is not correct"
-    assert len(p_list.files) == 1, "File count is not correct"
-    assert p_list.dirs[0].url == f'{username}/a/', "Directory name is not correct"
-    assert p_list.files[0].url == f'{username}/test1.txt', "File name is not correct"
-
 def test_upload(server):
     upload_basic('u0')
     upload_basic('u1')
     upload_basic('u2')
 
-def test_get_put_perm(server):
+def test_delete(server):
+    c = get_conn('u0')
+    c.delete('u0/test1.txt')
+    p_list = c.list_path('u0/')
+    assert len(p_list.files) == 0, "File deletion failed"
+
+def test_move(server):
+    c = get_conn('u0')
+    c.move('u0/a/test2.txt', 'u0/test2.txt')
+    p_list = c.list_path('u0/')
+    assert len(p_list.files) == 1, "File move failed"
+    assert p_list.files[0].url == 'u0/test2.txt', "File move failed"
+
+def test_perm(server):
     # admin
     c = get_conn('u0')
     c.put(f'u2/test1_from_u0.txt', b'hello world 1')
@@ -64,12 +54,15 @@ def test_get_put_perm(server):
     with pytest.raises(Exception):
         c.put(f'u2/test1_from_u1.txt', b'hello world 1')
     assert c.get(f'u2/test2_from_u0.txt') == b'hello world 2, protected', "User get put failed"
-    with pytest.raises(Exception):
+    with pytest.raises(Exception, match='403'):
         c.get(f'u2/test3_from_u0.txt')
     
     c = get_conn('u2')
-    with pytest.raises(Exception):
+    with pytest.raises(Exception, match='403'):
         c.put(f'u2/test1_from_u0.txt', b'hello world 1', conflict='overwrite')
+    
+    with pytest.raises(Exception, match='403'):
+        c.delete('u2/test1_from_u0.txt')
 
 def test_user_deletion(server):
     s = subprocess.check_output(['lfss-user', 'delete', 'u2'], cwd=SANDBOX_DIR)

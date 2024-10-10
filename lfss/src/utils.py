@@ -2,6 +2,10 @@ import datetime
 import urllib.parse
 import asyncio
 import functools
+import hashlib
+
+def hash_credential(username: str, password: str):
+    return hashlib.sha256((username + password).encode()).hexdigest()
 
 def encode_uri_compnents(path: str):
     """

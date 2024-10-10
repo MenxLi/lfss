@@ -1,1 +1,1 @@
-pytest -v test/cases/test_*.py --html=test/report/index.html --pdb
+pytest test/cases/test_*.py --html=test/report/index.html --pdb

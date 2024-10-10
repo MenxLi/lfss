@@ -5,6 +5,7 @@ import urllib.parse
 from lfss.src.datatype import (
     FileReadPermission, FileRecord, DirectoryRecord, UserRecord, PathContents
     )
+from lfss.src.utils import ensure_uri_compnents
 
 _default_endpoint = os.environ.get('LFSS_ENDPOINT', 'http://localhost:8000')
 _default_token = os.environ.get('LFSS_TOKEN', '')
@@ -23,6 +24,7 @@ class Connector:
     ):
         if path.startswith('/'):
             path = path[1:]
+        path = ensure_uri_compnents(path)
         def f(**kwargs):
             url = f"{self.config['endpoint']}/{path}" + "?" + urllib.parse.urlencode(search_params)
             headers: dict = kwargs.pop('headers', {})

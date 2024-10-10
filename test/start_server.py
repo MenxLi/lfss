@@ -29,8 +29,6 @@ class Server:
     
     def stop(self):
         self._s.terminate()
-    
-    def __del__(self):
         print("[server] Server stopped")
 
 if __name__ == '__main__':

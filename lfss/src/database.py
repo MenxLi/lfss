@@ -649,6 +649,10 @@ class Database:
             fconn = FileConn(cur)
             records = await fconn.delete_user_file_records(user.id)
             await self.__batch_delete_file_blobs(fconn, records)
+
+            # make sure the user's directory is deleted, 
+            # may contain admin's files, but delete them all
+            await fconn.delete_path_records(user.username + '/')
     
     async def iter_path(self, top_url: str, urls: Optional[list[str]]) -> AsyncIterable[tuple[FileRecord, bytes | AsyncIterable[bytes]]]:
         async with unique_cursor() as cur:

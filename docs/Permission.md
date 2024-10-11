@@ -18,6 +18,13 @@ Non-admin users can access files based on:
 - If the file is `unset`, then the file's permission is inherited from the owner's permission.
 - If both the owner and the file have `unset` permission, then the file is `public`.
 
+### Meta-data access
+- Non-login users can't access any file-meta.
+- All users can access the file-meta of files under their own path.
+- For files under other users' path, the file-meta is determined in a way same as file access.
+- Admins can access the path-meta of all users.
+- All users can access the path-meta of their own path.
+
 ### Path-listing
 - Non-login users cannot list any files.
 - All users can list the files under their own path 

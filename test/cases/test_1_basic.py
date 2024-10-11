@@ -41,13 +41,13 @@ def test_move(server):
     assert len(p_list.files) == 1, "File move failed"
     assert p_list.files[0].url == 'u0/test2.txt', "File move failed"
 
-def test_perm(server):
+def test_put_get_perm(server):
     # admin
     c = get_conn('u0')
-    c.put(f'u2/test1_from_u0.txt', b'hello world 1')
-    assert c.get(f'u2/test1_from_u0.txt') == b'hello world 1', "Admin get put failed"
+    c.put(f'u2/test1_from_u0.txt', b'hello world 1', permission=FileReadPermission.PUBLIC)
     c.put(f'u2/test2_from_u0.txt', b'hello world 2, protected', permission=FileReadPermission.PROTECTED)
     c.put(f'u2/test3_from_u0.txt', b'hello world 3, private', permission=FileReadPermission.PRIVATE)
+    assert c.get(f'u2/test1_from_u0.txt') == b'hello world 1', "Admin get put failed"
 
     # user
     c = get_conn('u1')
@@ -63,6 +63,25 @@ def test_perm(server):
     
     with pytest.raises(Exception, match='403'):
         c.delete('u2/test1_from_u0.txt')
+
+def test_meta_perm(server):
+    c0 = get_conn('u0')
+    assert c0.get_metadata('u2/test1_from_u0.txt') is not None, "Get metadata failed, should have admin permission"
+    assert c0.get_metadata('u2/non-exists.txt') is None, "Get metadata failed, should return None"
+    assert c0.get_metadata('u2/') is not None, "Get metadata failed, should have admin permission"
+    assert c0.get_metadata('u2/non-exists-dir/') is None, "Get metadata failed, should not exist"
+
+    c1 = get_conn('u1')
+    assert c1.get_metadata('u2/test1_from_u0.txt') is not None, "Get metadata failed, should have permission"
+    assert c1.get_metadata('u2/test2_from_u0.txt') is not None, "Get metadata failed, should have permission"
+    with pytest.raises(Exception, match='403'): c1.get_metadata('u2/test3_from_u0.txt')
+    with pytest.raises(Exception, match='403'): c1.get_metadata('u2/')
+
+    c2 = get_conn('u2')
+    assert c2.get_metadata('u2/test1_from_u0.txt') is not None, "Get metadata failed, should have permission"
+    assert c2.get_metadata('u2/test2_from_u0.txt') is not None, "Get metadata failed, should have permission"
+    assert c2.get_metadata('u2/test3_from_u0.txt') is not None, "Get metadata failed, should have permission"
+    assert c2.get_metadata('u2/') is not None, "Get metadata failed, should have permission"
 
 def test_user_deletion(server):
     s = subprocess.check_output(['lfss-user', 'delete', 'u2'], cwd=SANDBOX_DIR)

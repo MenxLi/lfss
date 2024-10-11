@@ -339,15 +339,34 @@ async def bundle_files(path: str, user: UserRecord = Depends(registered_user)):
 @router_api.get("/meta")
 @handle_exception
 async def get_file_meta(path: str, user: UserRecord = Depends(registered_user)):
+    """
+    Permission:
+        for file:
+            if file is under user's path, return the meta, 
+            else, determine by the permission same as get_file
+        for path:
+            if path is under user's path, return the meta, else return 403
+    """
     logger.info(f"GET meta({path}), user: {user.username}")
     path = ensure_uri_compnents(path)
+    is_file = not path.endswith("/")
     async with unique_cursor() as conn:
         fconn = FileConn(conn)
-        get_fn = fconn.get_file_record if not path.endswith("/") else fconn.get_path_record
-        record = await get_fn(path)
-
-    if not record:
-        raise HTTPException(status_code=404, detail="Path not found")
+        if is_file:
+            record = await fconn.get_file_record(path)
+            if not record:
+                raise HTTPException(status_code=404, detail="File not found")
+            if not path.startswith(f"{user.username}/") and not user.is_admin:
+                uconn = UserConn(conn)
+                owner = await uconn.get_user_by_id(record.owner_id)
+                assert owner is not None, "Owner not found"
+                is_allowed, reason = check_user_permission(user, owner, record)
+                if not is_allowed:
+                    raise HTTPException(status_code=403, detail=reason)
+        else:
+            record = await fconn.get_path_record(path)
+            if not path.startswith(f"{user.username}/") and not user.is_admin:
+                raise HTTPException(status_code=403, detail="Permission denied")
     return record
 
 @router_api.post("/meta")

@@ -15,7 +15,7 @@ def test_user_creation(server):
     assert c.whoami().username == 'u0', "Username is not correct"
     assert c.whoami().max_storage == 1024**3, "Max storage is not correct"
 
-special_chars = '!@#$%^&*()_+-:.,<>?'
+special_chars = '!@#$%^&*()_+-:.,<>? 你好あア'
 def get_fpath(charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890' + special_chars)->str:
     def random_string(k = 10) -> str:
         # return ''.join(random.choices('abcd!@#$%^&*()_+-;', k=k))
@@ -29,9 +29,9 @@ def get_fpath(charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123
 
 def put_get_delete(username: str, path: str):
     path = f"{username}/{path}"
-    charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+'
+    ascii_charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+'
     def random_string(k = 10) -> str:
-        return ''.join(random.choices(charset, k=k))
+        return ''.join(random.choices(ascii_charset, k=k))
 
     c = get_conn(username)
     content = random_string(random.randint(1, 1024*1024*16)).encode('ascii')
@@ -52,5 +52,8 @@ def test_concurrent(server):
         put_get_delete(username, path)
     pathes = set([get_fpath() for i in range(64)])
     with ThreadPoolExecutor(max_workers=16) as executor:
+        tasks = []
         for p in pathes:
-            executor.submit(task, 'u0', p)
+            tasks.append(executor.submit(task, 'u0', p))
+        for t in tasks:
+            t.result()

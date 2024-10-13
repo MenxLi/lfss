@@ -41,10 +41,10 @@ def test_dir_download(server, temp_dir):
     c = get_conn('u0')
     with tempfile.TemporaryDirectory() as d:
         failed_path = download_directory(c, 'u0/test-dir-upload/', d, n_concurrent=4, verbose=True)
-        assert not failed_path, "Failed to download some files"
-        for f in pathlib.Path(d).rglob('*.bin'):
+        assert not failed_path, "Failed to download some files: " + str(failed_path)
+        for f in pathlib.Path(temp_dir).rglob('*.bin'):
             assert f.exists(), f"File {f} not found"
-            rel_path = f.relative_to(d)
-            assert (temp_dir / rel_path).exists(), f"File {f} not found in temp dir"
+            rel_path = f.relative_to(temp_dir)
+            assert (d / rel_path).exists(), f"File {f} not found in download directory"
             with open(f, 'rb') as fp:
-                assert fp.read() == open(temp_dir / rel_path, 'rb').read(), f"File {f} content mismatch"
+                assert fp.read() == open(d / rel_path, 'rb').read(), f"File {f} content mismatch"

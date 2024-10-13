@@ -18,7 +18,7 @@ from .stat import RequestDB
 from .config import MAX_BUNDLE_BYTES, MAX_FILE_BYTES, LARGE_FILE_BYTES
 from .utils import ensure_uri_compnents, format_last_modified, now_stamp
 from .connection_pool import global_connection_init, global_connection_close, unique_cursor
-from .database import Database, UserRecord, DECOY_USER, FileRecord, check_user_permission, FileReadPermission, UserConn, FileConn
+from .database import Database, UserRecord, DECOY_USER, FileRecord, check_user_permission, FileReadPermission, UserConn, FileConn, PathContents
 
 logger = get_logger("server", term_level="DEBUG")
 logger_failed_request = get_logger("failed_requests", term_level="INFO")
@@ -120,7 +120,7 @@ router_fs = APIRouter(prefix="")
 
 @router_fs.get("/{path:path}")
 @handle_exception
-async def get_file(path: str, download = False, user: UserRecord = Depends(get_current_user)):
+async def get_file(path: str, download: bool = False, flat: bool = False, user: UserRecord = Depends(get_current_user)):
     path = ensure_uri_compnents(path)
 
     # handle directory query
@@ -130,18 +130,20 @@ async def get_file(path: str, download = False, user: UserRecord = Depends(get_c
         async with unique_cursor() as conn:
             fconn = FileConn(conn)
             if user.id == 0:
-                raise HTTPException(status_code=403, detail="Permission denied, credential required")
+                raise HTTPException(status_code=401, detail="Permission denied, credential required")
             if path == "/":
-                return {
-                    "dirs": await fconn.list_root(user.username) \
-                        if not user.is_admin else await fconn.list_root(),
-                    "files": []
-                }
+                if flat:
+                    raise HTTPException(status_code=400, detail="Flat query not supported for root path")
+                return PathContents(
+                    dirs = await fconn.list_root_dirs(user.username) \
+                        if not user.is_admin else await fconn.list_root_dirs(),
+                    files = []
+                )
 
             if not path.startswith(f"{user.username}/") and not user.is_admin:
                 raise HTTPException(status_code=403, detail="Permission denied, path must start with username")
 
-            return await fconn.list_path(path, flat = False)
+            return await fconn.list_path(path, flat = flat)
     
     async with unique_cursor() as conn:
         fconn = FileConn(conn)
@@ -317,7 +319,7 @@ async def bundle_files(path: str, user: UserRecord = Depends(registered_user)):
     
     async with unique_cursor() as conn:
         fconn = FileConn(conn)
-        files = await fconn.list_path(path, flat = True)
+        files = (await fconn.list_path(path, flat = True)).files
     files = [f for f in files if await is_access_granted(f)]
     if len(files) == 0:
         raise HTTPException(status_code=404, detail="No files found")

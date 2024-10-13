@@ -150,7 +150,7 @@ class FileConn(DBObjectBase):
             return []
         return [self.parse_record(r) for r in res]
     
-    async def list_root(self, *usernames: str) -> list[DirectoryRecord]:
+    async def list_root_dirs(self, *usernames: str) -> list[DirectoryRecord]:
         """
         Efficiently list users' directories, if usernames is empty, list all users' directories.
         """
@@ -167,17 +167,12 @@ class FileConn(DBObjectBase):
             dirs = [DirectoryRecord(u, await self.path_size(u, include_subpath=True)) for u in dirnames]
             return dirs
     
-    @overload
-    async def list_path(self, url: str, flat: Literal[True]) -> list[FileRecord]:...
-    @overload
-    async def list_path(self, url: str, flat: Literal[False]) -> PathContents:...
-    
-    async def list_path(self, url: str, flat: bool = False) -> list[FileRecord] | PathContents:
+    async def list_path(self, url: str, flat: bool = False) -> PathContents:
         """
-        List all files and directories under the given path, 
-        if flat is True, return a list of FileDBRecord, recursively including all subdirectories. 
-        Otherwise, return a tuple of (dirs, files), where dirs is a list of DirectoryRecord,
+        List all files and directories under the given path
+        if flat is True, list all files under the path, with out delimiting directories
         """
+        self.logger.debug(f"Listing path {url}, flat={flat}")
         if not url.endswith('/'):
             url += '/'
         if url == '/':
@@ -186,15 +181,17 @@ class FileConn(DBObjectBase):
             if flat:
                 cursor = await self.cur.execute("SELECT * FROM fmeta")
                 res = await cursor.fetchall()
-                return [self.parse_record(r) for r in res]
+                files = [self.parse_record(r) for r in res]
+                return PathContents([], files)
 
             else:
-                return PathContents(await self.list_root(), [])
+                return PathContents(await self.list_root_dirs(), [])
         
         if flat:
             cursor = await self.cur.execute("SELECT * FROM fmeta WHERE url LIKE ?", (url + '%', ))
             res = await cursor.fetchall()
-            return [self.parse_record(r) for r in res]
+            files = [self.parse_record(r) for r in res]
+            return PathContents([], files)
 
         cursor = await self.cur.execute("SELECT * FROM fmeta WHERE url LIKE ? AND url NOT LIKE ?", (url + '%', url + '%/%'))
         res = await cursor.fetchall()
@@ -655,7 +652,7 @@ class Database:
         async with unique_cursor() as cur:
             fconn = FileConn(cur)
             if urls is None:
-                urls = [r.url for r in await fconn.list_path(top_url, flat=True)]
+                urls = [r.url for r in (await fconn.list_path(top_url, flat=True)).files]
 
             for url in urls:
                 if not url.startswith(top_url):

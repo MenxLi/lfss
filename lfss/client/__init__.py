@@ -150,6 +150,6 @@ def download_directory(
             failed_files.append(src_url)
         
     with ThreadPoolExecutor(n_concurrent) as executor:
-        for file in connector.list_path(src_path).files:
+        for file in connector.list_path(src_path, flat=True).files:
             executor.submit(get_file, file.url)
     return failed_files

@@ -133,12 +133,17 @@ export default class Connector {
 
     /**
      * @param {string} path - the path to the file directory, should ends with '/'
+     * @param {Object} options - the options for the request
      * @returns {Promise<PathListResponse>} - the promise of the request
      */
-    async listPath(path){
+    async listPath(path, {
+        flat = false
+    } = {}){
         if (path.startsWith('/')){ path = path.slice(1); }
         if (!path.endsWith('/')){ path += '/'; }
-        const res = await fetch(this.config.endpoint + '/' + path, {
+        const dst = new URL(this.config.endpoint + '/' + path);
+        dst.searchParams.append('flat', flat);
+        const res = await fetch(dst.toString(), {
             method: 'GET',
             headers: {
                 'Authorization': 'Bearer ' + this.config.token

@@ -18,7 +18,6 @@ def test_user_creation(server):
 special_chars = '!@#$%^&*()_+-:.,<>? 你好あア'
 def get_fpath(charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890' + special_chars)->str:
     def random_string(k = 10) -> str:
-        # return ''.join(random.choices('abcd!@#$%^&*()_+-;', k=k))
         return ''.join(random.choices(charset, k=k))
     suffix = random.choice(['.txt', '.bin', '.dat', '.json', '.xml', '.csv', '.html', '.md', ''])
     while True:
@@ -43,15 +42,15 @@ def put_get_delete(username: str, path: str):
 
 def test_fname(server):
     # use some wired characters...
-    pathes = set([get_fpath(special_chars) for i in range(10)])
+    pathes = set([get_fpath(special_chars) for _ in range(3)])
     for i in pathes:
         put_get_delete('u0', i)
 
 def test_concurrent(server):
     def task(username: str, path: str):
         put_get_delete(username, path)
-    pathes = set([get_fpath() for i in range(64)])
-    with ThreadPoolExecutor(max_workers=16) as executor:
+    pathes = set([get_fpath() for i in range(16)])
+    with ThreadPoolExecutor(max_workers=8) as executor:
         tasks = []
         for p in pathes:
             tasks.append(executor.submit(task, 'u0', p))

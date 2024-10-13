@@ -1,5 +1,5 @@
 import subprocess
-import random
+import random, os
 from concurrent.futures import ThreadPoolExecutor
 from ..config import SANDBOX_DIR
 from .common import get_conn, create_server_context
@@ -21,24 +21,19 @@ def get_fpath(charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123
         return ''.join(random.choices(charset, k=k))
     suffix = random.choice(['.txt', '.bin', '.dat', '.json', '.xml', '.csv', '.html', '.md', ''])
     while True:
-        path = f'{random_string(48)}' + suffix
+        path = f'{random_string(32)}' + suffix
         if not '..' in path:
             break
     return path
 
 def put_get_delete(username: str, path: str):
     path = f"{username}/{path}"
-    ascii_charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+'
-    def random_string(k = 10) -> str:
-        return ''.join(random.choices(ascii_charset, k=k))
-
     c = get_conn(username)
-    content = random_string(random.randint(1, 1024*1024*16)).encode('ascii')
+    content = os.urandom(random.randint(1, 1024*1024*16))
     c.put(path, content)
     assert c.get(path) == content, "Put get failed"
     c.delete(path)
     assert c.get(path) is None, "Delete failed"
-
 
 def test_fname(server):
     # use some wired characters...

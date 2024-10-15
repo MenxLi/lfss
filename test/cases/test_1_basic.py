@@ -9,19 +9,19 @@ server = create_server_context()
 def test_user_creation(server):
     s = subprocess.check_output(['lfss-user', 'add', 'u0', 'test', '--admin', '--max-storage', '1G'], cwd=SANDBOX_DIR)
     s = s.decode()
-    assert 'User created' in s, "User creation failed"
+    assert 'User created' in s, "User creation failed {s}".format(s=s)
     c = get_conn('u0')
     assert c.whoami().is_admin, "User is not admin"
     assert c.whoami().username == 'u0', "Username is not correct"
     assert c.whoami().max_storage == 1024**3, "Max storage is not correct"
 
-    s = subprocess.check_output(['lfss-user', 'add', 'u1', 'test'], cwd=SANDBOX_DIR)
+    s = subprocess.check_output(['lfss-user', 'add', 'u1', 'test', '--permission', 'public'], cwd=SANDBOX_DIR)
     s = s.decode()
-    assert 'User created' in s, "User creation failed"
+    assert 'User created' in s, "User creation failed {s}".format(s=s)
 
     s = subprocess.check_output(['lfss-user', 'add', 'u2', 'test'], cwd=SANDBOX_DIR)
     s = s.decode()
-    assert 'User created' in s, "User creation failed"
+    assert 'User created' in s, "User creation failed {s}".format(s=s)
 
 def test_upload(server):
     upload_basic('u0')

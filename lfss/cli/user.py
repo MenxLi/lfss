@@ -1,5 +1,6 @@
 import argparse, asyncio
 from contextlib import asynccontextmanager
+from .cli import parse_permission, FileReadPermission
 from ..src.database import Database, FileReadPermission, transaction, UserConn
 from ..src.connection_pool import global_entrance
 
@@ -22,7 +23,7 @@ async def _main():
     sp_add.add_argument('username', type=str)
     sp_add.add_argument('password', type=str)
     sp_add.add_argument('--admin', action='store_true')
-    sp_add.add_argument('--permission', type=FileReadPermission, default=FileReadPermission.UNSET)
+    sp_add.add_argument("--permission", type=parse_permission, default=FileReadPermission.UNSET, help="File permission", choices=list(FileReadPermission))
     sp_add.add_argument('--max-storage', type=parse_storage_size, default="1G")
     
     sp_delete = sp.add_parser('delete')

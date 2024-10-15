@@ -1,7 +1,18 @@
 from lfss.client import Connector, upload_directory, upload_file, download_file, download_directory
-from lfss.src.datatype import FileReadPermission
 from pathlib import Path
 import argparse
+from lfss.src.datatype import FileReadPermission
+
+def parse_permission(s: str) -> FileReadPermission:
+    if s.lower() == "public":
+        return FileReadPermission.PUBLIC
+    if s.lower() == "protected":
+        return FileReadPermission.PROTECTED
+    if s.lower() == "private":
+        return FileReadPermission.PRIVATE
+    if s.lower() == "unset":
+        return FileReadPermission.UNSET
+    raise ValueError(f"Invalid permission {s}")
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Command line interface, please set LFSS_ENDPOINT and LFSS_TOKEN environment variables.")
@@ -16,7 +27,7 @@ def parse_arguments():
     sp_upload.add_argument("-j", "--jobs", type=int, default=1, help="Number of concurrent uploads")
     sp_upload.add_argument("--interval", type=float, default=0, help="Interval between files, only works with directory upload")
     sp_upload.add_argument("--conflict", choices=["overwrite", "abort", "skip", "skip-ahead"], default="abort", help="Conflict resolution")
-    sp_upload.add_argument("--permission", type=FileReadPermission, default=FileReadPermission.UNSET, help="File permission")
+    sp_upload.add_argument("--permission", type=parse_permission, default=FileReadPermission.UNSET, help="File permission", choices=list(FileReadPermission))
     sp_upload.add_argument("--retries", type=int, default=0, help="Number of retries")
 
     # download

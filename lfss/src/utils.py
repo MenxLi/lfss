@@ -8,33 +8,21 @@ def hash_credential(username: str, password: str):
     return hashlib.sha256((username + password).encode()).hexdigest()
 
 def encode_uri_compnents(path: str):
-    """
-    Encode the path components to encode the special characters, 
-    also to avoid path traversal attack
-    """
     path_sp = path.split("/")
     mapped = map(lambda x: urllib.parse.quote(x), path_sp)
     return "/".join(mapped)
 
 def decode_uri_compnents(path: str):
-    """
-    Decode the path components to decode the special characters
-    """
     path_sp = path.split("/")
     mapped = map(lambda x: urllib.parse.unquote(x), path_sp)
     return "/".join(mapped)
 
 def ensure_uri_compnents(path: str):
-    """
-    Ensure the path components are safe to use
-    """
+    """ Ensure the path components are safe to use """
     return encode_uri_compnents(decode_uri_compnents(path))
 
 def debounce_async(delay: float = 0):
-    """
-    Decorator to debounce the async function (procedure)
-    The function must return None
-    """
+    """ Debounce the async procedure """
     def debounce_wrap(func):
         # https://docs.python.org/3/library/asyncio-task.html#asyncio.Task.cancel
         async def delayed_func(*args, **kwargs):
@@ -55,10 +43,9 @@ def debounce_async(delay: float = 0):
         return wrapper
     return debounce_wrap
 
-# https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Last-Modified
 def format_last_modified(last_modified_gmt: str):
     """
-    Format the last modified time to the HTTP standard format
+    Format the last modified time to the [HTTP standard format](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Last-Modified)
     - last_modified_gmt: The last modified time in SQLite ISO 8601 GMT format: e.g. '2021-09-01 12:00:00'
     """
     assert len(last_modified_gmt) == 19

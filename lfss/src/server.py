@@ -219,7 +219,6 @@ async def put_file(
             return Response(status_code=200, headers={
                 "Content-Type": "application/json",
             }, content=json.dumps({"url": path}))
-        # remove the old file
         exists_flag = True
         if not user.is_admin and not file_record.owner_id == user.id:
             raise HTTPException(status_code=403, detail="Permission denied, cannot overwrite other's file")
@@ -341,14 +340,6 @@ async def bundle_files(path: str, user: UserRecord = Depends(registered_user)):
 @router_api.get("/meta")
 @handle_exception
 async def get_file_meta(path: str, user: UserRecord = Depends(registered_user)):
-    """
-    Permission:
-        for file:
-            if file is under user's path, return the meta, 
-            else, determine by the permission same as get_file
-        for path:
-            if path is under user's path, return the meta, else return 403
-    """
     logger.info(f"GET meta({path}), user: {user.username}")
     path = ensure_uri_compnents(path)
     is_file = not path.endswith("/")

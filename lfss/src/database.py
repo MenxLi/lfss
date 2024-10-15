@@ -1,5 +1,5 @@
 
-from typing import Optional, overload, Literal, AsyncIterable
+from typing import Optional, Literal, AsyncIterable
 from abc import ABC
 
 import urllib.parse
@@ -29,9 +29,6 @@ class DBObjectBase(ABC):
             raise ValueError("Connection not set")
         return self._cur
 
-    # async def commit(self):
-    #     await self.conn.commit()
-
 DECOY_USER = UserRecord(0, 'decoy', 'decoy', False, '2021-01-01 00:00:00', '2021-01-01 00:00:00', 0, FileReadPermission.PRIVATE)
 class UserConn(DBObjectBase):
 
@@ -43,10 +40,6 @@ class UserConn(DBObjectBase):
     def parse_record(record) -> UserRecord:
         return UserRecord(*record)
 
-    async def init(self, cur: aiosqlite.Cursor):
-        self.set_cursor(cur)
-        return self
-    
     async def get_user(self, username: str) -> Optional[UserRecord]:
         await self.cur.execute("SELECT * FROM user WHERE username = ?", (username, ))
         res = await self.cur.fetchone()
@@ -131,10 +124,6 @@ class FileConn(DBObjectBase):
     @staticmethod
     def parse_record(record) -> FileRecord:
         return FileRecord(*record)
-    
-    def init(self, cur: aiosqlite.Cursor):
-        self.set_cursor(cur)
-        return self
     
     async def get_file_record(self, url: str) -> Optional[FileRecord]:
         cursor = await self.cur.execute("SELECT * FROM fmeta WHERE url = ?", (url, ))
@@ -355,7 +344,7 @@ class FileConn(DBObjectBase):
                 await self._user_size_dec(r[0], size[0])
         
         # if any new records are created here, the size update may be inconsistent
-        # but it's not a big deal...
+        # but it's not a big deal... we should have only one writer
         
         if under_user_id is None:
             res = await self.cur.execute("DELETE FROM fmeta WHERE url LIKE ? RETURNING *", (path + '%', ))
@@ -429,7 +418,7 @@ async def get_user(cur: aiosqlite.Cursor, user: int | str) -> Optional[UserRecor
     else:
         return None
 
-# mostly transactional operations
+# higher level database operations, mostly transactional
 class Database:
     logger = get_logger('database', global_instance=True)
 
@@ -612,11 +601,13 @@ class Database:
             else:
                 internal_ids.append(r.file_id)
         
-        for i in range(0, len(internal_ids), batch_size):
-            await fconn.delete_file_blobs([r for r in internal_ids[i:i+batch_size]])
-        for i in range(0, len(external_ids)):
-            await fconn.delete_file_blob_external(external_ids[i])
-            
+        async def del_internal():
+            for i in range(0, len(internal_ids), batch_size):
+                await fconn.delete_file_blobs([r for r in internal_ids[i:i+batch_size]])
+        async def del_external():
+            for i in range(0, len(external_ids)):
+                await fconn.delete_file_blob_external(external_ids[i])
+        await asyncio.gather(del_internal(), del_external())
 
     async def delete_path(self, url: str, under_user: Optional[UserRecord] = None) -> Optional[list[FileRecord]]:
         validate_url(url, is_file=False)

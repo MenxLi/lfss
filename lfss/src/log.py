@@ -151,9 +151,6 @@ def log_access(
             return wrapper          # type: ignore
     return _log_access
 
-def get_dummy_logger() -> BaseLogger:
-    return BaseLogger('dummy')
-
 __ALL__ = [
-    'get_logger', 'clear_handlers', 'log_access', 'get_dummy_logger'
+    'get_logger', 'log_access'
 ]

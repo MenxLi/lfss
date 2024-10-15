@@ -1,5 +1,5 @@
 from pathlib import Path
-import os, hashlib
+import os
 
 __default_dir = '.storage_data'
 

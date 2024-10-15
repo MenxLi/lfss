@@ -22,9 +22,9 @@ async def _main():
     sp_add = sp.add_parser('add')
     sp_add.add_argument('username', type=str)
     sp_add.add_argument('password', type=str)
-    sp_add.add_argument('--admin', action='store_true')
-    sp_add.add_argument("--permission", type=parse_permission, default=FileReadPermission.UNSET, help="File permission", choices=list(FileReadPermission))
-    sp_add.add_argument('--max-storage', type=parse_storage_size, default="1G")
+    sp_add.add_argument('--admin', action='store_true', help='Set user as admin')
+    sp_add.add_argument("--permission", type=parse_permission, default=FileReadPermission.UNSET, help="File permission, can be public, protected, private, or unset")
+    sp_add.add_argument('--max-storage', type=parse_storage_size, default="1G", help="Maximum storage size, e.g. 1G, 100M, 10K")
     
     sp_delete = sp.add_parser('delete')
     sp_delete.add_argument('username', type=str)

@@ -220,3 +220,13 @@ a{
     color: white !important;
     background-color: #990511c7 !important;
 }
+
+button{
+    transition: all 0.2s;
+}
+button:hover {
+    transform: scale(1.05);
+}
+button:active {
+    transform: scale(0.95);
+}

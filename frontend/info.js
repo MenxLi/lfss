@@ -19,28 +19,28 @@ export function showInfoPanel(r, u){
     <div class="info-container-left">
         <table class="info-table">
             <tr>
-                <td class="info-table-key">Filename</td>
+                <td class="info-table-key">Name</td>
                 <td class="info-table-value">${decodePathURI(r.url).split('/').pop()}</td>
-            </tr>
-            <tr>
-                <td class="info-table-key">File-Type</td>
-                <td class="info-table-value">${r.mime_type}</td>
             </tr>
             <tr>
                 <td class="info-table-key">Size</td>
                 <td class="info-table-value">${formatSize(r.file_size)}</td>
             </tr>
             <tr>
-                <td class="info-table-key">Owner</td>
+                <td class="info-table-key">File-Type</td>
+                <td class="info-table-value">${r.mime_type}</td>
+            </tr>
+            <tr>
+                <td class="info-table-key">Owner-ID</td>
                 <td class="info-table-value">${r.owner_id}</td>
+            </tr>
+            <tr>
+                <td class="info-table-key">Access-Time</td>
+                <td class="info-table-value">${cvtGMT2Local(r.access_time)}</td>
             </tr>
             <tr>
                 <td class="info-table-key">Create-Time</td>
                 <td class="info-table-value">${cvtGMT2Local(r.create_time)}</td>
-            </td>
-            <tr>
-                <td class="info-table-key">Access-Time</td>
-                <td class="info-table-value">${cvtGMT2Local(r.access_time)}</td>
             </tr>
         </table>
     </div>
@@ -82,7 +82,7 @@ export function showDirInfoPanel(r, u, c){
     <div class="info-container-left">
         <table class="info-table">
             <tr>
-                <td class="info-table-key">Pathname</td>
+                <td class="info-table-key">Name</td>
                 <td class="info-table-value" id="info-table-pathname">${fmtPath.split('/').pop()}</td>
             </tr>
             <tr>

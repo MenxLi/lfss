@@ -277,6 +277,8 @@ function refreshFileList(){
                     infoButton.style.cursor = 'pointer';
                     infoButton.textContent = 'Details';
                     infoButton.style.width = '100%';
+                    infoButton.style.display = 'block';
+                    infoButton.style.textAlign = 'center';
                     infoButton.addEventListener('click', () => {
                         showDirInfoPanel(dir, userRecord, conn);
                     });

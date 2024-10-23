@@ -9,6 +9,19 @@ div.floating-window.blocker{
     z-index: 100;
 }
 
+@keyframes fade-in{
+    from{
+        opacity: 0;
+        transform: translate(-50%, calc(-50% + 0.25rem));
+    }
+    to{
+        opacity: 1;
+        transform: translate(-50%, -50%);
+    }
+}
+div.floating-window.window{
+    animation: fade-in 0.1s ease-in;
+}
 div.floating-window.window{
     position: fixed;
     top: 50%;

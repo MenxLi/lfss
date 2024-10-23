@@ -3,6 +3,10 @@ import urllib.parse
 import asyncio
 import functools
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
+from typing import TypeVar, Callable, Awaitable
+from functools import wraps, partial
+import os
 
 def hash_credential(username: str, password: str):
     return hashlib.sha256((username + password).encode()).hexdigest()
@@ -57,3 +61,32 @@ def now_stamp() -> float:
 
 def stamp_to_str(stamp: float) -> str:
     return datetime.datetime.fromtimestamp(stamp).strftime('%Y-%m-%d %H:%M:%S')
+
+
+_FnReturnT = TypeVar('_FnReturnT')
+_AsyncReturnT = Awaitable[_FnReturnT]
+_g_executor = None
+def get_global_executor():
+    global _g_executor
+    if _g_executor is None:
+        _g_executor = ThreadPoolExecutor(max_workers=4 if (cpu_count:=os.cpu_count()) and cpu_count > 4 else cpu_count)
+    return _g_executor
+def async_wrap(executor=None):
+    if executor is None:
+        executor = get_global_executor()
+    def _async_wrap(func: Callable[..., _FnReturnT]) -> Callable[..., Awaitable[_FnReturnT]]:
+        @wraps(func)
+        async def run(*args, **kwargs):
+            loop = asyncio.get_event_loop()
+            pfunc = partial(func, *args, **kwargs)
+            return await loop.run_in_executor(executor, pfunc)
+        return run
+    return _async_wrap
+def concurrent_wrap(executor=None):
+    def _concurrent_wrap(func: Callable[..., _AsyncReturnT]) -> Callable[..., _AsyncReturnT]:
+        @async_wrap(executor)
+        def sync_fn(*args, **kwargs):
+            loop = asyncio.new_event_loop()
+            return loop.run_until_complete(func(*args, **kwargs))
+        return sync_fn
+    return _concurrent_wrap

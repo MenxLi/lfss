@@ -13,7 +13,7 @@ from .connection_pool import execute_sql, unique_cursor, transaction
 from .datatype import UserRecord, FileReadPermission, FileRecord, DirectoryRecord, PathContents
 from .config import LARGE_BLOB_DIR
 from .log import get_logger
-from .utils import decode_uri_compnents, hash_credential
+from .utils import decode_uri_compnents, hash_credential, concurrent_wrap
 from .error import *
 
 class DBObjectBase(ABC):
@@ -661,6 +661,7 @@ class Database:
                         continue
                 yield r, blob
 
+    @concurrent_wrap()
     async def zip_path(self, top_url: str, urls: Optional[list[str]]) -> io.BytesIO:
         if top_url.startswith('/'):
             top_url = top_url[1:]

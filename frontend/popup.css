@@ -39,6 +39,7 @@ div.popup-window{
     display: block;
     text-align: left;
     animation: popup-appear 0.5s ease;
+    z-index: 102;
 }
 
 @keyframes popup-appear{

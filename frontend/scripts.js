@@ -1,7 +1,8 @@
 import Connector from './api.js';
 import { permMap } from './api.js';
 import { showFloatingWindowLineInput, showPopup } from './popup.js';
-import { formatSize, decodePathURI, ensurePathURI, copyToClipboard, getRandomString, cvtGMT2Local, debounce, encodePathURI } from './utils.js';
+import { formatSize, decodePathURI, ensurePathURI, getRandomString, cvtGMT2Local, debounce, encodePathURI } from './utils.js';
+import { showInfoPanel, showDirInfoPanel } from './info.js';
 
 const conn = new Connector();
 let userRecord = null;
@@ -235,7 +236,6 @@ function refreshFileList(){
                 const tr = document.createElement('tr');
                 const sizeTd = document.createElement('td');
                 const accessTimeTd = document.createElement('td');
-                const createTimeTd = document.createElement('td');
                 {
                     const nameTd = document.createElement('td');
                     if (dir.url.endsWith('/')){
@@ -262,8 +262,6 @@ function refreshFileList(){
                     tr.appendChild(sizeTd);
                     accessTimeTd.textContent = cvtGMT2Local(dir.access_time);
                     tr.appendChild(accessTimeTd);
-                    createTimeTd.textContent = cvtGMT2Local(dir.create_time);
-                    tr.appendChild(createTimeTd);
                 }
                 {
                     const accessTd = document.createElement('td');
@@ -275,21 +273,14 @@ function refreshFileList(){
                     const actContainer = document.createElement('div');
                     actContainer.classList.add('action-container');
 
-                    const showMetaButton = document.createElement('a');
-                    showMetaButton.textContent = 'Reveal';
-                    showMetaButton.style.cursor = 'pointer';
-                    showMetaButton.addEventListener('click', () => {
-                        const dirUrlEncap = dirurl;
-                        conn.getMetadata(dirUrlEncap).then(
-                            (meta) => {
-                                sizeTd.textContent = formatSize(meta.size);
-                                accessTimeTd.textContent = cvtGMT2Local(meta.access_time);
-                                createTimeTd.textContent = cvtGMT2Local(meta.create_time);
-                            }
-                        );
-                        showPopup('Fetching metadata...', {level: 'info', timeout: 3000});
+                    const infoButton = document.createElement('a');
+                    infoButton.style.cursor = 'pointer';
+                    infoButton.textContent = 'Details';
+                    infoButton.style.width = '100%';
+                    infoButton.addEventListener('click', () => {
+                        showDirInfoPanel(dir, userRecord, conn);
                     });
-                    actContainer.appendChild(showMetaButton);
+                    actContainer.appendChild(infoButton);
 
                     const moveButton = document.createElement('a');
                     moveButton.textContent = 'Move';
@@ -370,13 +361,6 @@ function refreshFileList(){
                 }
 
                 {
-                    const dateTd = document.createElement('td');
-                    const createTime = file.create_time;
-                    dateTd.textContent = cvtGMT2Local(createTime);
-                    tr.appendChild(dateTd);
-                }
-
-                {
                     const accessTd = document.createElement('td');
                     if (file.owner_id === userRecord.id || userRecord.is_admin){
                         const select = document.createElement('select');
@@ -416,14 +400,13 @@ function refreshFileList(){
                     const actContainer = document.createElement('div');
                     actContainer.classList.add('action-container');
 
-                    const copyButton = document.createElement('a');
-                    copyButton.style.cursor = 'pointer';
-                    copyButton.textContent = 'Share';
-                    copyButton.addEventListener('click', () => {
-                        copyToClipboard(conn.config.endpoint + '/' + file.url);
-                        showPopup('Link copied to clipboard', {level: "success"});
+                    const infoButton = document.createElement('a');
+                    infoButton.style.cursor = 'pointer';
+                    infoButton.textContent = 'Details';
+                    infoButton.addEventListener('click', () => {
+                        showInfoPanel(file, userRecord);
                     });
-                    actContainer.appendChild(copyButton);
+                    actContainer.appendChild(infoButton);
 
                     const viewButton = document.createElement('a');
                     viewButton.textContent = 'View';

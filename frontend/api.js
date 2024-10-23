@@ -20,6 +20,7 @@
  * @property {number} file_size - the size of the file, in bytes
  * @property {string} create_time - the time the file was created
  * @property {string} access_time - the time the file was last accessed
+ * @property {string} mime_type - the mime type of the file
  * 
  * Partially complete...
  * @typedef {Object} DirectoryRecord

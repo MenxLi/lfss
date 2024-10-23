@@ -1,0 +1,36 @@
+
+div.info-container {
+    display: flex;
+    flex-direction: column;
+    margin: 1rem;
+    gap: 1rem;
+}
+div.info-container-left {
+    margin: 0 auto;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+}
+
+td {
+    text-align: left;
+    text-wrap: nowrap;
+    width: fit-content;
+}
+td.info-table-key {
+    font-weight: bold;
+    padding-right: 1rem;
+}
+
+div.info-container-right {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+}
+div.info-path-copy {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}

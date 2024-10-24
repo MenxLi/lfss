@@ -2,7 +2,7 @@ from lfss.src.utils import hash_credential
 from lfss.client import Connector
 from ..config import SERVER_PORT, SANDBOX_DIR, clear_sandbox
 from ..start_server import Server
-import pytest
+import pytest, os
 
 def get_conn(username, password = 'test'):
     return Connector(f"http://localhost:{SERVER_PORT}", token=hash_credential(username, password))
@@ -20,6 +20,10 @@ def upload_basic(username: str):
     assert p_list.files[0].url == f'{username}/test1.txt', "File name is not correct"
 
 def create_server_context():
+    # clear environment variables
+    os.environ.pop('LFSS_DATA', None)
+    os.environ.pop('LFSS_LARGE_FILE', None)
+
     @pytest.fixture(scope='module')
     def server():
         s = Server()

@@ -115,14 +115,14 @@ async def vacuum(index: bool = False, blobs: bool = False):
         await asyncio.create_task(fn())
 
     # create a temporary index to speed up the process...
-    with indicator("Ensuring external storage consistancy"):
+    with indicator("Clearing un-referenced files in external storage"):
         async with transaction() as c:
             await c.execute("CREATE INDEX IF NOT EXISTS fmeta_file_id ON fmeta (file_id)")
         for i, f in enumerate(LARGE_BLOB_DIR.iterdir()):
             f_id = f.name
             await ensure_external_consistency(f_id)
-            if (i+1) % 100_000 == 0:
-                print(f"Checked {i//1000}k files in external storage.")
+            if (i+1) % 1_000 == 0:
+                print(f"Checked {(i+1)//1000}k files in external storage.", end='\r')
         async with transaction() as c:
             await c.execute("DROP INDEX IF EXISTS fmeta_file_id")
 

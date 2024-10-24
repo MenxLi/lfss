@@ -139,7 +139,7 @@ class FileConn(DBObjectBase):
             return []
         return [self.parse_record(r) for r in res]
     
-    async def list_root_dirs(self, *usernames: str) -> list[DirectoryRecord]:
+    async def list_root_dirs(self, *usernames: str, skim = False) -> list[DirectoryRecord]:
         """
         Efficiently list users' directories, if usernames is empty, list all users' directories.
         """
@@ -148,12 +148,12 @@ class FileConn(DBObjectBase):
             await self.cur.execute("SELECT username FROM user")
             res = await self.cur.fetchall()
             dirnames = [u[0] + '/' for u in res]
-            dirs = [DirectoryRecord(u, await self.path_size(u, include_subpath=True)) for u in dirnames]
+            dirs = [await self.get_path_record(u) for u in dirnames] if not skim else [DirectoryRecord(u) for u in dirnames]
             return dirs
         else:
             # list specific users
             dirnames = [uname + '/' for uname in usernames]
-            dirs = [DirectoryRecord(u, await self.path_size(u, include_subpath=True)) for u in dirnames]
+            dirs = [await self.get_path_record(u) for u in dirnames] if not skim else [DirectoryRecord(u) for u in dirnames]
             return dirs
     
     async def list_path(self, url: str, flat: bool = False) -> PathContents:
@@ -207,20 +207,24 @@ class FileConn(DBObjectBase):
         return PathContents(dirs, files)
     
     async def get_path_record(self, url: str) -> DirectoryRecord:
+        """
+        Get the full record of a directory, including size, create_time, update_time, access_time etc.
+        """
         assert url.endswith('/'), "Path must end with /"
         cursor = await self.cur.execute("""
             SELECT MIN(create_time) as create_time, 
                 MAX(create_time) as update_time, 
-                MAX(access_time) as access_time 
+                MAX(access_time) as access_time, 
+                COUNT(*) as n_files
             FROM fmeta 
             WHERE url LIKE ?
         """, (url + '%', ))
         result = await cursor.fetchone()
         if result is None or any(val is None for val in result):
             raise PathNotFoundError(f"Path {url} not found")
-        create_time, update_time, access_time = result
+        create_time, update_time, access_time, n_files = result
         p_size = await self.path_size(url, include_subpath=True)
-        return DirectoryRecord(url, p_size, create_time=create_time, update_time=update_time, access_time=access_time)
+        return DirectoryRecord(url, p_size, create_time=create_time, update_time=update_time, access_time=access_time, n_files=n_files)
     
     async def user_size(self, user_id: int) -> int:
         cursor = await self.cur.execute("SELECT size FROM usize WHERE user_id = ?", (user_id, ))

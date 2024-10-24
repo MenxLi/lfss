@@ -90,6 +90,10 @@ export function showDirInfoPanel(r, u, c){
                 <td class="info-table-value" id="info-table-pathsize">N/A</td>
             </tr>
             <tr>
+                <td class="info-table-key">File-Count</td>
+                <td class="info-table-value" id="info-table-nfiles">N/A</td>
+            </tr>
+            <tr>
                 <td class="info-table-key">Access-Time</td>
                 <td class="info-table-value" id="info-table-accesstime">1970-01-01 00:00:00</td>
             </tr>
@@ -124,6 +128,7 @@ export function showDirInfoPanel(r, u, c){
     const sizeValTd = document.querySelector('.info-table-value#info-table-pathsize');
     const createTimeValTd = document.querySelector('.info-table-value#info-table-createtime');
     const accessTimeValTd = document.querySelector('.info-table-value#info-table-accesstime');
+    const countValTd = document.querySelector('.info-table-value#info-table-nfiles');
     // console.log(sizeValTd, createTimeValTd, accessTimeValTd)
     c.getMetadata(ensureSlashEnd(r.url)).then((meta) => {
         if (!meta) {
@@ -133,5 +138,6 @@ export function showDirInfoPanel(r, u, c){
         sizeValTd.textContent = formatSize(meta.size);
         createTimeValTd.textContent = cvtGMT2Local(meta.create_time);
         accessTimeValTd.textContent = cvtGMT2Local(meta.access_time);
+        countValTd.textContent = meta.n_files;
     });
 }

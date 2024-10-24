@@ -135,8 +135,8 @@ async def get_file(path: str, download: bool = False, flat: bool = False, user: 
                 if flat:
                     raise HTTPException(status_code=400, detail="Flat query not supported for root path")
                 return PathContents(
-                    dirs = await fconn.list_root_dirs(user.username) \
-                        if not user.is_admin else await fconn.list_root_dirs(),
+                    dirs = await fconn.list_root_dirs(user.username, skim=True) \
+                        if not user.is_admin else await fconn.list_root_dirs(skim=True),
                     files = []
                 )
 

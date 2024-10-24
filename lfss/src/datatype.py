@@ -40,13 +40,14 @@ class FileRecord:
 @dataclasses.dataclass
 class DirectoryRecord:
     url: str
-    size: int
+    size: int = -1
     create_time: str = ""
     update_time: str = ""
     access_time: str = ""
+    n_files: int = -1
 
     def __str__(self):
-        return f"Directory {self.url} (size={self.size})"
+        return f"Directory {self.url} (size={self.size}, created at {self.create_time}, updated at {self.update_time}, accessed at {self.access_time}, n_files={self.n_files})"
 
 @dataclasses.dataclass
 class PathContents:

@@ -28,6 +28,7 @@
  * @property {string} size - the size of the directory, in bytes
  * @property {string} create_time - the time the directory was created
  * @property {string} access_time - the time the directory was last accessed
+ * @property {number} n_files - the number of total files in the directory, including subdirectories
  * 
  * @typedef {Object} PathListResponse
  * @property {DirectoryRecord[]} dirs - the list of directories in the directory

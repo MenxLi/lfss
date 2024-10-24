@@ -20,3 +20,4 @@ else:
     LARGE_FILE_BYTES = 8 * 1024 * 1024  # 8MB
 MAX_FILE_BYTES = 512 * 1024 * 1024   # 512MB
 MAX_BUNDLE_BYTES = 512 * 1024 * 1024   # 512MB
+CHUNK_SIZE = 1024 * 1024   # 1MB chunks for streaming (on large files)

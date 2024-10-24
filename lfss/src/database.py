@@ -11,7 +11,7 @@ import aiofiles.os
 
 from .connection_pool import execute_sql, unique_cursor, transaction
 from .datatype import UserRecord, FileReadPermission, FileRecord, DirectoryRecord, PathContents
-from .config import LARGE_BLOB_DIR
+from .config import LARGE_BLOB_DIR, CHUNK_SIZE
 from .log import get_logger
 from .utils import decode_uri_compnents, hash_credential, concurrent_wrap
 from .error import *
@@ -384,7 +384,9 @@ class FileConn(DBObjectBase):
     async def get_file_blob_external(self, file_id: str) -> AsyncIterable[bytes]:
         assert (LARGE_BLOB_DIR / file_id).exists(), f"File {file_id} not found"
         async with aiofiles.open(LARGE_BLOB_DIR / file_id, 'rb') as f:
-            async for chunk in f:
+            while True:
+                chunk = await f.read(CHUNK_SIZE)
+                if not chunk: break
                 yield chunk
     
     async def delete_file_blob_external(self, file_id: str):

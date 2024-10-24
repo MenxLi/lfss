@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from .error import *
 from .log import get_logger
 from .stat import RequestDB
-from .config import MAX_BUNDLE_BYTES, MAX_FILE_BYTES, LARGE_FILE_BYTES
+from .config import MAX_BUNDLE_BYTES, MAX_FILE_BYTES, LARGE_FILE_BYTES, CHUNK_SIZE
 from .utils import ensure_uri_compnents, format_last_modified, now_stamp
 from .connection_pool import global_connection_init, global_connection_close, unique_cursor
 from .database import Database, UserRecord, DECOY_USER, FileRecord, check_user_permission, FileReadPermission, UserConn, FileConn, PathContents
@@ -253,9 +253,8 @@ async def put_file(
 
     if len(blobs) > LARGE_FILE_BYTES:
         async def blob_reader():
-            chunk_size = 16 * 1024 * 1024    # 16MB
-            for b in range(0, len(blobs), chunk_size):
-                yield blobs[b:b+chunk_size]
+            for b in range(0, len(blobs), CHUNK_SIZE):
+                yield blobs[b:b+CHUNK_SIZE]
         await db.save_file(user.id, path, blob_reader(), permission = FileReadPermission(permission), mime_type = mime_t)
     else:
         await db.save_file(user.id, path, blobs, permission = FileReadPermission(permission), mime_type=mime_t)

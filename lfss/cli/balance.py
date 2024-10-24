@@ -3,7 +3,7 @@ Balance the storage by ensuring that large file thresholds are met.
 """
 
 from lfss.src.config import LARGE_BLOB_DIR, LARGE_FILE_BYTES
-import argparse, time
+import argparse, time, itertools
 from functools import wraps
 from asyncio import Semaphore
 import aiofiles, asyncio
@@ -30,7 +30,6 @@ async def move_to_external(f_id: str, flag: str = ''):
         if blob_row is None:
             print(f"{flag}File {f_id} not found in blobs.fdata")
             return
-        await c.execute("BEGIN")
         blob: bytes = blob_row[0]
         async with aiofiles.open(LARGE_BLOB_DIR / f_id, 'wb') as f:
             await f.write(blob)
@@ -59,8 +58,7 @@ async def _main(batch_size: int = 10000):
     start_time = time.time()
 
     e_cout = 0
-    batch_count = 0
-    while True:
+    for batch_count in itertools.count(start=0):
         async with unique_cursor() as conn:
             exceeded_rows = list(await (await conn.execute( 
                 "SELECT file_id FROM fmeta WHERE file_size > ? AND external = 0 LIMIT ? OFFSET ?",
@@ -76,8 +74,7 @@ async def _main(batch_size: int = 10000):
         await asyncio.gather(*tasks)
 
     i_count = 0
-    batch_count = 0
-    while True:
+    for batch_count in itertools.count(start=0):
         async with unique_cursor() as conn:
             under_rows = list(await (await conn.execute(
                 "SELECT file_id, file_size, external FROM fmeta WHERE file_size <= ? AND external = 1 LIMIT ? OFFSET ?",

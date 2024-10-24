@@ -63,7 +63,6 @@ async def move_to_internal(f_id: str, flag: str = ''):
 @global_entrance()
 async def _main(batch_size: int = 10000):
     tasks = []
-
     e_cout = 0
     for batch_count in itertools.count(start=0):
         async with unique_cursor() as conn:
@@ -80,6 +79,7 @@ async def _main(batch_size: int = 10000):
             tasks.append(move_to_external(f_id, flag=f"[b{batch_count+1}-e{i+1}/{len(exceeded_rows)}] "))
         await asyncio.gather(*tasks)
 
+    tasks = []
     i_count = 0
     for batch_count in itertools.count(start=0):
         async with unique_cursor() as conn:

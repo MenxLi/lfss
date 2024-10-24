@@ -62,6 +62,18 @@ def now_stamp() -> float:
 def stamp_to_str(stamp: float) -> str:
     return datetime.datetime.fromtimestamp(stamp).strftime('%Y-%m-%d %H:%M:%S')
 
+def parse_storage_size(s: str) -> int:
+    """ Parse the file size string to bytes """
+    if s[-1].isdigit():
+        return int(s)
+    unit = s[-1].lower()
+    match unit:
+        case 'b': return int(s[:-1])
+        case 'k': return int(s[:-1]) * 1024
+        case 'm': return int(s[:-1]) * 1024**2
+        case 'g': return int(s[:-1]) * 1024**3
+        case 't': return int(s[:-1]) * 1024**4
+        case _: raise ValueError(f"Invalid file size string: {s}")
 
 _FnReturnT = TypeVar('_FnReturnT')
 _AsyncReturnT = Awaitable[_FnReturnT]

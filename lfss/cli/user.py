@@ -1,19 +1,9 @@
 import argparse, asyncio
 from contextlib import asynccontextmanager
 from .cli import parse_permission, FileReadPermission
+from ..src.utils import parse_storage_size
 from ..src.database import Database, FileReadPermission, transaction, UserConn
 from ..src.connection_pool import global_entrance
-
-def parse_storage_size(s: str) -> int:
-    if s[-1] in 'Kk':
-        return int(s[:-1]) * 1024
-    if s[-1] in 'Mm':
-        return int(s[:-1]) * 1024 * 1024
-    if s[-1] in 'Gg':
-        return int(s[:-1]) * 1024 * 1024 * 1024
-    if s[-1] in 'Tt':
-        return int(s[:-1]) * 1024 * 1024 * 1024 * 1024
-    return int(s)
 
 @global_entrance(1)
 async def _main():

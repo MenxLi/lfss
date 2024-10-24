@@ -1,5 +1,6 @@
-from pathlib import Path
 import os
+from pathlib import Path
+from .utils import parse_storage_size
 
 __default_dir = '.storage_data'
 
@@ -12,6 +13,10 @@ LARGE_BLOB_DIR = DATA_HOME / 'large_blobs'
 LARGE_BLOB_DIR.mkdir(exist_ok=True)
 
 # https://sqlite.org/fasterthanfs.html
-LARGE_FILE_BYTES = 8 * 1024 * 1024   # 8MB
+__env_large_file = os.environ.get('LFSS_LARGE_FILE', None)
+if __env_large_file is not None:
+    LARGE_FILE_BYTES = parse_storage_size(__env_large_file)
+else:
+    LARGE_FILE_BYTES = 8 * 1024 * 1024  # 8MB
 MAX_FILE_BYTES = 512 * 1024 * 1024   # 512MB
 MAX_BUNDLE_BYTES = 512 * 1024 * 1024   # 512MB

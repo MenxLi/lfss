@@ -7,6 +7,7 @@ import argparse, time, itertools
 from functools import wraps
 from asyncio import Semaphore
 import aiofiles, asyncio
+from contextlib import contextmanager
 from lfss.src.database import transaction, unique_cursor
 from lfss.src.connection_pool import global_entrance
 
@@ -92,15 +93,35 @@ async def _main(batch_size: int = 10000):
     end_time = time.time()
     print(f"Balancing complete, took {end_time - start_time:.2f} seconds. "
           f"{e_cout} files moved to external storage, {i_count} files moved to internal storage.")
+
+@global_entrance()
+async def vacuum(index: bool = False, blobs: bool = False):
+    @contextmanager
+    def indicator(name: str):
+        print(f"\033[1;33mRunning {name}... \033[0m")
+        s = time.time()
+        yield
+        print(f"{name} took {time.time() - s:.2f} seconds")
+
+    async with unique_cursor(is_write=True) as c:
+        if index:
+            with indicator("VACUUM-index"):
+                await c.execute("VACUUM main")
+        if blobs:
+            with indicator("VACUUM-blobs"):
+                await c.execute("VACUUM blobs")
             
 def main():
     global sem
     parser = argparse.ArgumentParser(description="Balance the storage by ensuring that large file thresholds are met.")
     parser.add_argument("-j", "--jobs", type=int, default=2, help="Number of concurrent jobs")
     parser.add_argument("-b", "--batch-size", type=int, default=10000, help="Batch size for processing files")
+    parser.add_argument("--vacuum", action="store_true", help="Run VACUUM only on index.db after balancing")
+    parser.add_argument("--vacuum-all", action="store_true", help="Run VACUUM on both index.db and blobs.db after balancing")
     args = parser.parse_args()
     sem = Semaphore(args.jobs)
     asyncio.run(_main(args.batch_size))
+    asyncio.run(vacuum(index=args.vacuum or args.vacuum_all, blobs=args.vacuum_all))
 
 if __name__ == '__main__':
     main()

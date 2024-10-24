@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from asyncio import Semaphore, Lock
 from functools import wraps
+from typing import Callable, Awaitable
 
 from .log import get_logger
 from .config import DATA_HOME
@@ -125,7 +126,7 @@ async def global_connection(n_read: int = 1):
         await global_connection_close()
 
 def global_entrance(n_read: int = 1):
-    def decorator(func):
+    def decorator(func: Callable[..., Awaitable]):
         @wraps(func)
         async def wrapper(*args, **kwargs):
             async with global_connection(n_read):

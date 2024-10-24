@@ -513,7 +513,7 @@ class Database:
     async def read_file(self, url: str) -> bytes:
         validate_url(url)
 
-        async with transaction() as cur:
+        async with unique_cursor() as cur:
             fconn = FileConn(cur)
             r = await fconn.get_file_record(url)
             if r is None:
@@ -525,7 +525,9 @@ class Database:
             blob = await fconn.get_file_blob(f_id)
             if blob is None:
                 raise FileNotFoundError(f"File {url} data not found")
-            await fconn.log_access(url)
+
+        async with transaction() as w_cur:
+            await FileConn(w_cur).log_access(url)
 
         return blob
 

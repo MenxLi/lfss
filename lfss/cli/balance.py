@@ -7,9 +7,17 @@ import argparse, time, itertools
 from functools import wraps
 from asyncio import Semaphore
 import aiofiles, asyncio
+import aiofiles.os
 from contextlib import contextmanager
 from lfss.src.database import transaction, unique_cursor
 from lfss.src.connection_pool import global_entrance
+
+@contextmanager
+def indicator(name: str):
+    print(f"\033[1;33mRunning {name}... \033[0m")
+    s = time.time()
+    yield
+    print(f"{name} took {time.time() - s:.2f} seconds.")
 
 sem = Semaphore(1)
 
@@ -54,9 +62,7 @@ async def move_to_internal(f_id: str, flag: str = ''):
 
 @global_entrance()
 async def _main(batch_size: int = 10000):
-
     tasks = []
-    start_time = time.time()
 
     e_cout = 0
     for batch_count in itertools.count(start=0):
@@ -90,20 +96,30 @@ async def _main(batch_size: int = 10000):
             tasks.append(move_to_internal(f_id, flag=f"[b{batch_count+1}-i{i+1}/{len(under_rows)}] "))
         await asyncio.gather(*tasks)
 
-    end_time = time.time()
-    print(f"Balancing complete, took {end_time - start_time:.2f} seconds. "
-          f"{e_cout} files moved to external storage, {i_count} files moved to internal storage.")
+    print(f"Finished. {e_cout} files moved to external storage, {i_count} files moved to internal storage.")
 
 @global_entrance()
 async def vacuum(index: bool = False, blobs: bool = False):
-    @contextmanager
-    def indicator(name: str):
-        print(f"\033[1;33mRunning {name}... \033[0m")
-        s = time.time()
-        yield
-        print(f"{name} took {time.time() - s:.2f} seconds")
+
+    # check if any file in the Large Blob directory is not in the database
+    # the reverse operation is not necessary, because by design, the database should be the source of truth...
+    # we allow un-referenced files in the Large Blob directory on failure, but not the other way around (unless manually deleted)
+    async def ensure_external_consistency(f_id: str):
+        @barriered
+        async def fn():
+            async with unique_cursor() as c:
+                cursor = await c.execute("SELECT file_id FROM fmeta WHERE file_id = ?", (f_id,))
+                if not await cursor.fetchone():
+                    print(f"File {f_id} not found in database, removing from external storage.")
+                    await aiofiles.os.remove(f)
+        await asyncio.create_task(fn())
 
     async with unique_cursor(is_write=True) as c:
+        with indicator("Ensuring external storage consistancy"):
+            for f in LARGE_BLOB_DIR.iterdir():
+                f_id = f.name
+                await ensure_external_consistency(f_id)
+
         if index:
             with indicator("VACUUM-index"):
                 await c.execute("VACUUM main")
@@ -120,8 +136,10 @@ def main():
     parser.add_argument("--vacuum-all", action="store_true", help="Run VACUUM on both index.db and blobs.db after balancing")
     args = parser.parse_args()
     sem = Semaphore(args.jobs)
-    asyncio.run(_main(args.batch_size))
-    asyncio.run(vacuum(index=args.vacuum or args.vacuum_all, blobs=args.vacuum_all))
+    with indicator("Balancing"):
+        asyncio.run(_main(args.batch_size))
+    if args.vacuum or args.vacuum_all:
+        asyncio.run(vacuum(index=args.vacuum or args.vacuum_all, blobs=args.vacuum_all))
 
 if __name__ == '__main__':
     main()

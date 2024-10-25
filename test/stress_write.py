@@ -1,12 +1,10 @@
-from concurrent.futures import ProcessPoolExecutor
-import time
-import multiprocessing
-from multiprocessing.managers import ValueProxy
-from threading import Lock
-import uuid
-import random
 import argparse
-import time
+import uuid, os, time
+import multiprocessing
+from threading import Lock
+from multiprocessing.managers import ValueProxy
+from concurrent.futures import ProcessPoolExecutor
+
 from lfss.client import Connector
 from lfss.src.utils import parse_storage_size
 
@@ -22,8 +20,7 @@ def put_single_file(
     assert size > 0
     assert path.endswith('/')
 
-    _blob = bytearray(random.getrandbits(8) for _ in range(size))
-    blob = bytes(_blob)
+    blob = os.urandom(size)
     fname = uuid.uuid4().hex
     try:
         c.put(path + fname, blob)
@@ -47,7 +44,6 @@ if __name__ == '__main__':
     parser.add_argument('--delete', action='store_true', help='Delete path after writing, be careful!!')
     args = parser.parse_args()
 
-    c = Connector()
     if args.delete and c.get_metadata(args.path):
         ans = input(f"Path: {args.path} already exists, are you sure you wan to delete it after testing? (y/n): ")
         if ans.lower() != 'y':

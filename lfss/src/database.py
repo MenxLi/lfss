@@ -333,7 +333,7 @@ class FileConn(DBObjectBase):
         await self.cur.execute("DELETE FROM usize WHERE user_id = ?", (owner_id, ))
         res = await self.cur.execute("DELETE FROM fmeta WHERE owner_id = ? RETURNING *", (owner_id, ))
         ret = [self.parse_record(r) for r in await res.fetchall()]
-        self.logger.info(f"Deleted {len(ret)} file(s) for user {owner_id}") # type: ignore
+        self.logger.info(f"Deleted {len(ret)} file records for user {owner_id}") # type: ignore
         return ret
     
     async def delete_path_records(self, path: str, under_user_id: Optional[int] = None) -> list[FileRecord]:
@@ -641,7 +641,9 @@ class Database:
 
             fconn = FileConn(cur)
             records = await fconn.delete_user_file_records(user.id)
+            self.logger.debug("Deleting files...")
             await self.__batch_delete_file_blobs(fconn, records)
+            self.logger.info(f"Deleted {len(records)} file(s) for user {user.username}")
 
             # make sure the user's directory is deleted, 
             # may contain admin's files, but delete them all

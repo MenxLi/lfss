@@ -8,16 +8,18 @@ c = Connector()
 
 def read_single_file(url):
     global counter, batch_size_sum, batch_start_time
-    with lock:
-        counter += 1
-        if counter % 100 == 0:
-            print(f"Read {counter} files, avg-size: {batch_size_sum / 1024 / 1024 / 100:.2f} MB, speed: {batch_size_sum / (time.time() - batch_start_time) / 1024 / 1024:.2f} MB/s")
-            batch_start_time = time.time()
-            batch_size_sum = 0
     try:
         b = c.get(url)
         assert b is not None
-        batch_size_sum += len(b)
+
+        with lock:
+            counter += 1
+            batch_size_sum += len(b)
+            if counter % 100 == 0:
+                print(f"Read {counter} files, avg-size: {batch_size_sum / 1024 / 1024 / 100:.2f} MB, speed: {batch_size_sum / (time.time() - batch_start_time) / 1024 / 1024:.2f} MB/s")
+                batch_start_time = time.time()
+                batch_size_sum = 0
+
     except Exception as e:
         print("[ERROR] Failed to read: ", url, e)
 

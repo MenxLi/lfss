@@ -24,6 +24,7 @@ lfss-serve = "lfss.cli.serve:main"
 lfss-user = "lfss.cli.user:main"
 lfss-panel = "lfss.cli.panel:main"
 lfss-cli = "lfss.cli.cli:main"
+lfss-vacuum = "lfss.cli.vacuum:main"
 lfss-balance = "lfss.cli.balance:main"
 
 [build-system]

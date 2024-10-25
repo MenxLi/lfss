@@ -10,6 +10,7 @@ import aiofiles, asyncio
 import aiofiles.os
 from contextlib import contextmanager
 from lfss.src.database import transaction, unique_cursor
+from lfss.src.stat import RequestDB
 from lfss.src.connection_pool import global_entrance
 
 sem: Semaphore
@@ -30,7 +31,7 @@ def barriered(func):
     return wrapper
 
 @global_entrance()
-async def vacuum(index: bool = False, blobs: bool = False):
+async def vacuum_main(index: bool = False, blobs: bool = False):
 
     # check if any file in the Large Blob directory is not in the database
     # the reverse operation is not necessary, because by design, the database should be the source of truth...
@@ -64,6 +65,15 @@ async def vacuum(index: bool = False, blobs: bool = False):
         if blobs:
             with indicator("VACUUM-blobs"):
                 await c.execute("VACUUM blobs")
+
+async def vacuum_requests():
+    with indicator("VACUUM-requests"):
+        req_db = await RequestDB().init()
+        try:
+            await req_db.shrink()
+            await req_db.conn.execute("VACUUM")
+        finally:
+            await req_db.close()
             
 def main():
     global sem
@@ -71,14 +81,13 @@ def main():
     parser.add_argument("-j", "--jobs", type=int, default=2, help="Number of concurrent jobs")
     parser.add_argument("-m", "--metadata", action="store_true", help="Vacuum metadata")
     parser.add_argument("-d", "--data", action="store_true", help="Vacuum blobs")
-    parser.add_argument("-r", "--requests", action="store_true", help="Delete request logs")
+    parser.add_argument("-r", "--requests", action="store_true", help="Vacuum request logs")
     args = parser.parse_args()
     sem = Semaphore(args.jobs)
-    asyncio.run(vacuum(index=args.metadata, blobs=args.data))
+    asyncio.run(vacuum_main(index=args.metadata, blobs=args.data))
 
     if args.requests:
-        with indicator("Deleting request logs"):
-            os.remove(DATA_HOME / 'requests.db')
+        asyncio.run(vacuum_requests())
 
 if __name__ == '__main__':
     main()

@@ -57,6 +57,7 @@ def format_last_modified(last_modified_gmt: str):
     return dt.strftime('%a, %d %b %Y %H:%M:%S GMT')
 
 def now_stamp() -> float:
+    """ Get the current timestamp, in seconds """
     return datetime.datetime.now().timestamp()
 
 def stamp_to_str(stamp: float) -> str:

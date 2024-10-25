@@ -94,11 +94,11 @@ def get_logger(
             file_handler = logging.FileHandler(log_file)
         elif file_handler_type == 'daily':
             file_handler = handlers.TimedRotatingFileHandler(
-                log_file, when='midnight', interval=1, backupCount=5
+                log_file, when='midnight', interval=1, backupCount=30
             )
         elif file_handler_type == 'rotate':
             file_handler = handlers.RotatingFileHandler(
-                log_file, maxBytes=1000000, backupCount=5
+                log_file, maxBytes=1024*1024, backupCount=5
             )
 
         file_handler.setFormatter(formatter_plain)

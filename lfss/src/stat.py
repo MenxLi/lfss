@@ -1,7 +1,7 @@
 from typing import Optional, Any
 import aiosqlite
 from .config import DATA_HOME
-from .utils import debounce_async
+from .utils import debounce_async, concurrent_wrap
 
 class RequestDB:
     conn: aiosqlite.Connection
@@ -25,6 +25,7 @@ class RequestDB:
                 status INTEGER
             )
         ''')
+        return self
 
     async def close(self):
         await self.conn.close()
@@ -63,4 +64,27 @@ class RequestDB:
         ''', (time, method, path, headers, query, client, duration, request_size, response_size, status)) as cursor:
             assert cursor.lastrowid is not None
             return cursor.lastrowid
+    
+    @concurrent_wrap()
+    async def shrink(self, max_rows: int = 1_000_000, time_before: float = 0):
+        async with aiosqlite.connect(self.db) as conn:
+
+            # remove all but the last max_rows
+            res = await (await conn.execute('SELECT COUNT(*) FROM requests')).fetchone()
+            assert res is not None
+            row_len = res[0]
+            if row_len > max_rows:
+                await conn.execute('''
+                    DELETE FROM requests WHERE id NOT IN (
+                        SELECT id FROM requests ORDER BY time DESC LIMIT ?
+                    )
+                ''', (max_rows,))
+
+            # remove old requests that is older than time_before
+            if time_before > 0:
+                await conn.execute('''
+                    DELETE FROM requests WHERE time < ?
+                ''', (time_before,))
+
+            await conn.commit()
         

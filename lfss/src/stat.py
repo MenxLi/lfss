@@ -1,7 +1,8 @@
 from typing import Optional, Any
 import aiosqlite
+from contextlib import asynccontextmanager
 from .config import DATA_HOME
-from .utils import debounce_async, concurrent_wrap
+from .utils import debounce_async
 
 class RequestDB:
     conn: aiosqlite.Connection
@@ -26,6 +27,14 @@ class RequestDB:
             )
         ''')
         return self
+    
+    def connect(self):
+        @asynccontextmanager
+        async def _mgr():
+            await self.init()
+            yield self
+            await self.close()
+        return _mgr()
 
     async def close(self):
         await self.conn.close()
@@ -65,7 +74,6 @@ class RequestDB:
             assert cursor.lastrowid is not None
             return cursor.lastrowid
     
-    @concurrent_wrap()
     async def shrink(self, max_rows: int = 1_000_000, time_before: float = 0):
         async with aiosqlite.connect(self.db) as conn:
 

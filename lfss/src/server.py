@@ -31,8 +31,6 @@ async def lifespan(app: FastAPI):
     try:
         await global_connection_init(n_read = 2)
         await asyncio.gather(db.init(), req_conn.init())
-        await req_conn.shrink()
-        logger.info("Server started.")
         yield
         await req_conn.commit()
     finally:

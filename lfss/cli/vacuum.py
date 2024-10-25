@@ -2,8 +2,8 @@
 Vacuum the database and external storage to ensure that the storage is consistent and minimal.
 """
 
-from lfss.src.config import LARGE_BLOB_DIR, DATA_HOME
-import argparse, time, os
+from lfss.src.config import LARGE_BLOB_DIR
+import argparse, time
 from functools import wraps
 from asyncio import Semaphore
 import aiofiles, asyncio
@@ -11,6 +11,7 @@ import aiofiles.os
 from contextlib import contextmanager
 from lfss.src.database import transaction, unique_cursor
 from lfss.src.stat import RequestDB
+from lfss.src.utils import now_stamp
 from lfss.src.connection_pool import global_entrance
 
 sem: Semaphore
@@ -68,12 +69,9 @@ async def vacuum_main(index: bool = False, blobs: bool = False):
 
 async def vacuum_requests():
     with indicator("VACUUM-requests"):
-        req_db = await RequestDB().init()
-        try:
-            await req_db.shrink()
+        async with RequestDB().connect() as req_db:
+            await req_db.shrink(max_rows=1_000_000, time_before=now_stamp() - 7*24*60*60)
             await req_db.conn.execute("VACUUM")
-        finally:
-            await req_db.close()
             
 def main():
     global sem
@@ -81,7 +79,7 @@ def main():
     parser.add_argument("-j", "--jobs", type=int, default=2, help="Number of concurrent jobs")
     parser.add_argument("-m", "--metadata", action="store_true", help="Vacuum metadata")
     parser.add_argument("-d", "--data", action="store_true", help="Vacuum blobs")
-    parser.add_argument("-r", "--requests", action="store_true", help="Vacuum request logs")
+    parser.add_argument("-r", "--requests", action="store_true", help="Vacuum request logs to only keep at most recent 1M rows in 7 days")
     args = parser.parse_args()
     sem = Semaphore(args.jobs)
     asyncio.run(vacuum_main(index=args.metadata, blobs=args.data))

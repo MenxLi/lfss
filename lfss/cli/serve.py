@@ -24,7 +24,7 @@ def main():
         log_config=default_logging_config
     )
     server = Server(config=config)
-    logger.info(f"Starting server at {args.host}:{args.port}, with {args.workers} workers...")
+    logger.info(f"Starting server at http://{args.host}:{args.port}, with {args.workers} workers.")
     server.run()
 
 if __name__ == "__main__":

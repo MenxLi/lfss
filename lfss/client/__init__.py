@@ -1,7 +1,7 @@
 import os, time, pathlib
 from threading import Lock
-from concurrent.futures import ThreadPoolExecutor
 from .api import Connector
+from ..src.bounded_pool import BoundedThreadPoolExecutor
 
 def upload_file(
     connector: Connector, 
@@ -68,7 +68,7 @@ def upload_directory(
             ):
             faild_files.append(file_path)
 
-    with ThreadPoolExecutor(n_concurrent) as executor:
+    with BoundedThreadPoolExecutor(n_concurrent) as executor:
         for root, dirs, files in os.walk(directory):
             for file in files:
                 executor.submit(put_file, os.path.join(root, file))
@@ -149,7 +149,7 @@ def download_directory(
             ):
             failed_files.append(src_url)
         
-    with ThreadPoolExecutor(n_concurrent) as executor:
+    with BoundedThreadPoolExecutor(n_concurrent) as executor:
         for file in connector.list_path(src_path, flat=True).files:
             executor.submit(get_file, file.url)
     return failed_files

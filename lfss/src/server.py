@@ -101,9 +101,11 @@ async def log_requests(request: Request, call_next):
     response_time = end_time - start_time
     response.headers["X-Response-Time"] = str(response_time)
 
+    if response.headers.get("X-Skip-Log", None) is not None:
+        return response
+
     if response.status_code >= 400:
         logger_failed_request.error(f"{request.method} {request.url.path} {response.status_code}")
-        
     await req_conn.log_request(
         request_time_stamp, 
         request.method, request.url.path, response.status_code, response_time,
@@ -114,11 +116,20 @@ async def log_requests(request: Request, call_next):
         response_size = int(response.headers.get("Content-Length", 0))
     )
     await req_conn.ensure_commit_once()
-
     return response
+
+def skip_request_log(fn):
+    @wraps(fn)
+    async def wrapper(*args, **kwargs):
+        response = await fn(*args, **kwargs)
+        assert isinstance(response, Response), "Response expected"
+        response.headers["X-Skip-Log"] = "1"
+        return response
+    return wrapper
 
 router_fs = APIRouter(prefix="")
 
+@skip_request_log
 async def emit_thumbnail(
     path: str, download: bool,
     create_time: Optional[str] = None
@@ -128,7 +139,7 @@ async def emit_thumbnail(
     else:
         fname = path.split("/")[-1]
     if (thumb_res := await get_thumb(path)) is None:
-        raise HTTPException(status_code=415, detail="Thumbnail not supported")
+        return Response(status_code=415, content="Thumbnail not supported")
     thumb_blob, mime_type = thumb_res
     disp = "inline" if not download else "attachment"
     headers = {

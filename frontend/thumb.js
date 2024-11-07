@@ -35,10 +35,10 @@ function getIconSVGFromMimeType(mimeType){
             'application/zip' || 'application/x-zip-compressed' || 'application/x-7z-compressed' || 'application/x-rar-compressed' || 'application/x-tar' || 'application/x-gzip':
             return ICON_ZIP;
         case 
-            'text/x-python' || 'text/x-c' || 'text/x-c++' || 'text/x-java' || 'text/x-javascript' || 'text/x-php' || 'text/x-rust' || 'text/x-go' || 'text/x-csharp' || 'text/x-typescript' || 
-            'text/x-html' || 'text/x-css' || 'text/x-sql' || 'text/x-xml' || 'text/x-yaml' || 'text/x-json' || 'text/x-markdown' || 'text/x-shellscript' ||
-            'text/x-bat' || 'text/x-powershell' || 'text/x-bash' || 'text/x-perl' || 'text/x-ruby' || 'text/x-lua' || 'text/x-tcl' || 'text/x-lisp' || 
-            'text/x-haskell' || 'text/x-elm' || 'text/x-crystal' || 'text/x-nim' || 'text/x-zig':
+            "text/html" || "application/xhtml+xml" || "application/xml" || "text/css" || "application/javascript" || "text/javascript" || "application/json" || "text/x-python" || "text/x-java-source" || 
+            "application/x-httpd-php" || "text/x-ruby" || "text/x-perl" || "application/x-sh" || "application/sql" || "text/x-csrc" || "text/x-c++src" || "text/x-csharp" || "text/x-go" || "text/x-haskell" || 
+            "text/x-lua" || "text/x-markdown" || "application/wasm" || "application/x-tcl" || "text/x-yaml" || "application/x-latex" || "application/x-tex" || "text/x-scss" || "application/x-lisp" || 
+            "application/x-rustsrc" || "application/x-ruby" || "text/x-asm":
             return ICON_CODE;
         default: 
             return ICON_FILE;

@@ -127,7 +127,9 @@ async def emit_thumbnail(
         fname = path.split("/")[-2]
     else:
         fname = path.split("/")[-1]
-    thumb_blob, mime_type = await get_thumb(path)
+    if (thumb_res := await get_thumb(path)) is None:
+        raise HTTPException(status_code=415, detail="Thumbnail not supported")
+    thumb_blob, mime_type = thumb_res
     disp = "inline" if not download else "attachment"
     headers = {
         "Content-Disposition": f"{disp}; filename={fname}.thumb.jpg",

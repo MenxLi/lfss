@@ -21,3 +21,6 @@ else:
 MAX_FILE_BYTES = 512 * 1024 * 1024   # 512MB
 MAX_BUNDLE_BYTES = 512 * 1024 * 1024   # 512MB
 CHUNK_SIZE = 1024 * 1024   # 1MB chunks for streaming (on large files)
+
+THUMB_DB = DATA_HOME / 'thumbs.db'
+THUMB_SIZE = (48, 48)

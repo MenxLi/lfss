@@ -3,6 +3,7 @@ import { permMap } from './api.js';
 import { showFloatingWindowLineInput, showPopup } from './popup.js';
 import { formatSize, decodePathURI, ensurePathURI, getRandomString, cvtGMT2Local, debounce, encodePathURI, asHtmlText } from './utils.js';
 import { showInfoPanel, showDirInfoPanel } from './info.js';
+import { makeThumbHtml } from './thumb.js';
 
 const conn = new Connector();
 let userRecord = null;
@@ -253,10 +254,7 @@ function refreshFileList(){
                     dirLink.href = '#';
                     const nameDiv = document.createElement('div');
                     nameDiv.classList.add('filename-container');
-                    const thumbImg = document.createElement('img');
-                    thumbImg.classList.add('thumb');
-                    thumbImg.src = conn.config.endpoint + '/' + ensureSlashEnd(dir.url) + '?token=' + conn.config.token + '&thumb=true';
-                    nameDiv.appendChild(thumbImg);
+                    nameDiv.innerHTML = makeThumbHtml(conn, dir);
                     nameDiv.appendChild(dirLink);
                     nameTd.appendChild(nameDiv);
 
@@ -353,7 +351,7 @@ function refreshFileList(){
 
                     nameTd.innerHTML = `
                     <div class="filename-container">
-                        <img class="thumb" src="${conn.config.endpoint}/${file.url}?token=${conn.config.token}&thumb=true" />
+                        ${makeThumbHtml(conn, file)}
                         <span>${asHtmlText(fileName)}</span>
                     </div>
                     `

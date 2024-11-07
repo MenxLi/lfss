@@ -1,0 +1,22 @@
+
+div.thumb{
+    height: 32px;
+    width: 32px;
+    border-radius: 0.25rem;
+    display:contents;
+}
+img.thumb{
+    max-height: 32px;   /* smaller than backend */
+    max-width: 32px;
+    border-radius: 0.25rem;
+    transition: all 0.2s;
+}
+img.thumb:hover{
+    max-height: 48px;   /* same as backend */
+    max-width: 48px;
+    border-radius: 0.25rem;
+}
+img.thumb-svg{
+    /* gray color */
+    filter: invert(30%);
+}

@@ -1,5 +1,6 @@
 @import "./popup.css";
 @import "./info.css";
+@import "./thumb.css";
 
 body{
     font-family: Arial, sans-serif;
@@ -186,14 +187,8 @@ div.filename-container{
     flex-direction: row;
     align-items: center;
     gap: 0.5rem;
-    height: 32px; /* same as thumbnail */
+    height: 32px;
 }
-img.thumb{
-    max-height: 32px;   /* smaller than backend */
-    max-width: 32px;
-    border-radius: 0.25rem;
-}
-
 label#upload-file-prefix{
     width: 800px;
     text-align: right;

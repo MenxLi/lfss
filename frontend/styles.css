@@ -181,6 +181,19 @@ table#files tr td:nth-child(3), table#files tr td:nth-child(5){
     width: 12%;
 }
 
+div.filename-container{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    height: 32px; /* same as thumbnail */
+}
+img.thumb{
+    max-height: 32px;   /* smaller than backend */
+    max-width: 32px;
+    border-radius: 0.25rem;
+}
+
 label#upload-file-prefix{
     width: 800px;
     text-align: right;

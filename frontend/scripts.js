@@ -1,7 +1,7 @@
 import Connector from './api.js';
 import { permMap } from './api.js';
 import { showFloatingWindowLineInput, showPopup } from './popup.js';
-import { formatSize, decodePathURI, ensurePathURI, getRandomString, cvtGMT2Local, debounce, encodePathURI } from './utils.js';
+import { formatSize, decodePathURI, ensurePathURI, getRandomString, cvtGMT2Local, debounce, encodePathURI, asHtmlText } from './utils.js';
 import { showInfoPanel, showDirInfoPanel } from './info.js';
 
 const conn = new Connector();
@@ -251,7 +251,14 @@ function refreshFileList(){
                         onPathChange();
                     });
                     dirLink.href = '#';
-                    nameTd.appendChild(dirLink);
+                    const nameDiv = document.createElement('div');
+                    nameDiv.classList.add('filename-container');
+                    const thumbImg = document.createElement('img');
+                    thumbImg.classList.add('thumb');
+                    thumbImg.src = conn.config.endpoint + '/' + ensureSlashEnd(dir.url) + '?token=' + conn.config.token + '&thumb=true';
+                    nameDiv.appendChild(thumbImg);
+                    nameDiv.appendChild(dirLink);
+                    nameTd.appendChild(nameDiv);
 
                     tr.appendChild(nameTd);
                     tbody.appendChild(tr);
@@ -343,7 +350,13 @@ function refreshFileList(){
                     const nameTd = document.createElement('td');
                     const plainUrl = decodePathURI(file.url);
                     const fileName = plainUrl.split('/').pop();
-                    nameTd.textContent = fileName;
+
+                    nameTd.innerHTML = `
+                    <div class="filename-container">
+                        <img class="thumb" src="${conn.config.endpoint}/${file.url}?token=${conn.config.token}&thumb=true" />
+                        <span>${asHtmlText(fileName)}</span>
+                    </div>
+                    `
                     tr.appendChild(nameTd);
                     tbody.appendChild(tr);
                 }

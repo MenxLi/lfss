@@ -87,3 +87,10 @@ export function debounce(fn,wait){
         timeout = setTimeout(() => fn.apply(context, args), wait);
     }
 }
+
+export function asHtmlText(text){
+    const anonElem = document.createElement('div');
+    anonElem.textContent = text;
+    const htmlText = anonElem.innerHTML;
+    return htmlText;
+}

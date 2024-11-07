@@ -19,6 +19,7 @@ from .config import MAX_BUNDLE_BYTES, MAX_FILE_BYTES, LARGE_FILE_BYTES, CHUNK_SI
 from .utils import ensure_uri_compnents, format_last_modified, now_stamp
 from .connection_pool import global_connection_init, global_connection_close, unique_cursor
 from .database import Database, UserRecord, DECOY_USER, FileRecord, check_user_permission, FileReadPermission, UserConn, FileConn, PathContents
+from .thumb import get_thumb
 
 logger = get_logger("server", term_level="DEBUG")
 logger_failed_request = get_logger("failed_requests", term_level="INFO")
@@ -49,7 +50,7 @@ def handle_exception(fn):
             if isinstance(e, FileNotFoundError): raise HTTPException(status_code=404, detail=str(e))
             if isinstance(e, FileExistsError): raise HTTPException(status_code=409, detail=str(e))
             logger.error(f"Uncaptured error in {fn.__name__}: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise 
     return wrapper
 
 async def get_credential_from_params(request: Request):
@@ -118,9 +119,59 @@ async def log_requests(request: Request, call_next):
 
 router_fs = APIRouter(prefix="")
 
+async def emit_thumbnail(
+    path: str, download: bool,
+    create_time: Optional[str] = None
+    ):
+    if path.endswith("/"):
+        fname = path.split("/")[-2]
+    else:
+        fname = path.split("/")[-1]
+    thumb_blob, mime_type = await get_thumb(path)
+    disp = "inline" if not download else "attachment"
+    headers = {
+        "Content-Disposition": f"{disp}; filename={fname}.thumb.jpg",
+        "Content-Length": str(len(thumb_blob)),
+    }
+    if create_time is not None:
+        headers["Last-Modified"] = format_last_modified(create_time)
+    return Response(
+        content=thumb_blob, media_type=mime_type, headers=headers
+    )
+async def emit_file(
+    file_record: FileRecord, 
+    media_type: Optional[str] = None, 
+    disposition = "attachment"
+    ):
+    if media_type is None:
+        media_type = file_record.mime_type
+    path = file_record.url
+    fname = path.split("/")[-1]
+    if not file_record.external:
+        fblob = await db.read_file(path)
+        return Response(
+            content=fblob, media_type=media_type, headers={
+                "Content-Disposition": f"{disposition}; filename={fname}", 
+                "Content-Length": str(len(fblob)), 
+                "Last-Modified": format_last_modified(file_record.create_time)
+            }
+        )
+    else:
+        return StreamingResponse(
+            await db.read_file_stream(path), media_type=media_type, headers={
+                "Content-Disposition": f"{disposition}; filename={fname}", 
+                "Content-Length": str(file_record.file_size),
+                "Last-Modified": format_last_modified(file_record.create_time)
+            }
+        )
+
 @router_fs.get("/{path:path}")
 @handle_exception
-async def get_file(path: str, download: bool = False, flat: bool = False, user: UserRecord = Depends(get_current_user)):
+async def get_file(
+    path: str, 
+    download: bool = False, flat: bool = False, thumb: bool = False,
+    user: UserRecord = Depends(get_current_user)
+    ):
     path = ensure_uri_compnents(path)
 
     # handle directory query
@@ -131,6 +182,9 @@ async def get_file(path: str, download: bool = False, flat: bool = False, user: 
             fconn = FileConn(conn)
             if user.id == 0:
                 raise HTTPException(status_code=401, detail="Permission denied, credential required")
+            if thumb:
+                return await emit_thumbnail(path, download, create_time=None)
+            
             if path == "/":
                 if flat:
                     raise HTTPException(status_code=400, detail="Flat query not supported for root path")
@@ -145,6 +199,7 @@ async def get_file(path: str, download: bool = False, flat: bool = False, user: 
 
             return await fconn.list_path(path, flat = flat)
     
+    # handle file query
     async with unique_cursor() as conn:
         fconn = FileConn(conn)
         file_record = await fconn.get_file_record(path)
@@ -159,32 +214,13 @@ async def get_file(path: str, download: bool = False, flat: bool = False, user: 
     if not allow_access:
         raise HTTPException(status_code=403, detail=reason)
     
-    fname = path.split("/")[-1]
-    async def send(media_type: Optional[str] = None, disposition = "attachment"):
-        if media_type is None:
-            media_type = file_record.mime_type
-        if not file_record.external:
-            fblob = await db.read_file(path)
-            return Response(
-                content=fblob, media_type=media_type, headers={
-                    "Content-Disposition": f"{disposition}; filename={fname}", 
-                    "Content-Length": str(len(fblob)), 
-                    "Last-Modified": format_last_modified(file_record.create_time)
-                }
-            )
-        else:
-            return StreamingResponse(
-                await db.read_file_stream(path), media_type=media_type, headers={
-                    "Content-Disposition": f"{disposition}; filename={fname}", 
-                    "Content-Length": str(file_record.file_size),
-                    "Last-Modified": format_last_modified(file_record.create_time)
-                }
-            )
-    
-    if download:
-        return await send('application/octet-stream', "attachment")
+    if thumb:
+        return await emit_thumbnail(path, download, create_time=file_record.create_time)
     else:
-        return await send(None, "inline")
+        if download:
+            return await emit_file(file_record, 'application/octet-stream', "attachment")
+        else:
+            return await emit_file(file_record, None, "inline")
 
 @router_fs.put("/{path:path}")
 @handle_exception

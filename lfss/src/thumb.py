@@ -14,6 +14,7 @@ async def _maybe_init_thumb(c: aiosqlite.Cursor):
             thumb BLOB
         )
     ''')
+    await c.execute('CREATE INDEX IF NOT EXISTS thumbs_path_idx ON thumbs (path)')
 
 async def _get_cache_thumb(c: aiosqlite.Cursor, path: str, ctime: str) -> Optional[bytes]:
     res = await c.execute('''

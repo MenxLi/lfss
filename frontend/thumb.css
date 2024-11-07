@@ -10,6 +10,14 @@ img.thumb{
     max-width: 32px;
     border-radius: 0.25rem;
 }
+img.thumb{
+    min-height: 32px;
+    min-width: 32px;
+}
+img.thumb-loaded{
+    min-width: none;
+    min-height: none;
+}
 img.thumb-svg{
     /* dark blue */
     filter: invert(30%) sepia(100%) saturate(80%) hue-rotate(180deg);

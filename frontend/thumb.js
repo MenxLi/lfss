@@ -56,13 +56,16 @@ let thumb_counter = 0;
  * @returns {string}
  */
 export function makeThumbHtml(c, r){
+    function ensureSlashEnd(url){ return url.endsWith('/')? url : url + '/'; }
     const token = c.config.token;
     const mtype = r.mime_type? r.mime_type : 'directory';
     const thumb_id = `thumb-${thumb_counter++}`;
+    const url = mtype == 'directory'? ensureSlashEnd(r.url) : r.url;
     return `
 <div class="thumb" id="${thumb_id}"> \
-    <img src="${c.config.endpoint}/${r.url}?token=${token}&thumb=true" alt="${r.url}" class="thumb" \
-    onerror="this.src='${getSafeIconUrl(getIconSVGFromMimeType(mtype))}';this.classList.add('thumb-svg');" \
+    <img src="${c.config.endpoint}/${url}?token=${token}&thumb=true" alt="${r.url}" class="thumb" \
+    onload="this.classList.add('thumb-loaded');"
+    onerror="this.src='${getSafeIconUrl(getIconSVGFromMimeType(mtype))}';this.classList.add('thumb-svg');this.classList.add('thumb-loaded');" \
 </div>
 `;
 }

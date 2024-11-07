@@ -194,7 +194,6 @@ div.filename-container{
     flex-direction: row;
     align-items: center;
     gap: 0.5rem;
-    height: 32px;
 }
 label#upload-file-prefix{
     width: 800px;

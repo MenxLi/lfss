@@ -121,6 +121,13 @@ input#path{
     cursor: pointer;
 }
 
+div#top-bar{
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+}
 div#position-hint{
     color: rgb(138, 138, 138);
     border-radius: 0.5rem;

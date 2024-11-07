@@ -23,6 +23,8 @@ const uploadFileSelector = document.querySelector('#file-selector');
 const uploadFileNameInput = document.querySelector('#file-name');
 const uploadButton = document.querySelector('#upload-btn');
 const randomizeFnameButton = document.querySelector('#randomize-fname-btn');
+const sortBySelect = document.querySelector('#sort-by-sel');
+const sortOrderSelect = document.querySelector('#sort-order-sel');
 
 conn.config.endpoint = endpointInput.value;
 conn.config.token = tokenInput.value;
@@ -220,6 +222,40 @@ function maybeRefreshFileList(){
     }
 }
 
+let sortBy = sortBySelect.value;
+let sortOrder = sortOrderSelect.value;
+/** @param {import('./api.js').DirectoryRecord} dirs */
+function sortDirList(dirs){
+    if (sortBy === 'name'){
+        dirs.sort((a, b) => { return a.url.localeCompare(b.url); });
+    }
+    if (sortOrder === 'desc'){ dirs.reverse(); }
+}
+/** @param {import('./api.js').FileRecord} files */
+function sortFileList(files){
+    function timestr2num(timestr){
+        return new Date(timestr).getTime();
+    }
+    if (sortBy === 'name'){
+        files.sort((a, b) => { return a.url.localeCompare(b.url); });
+    }
+    if (sortBy === 'size'){
+        files.sort((a, b) => { return a.file_size - b.file_size; });
+    }
+    if (sortBy === 'access'){
+        files.sort((a, b) => { return timestr2num(a.access_time) - timestr2num(b.access_time); });
+    }
+    if (sortBy === 'create'){
+        files.sort((a, b) => { return timestr2num(a.create_time) - timestr2num(b.create_time); });
+    }
+    if (sortBy === 'mime'){
+        files.sort((a, b) => { return a.mime_type.localeCompare(b.mime_type); });
+    }
+    if (sortOrder === 'desc'){ files.reverse(); }
+}
+sortBySelect.addEventListener('change', (elem) => {sortBy = elem.target.value; refreshFileList();});
+sortOrderSelect.addEventListener('change', (elem) => {sortOrder = elem.target.value; refreshFileList();});
+
 function refreshFileList(){
     conn.listPath(pathInput.value)
         .then(data => {
@@ -232,6 +268,9 @@ function refreshFileList(){
 
             if (!data.dirs){ data.dirs = []; }
             if (!data.files){ data.files = []; }
+
+            sortDirList(data.dirs);
+            sortFileList(data.files);
 
             data.dirs.forEach(dir => {
                 const tr = document.createElement('tr');

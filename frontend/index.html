@@ -24,9 +24,27 @@
     </div>
 
     <div class="container content" id="view">
-        <div id="position-hint" class='disconnected'>
-            <span></span>
-            <label></label>
+        <div id="top-bar">
+            <div id="position-hint" class='disconnected'>
+                <span></span>
+                <label></label>
+            </div>
+            <div>
+                <span style="margin-right: 0.25rem; color: #999;">
+                Sort by</span>
+                <select id="sort-by-sel">
+                    <option value="none">None</option>
+                    <option value="name">Name</option>
+                    <option value="size">Size</option>
+                    <option value="access">Accessed</option>
+                    <option value="create">Created</option>
+                    <option value="mime">Type</option>
+                </select>
+                <select id="sort-order-sel">
+                    <option value="asc">Ascending</option>
+                    <option value="desc">Descending</option>
+                </select>
+            </div>
         </div>
         <table id="files">
             <thead>

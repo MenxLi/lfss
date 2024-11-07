@@ -1,8 +1,5 @@
 
 div.thumb{
-    height: 32px;
-    width: 32px;
-    border-radius: 0.25rem;
     display: contents;
 }
 img.thumb{
@@ -10,8 +7,4 @@ img.thumb{
     width: 32px;
     object-fit: contain;
     border-radius: 0.1rem;
-}
-img.thumb-svg{
-    /* dark blue */
-    filter: invert(30%) sepia(100%) saturate(80%) hue-rotate(180deg);
 }

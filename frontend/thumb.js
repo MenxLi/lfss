@@ -46,6 +46,11 @@ function getIconSVGFromMimeType(mimeType){
 }
 
 function getSafeIconUrl(icon_str){
+    // change icon color
+    const color = '#345';
+    icon_str = icon_str
+        .replace(/<svg/, `<svg fill="${color}"`)
+        .replace(/<path/, `<path fill="${color}"`);
     return 'data:image/svg+xml,' + encodeURIComponent(icon_str);
 }
 

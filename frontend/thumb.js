@@ -64,8 +64,7 @@ export function makeThumbHtml(c, r){
     return `
 <div class="thumb" id="${thumb_id}"> \
     <img src="${c.config.endpoint}/${url}?token=${token}&thumb=true" alt="${r.url}" class="thumb" \
-    onload="this.classList.add('thumb-loaded');"
-    onerror="this.src='${getSafeIconUrl(getIconSVGFromMimeType(mtype))}';this.classList.add('thumb-svg');this.classList.add('thumb-loaded');" \
+    onerror="this.src='${getSafeIconUrl(getIconSVGFromMimeType(mtype))}';this.classList.add('thumb-svg');" \
 </div>
 `;
 }

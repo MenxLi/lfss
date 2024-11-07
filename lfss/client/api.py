@@ -31,8 +31,9 @@ class Connector:
             headers.update({
                 'Authorization': f"Bearer {self.config['token']}",
             })
-            response = requests.request(method, url, headers=headers, **kwargs)
-            response.raise_for_status()
+            with requests.Session() as s:
+                response = s.request(method, url, headers=headers, **kwargs)
+                response.raise_for_status()
             return response
         return f
 

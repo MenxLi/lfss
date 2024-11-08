@@ -1,12 +1,13 @@
-import Connector from './api.js';
 import { permMap } from './api.js';
 import { showFloatingWindowLineInput, showPopup } from './popup.js';
 import { formatSize, decodePathURI, ensurePathURI, getRandomString, cvtGMT2Local, debounce, encodePathURI, asHtmlText } from './utils.js';
 import { showInfoPanel, showDirInfoPanel } from './info.js';
 import { makeThumbHtml } from './thumb.js';
+import { store } from './state.js';
 
-const conn = new Connector();
+/** @type {import('./api.js').UserRecord}*/
 let userRecord = null;
+
 const ensureSlashEnd = (path) => {
     return path.endsWith('/') ? path : path + '/';
 }
@@ -26,24 +27,13 @@ const randomizeFnameButton = document.querySelector('#randomize-fname-btn');
 const sortBySelect = document.querySelector('#sort-by-sel');
 const sortOrderSelect = document.querySelector('#sort-order-sel');
 
-conn.config.endpoint = endpointInput.value;
-conn.config.token = tokenInput.value;
+const conn = store.conn;
+store.init();
 
 {
-    const endpoint = window.localStorage.getItem('endpoint');
-    if (endpoint){
-        endpointInput.value = endpoint;
-        conn.config.endpoint = endpoint;
-    }
-    const token = window.localStorage.getItem('token');
-    if (token){
-        tokenInput.value = token;
-        conn.config.token = token;
-    }
-    const path = window.localStorage.getItem('path');
-    if (path){
-        pathInput.value = path;
-    }
+    tokenInput.value = store.token;
+    endpointInput.value = store.endpoint;
+    pathInput.value = store.dirpath;
     uploadFilePrefixLabel.textContent = pathInput.value;
     maybeRefreshUserRecord().then(
         () => maybeRefreshFileList()
@@ -52,20 +42,18 @@ conn.config.token = tokenInput.value;
 
 function onPathChange(){
     uploadFilePrefixLabel.textContent = pathInput.value;
-    window.localStorage.setItem('path', pathInput.value);
+    store.dirpath = pathInput.value;
     maybeRefreshFileList();
 }
 
 endpointInput.addEventListener('blur', () => {
-    conn.config.endpoint = endpointInput.value;
-    window.localStorage.setItem('endpoint', endpointInput.value);
+    store.endpoint = endpointInput.value;
     maybeRefreshUserRecord().then(
         () => maybeRefreshFileList()
     );
 });
 tokenInput.addEventListener('blur', () => {
-    conn.config.token = tokenInput.value;
-    window.localStorage.setItem('token', tokenInput.value);
+    store.token = tokenInput.value;
     maybeRefreshUserRecord().then(
         () => maybeRefreshFileList()
     );
@@ -94,7 +82,7 @@ function onFileNameInpuChange(){
         uploadFileNameInput.classList.remove('duplicate');
     }
     else {
-        const p = ensurePathURI(pathInput.value + fileName);
+        const p = ensurePathURI(store.dirpath + fileName);
         conn.getMetadata(p).then(
             (data) => {
                 console.log("Got file meta", data);
@@ -126,7 +114,7 @@ uploadFileSelector.addEventListener('change', () => {
 });
 uploadButton.addEventListener('click', () => {
     const file = uploadFileSelector.files[0];
-    let path = pathInput.value;
+    let path = store.dirpath;
     let fileName = uploadFileNameInput.value;
     if (fileName.length === 0){
         throw new Error('File name cannot be empty');
@@ -172,7 +160,7 @@ uploadFileNameInput.addEventListener('input', debounce(onFileNameInpuChange, 500
             uploadFileNameInput.focus();
         }
         else if (files.length > 1){
-            let dstPath = pathInput.value + uploadFileNameInput.value;
+            let dstPath = store.dirpath + uploadFileNameInput.value;
             if (!dstPath.endsWith('/')){ dstPath += '/'; }
             if (!confirm(`
 You are trying to upload multiple files at once. 
@@ -216,7 +204,7 @@ Are you sure you want to proceed?
 
 function maybeRefreshFileList(){
     if (
-        pathInput.value && pathInput.value.length > 0 && pathInput.value.endsWith('/')
+        store.dirpath && store.dirpath.length > 0 && store.dirpath.endsWith('/')
     ){
         refreshFileList();
     }
@@ -257,11 +245,11 @@ sortBySelect.addEventListener('change', (elem) => {sortBy = elem.target.value; r
 sortOrderSelect.addEventListener('change', (elem) => {sortOrder = elem.target.value; refreshFileList();});
 
 function refreshFileList(){
-    conn.listPath(pathInput.value)
+    conn.listPath(store.dirpath)
         .then(data => {
             pathHintDiv.classList.remove('disconnected');
             pathHintDiv.classList.add('connected');
-            pathHintLabel.textContent = pathInput.value;
+            pathHintLabel.textContent = store.dirpath;
             tbody.innerHTML = '';
 
             console.log("Got data", data);
@@ -520,7 +508,7 @@ function refreshFileList(){
         (err) => {
             pathHintDiv.classList.remove('connected');
             pathHintDiv.classList.add('disconnected');
-            pathHintLabel.textContent = pathInput.value;
+            pathHintLabel.textContent = store.dirpath;
             tbody.innerHTML = '';
             console.log("Error");
             console.error(err);
@@ -530,7 +518,7 @@ function refreshFileList(){
 
 
 async function maybeRefreshUserRecord(){
-    if (endpointInput.value && tokenInput.value){
+    if (store.endpoint && store.token){
         await refreshUserRecord();
     }
 }
@@ -545,9 +533,6 @@ async function refreshUserRecord(){
         console.error("Failed to get user record");
         return false;
     }
-
-    // UI updates.
-
     return true;
 }
 

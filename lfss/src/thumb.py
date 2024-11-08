@@ -5,6 +5,7 @@ from typing import Optional
 from PIL import Image
 from io import BytesIO
 import aiosqlite
+from contextlib import asynccontextmanager
 
 async def _maybe_init_thumb(c: aiosqlite.Cursor):
     await c.execute('''
@@ -49,6 +50,13 @@ async def _delete_cache_thumb(c: aiosqlite.Cursor, path: str):
     ''', (path, ))
     await c.execute('COMMIT')
 
+@asynccontextmanager
+async def cache_cursor():
+    async with aiosqlite.connect(THUMB_DB) as conn:
+        cur = await conn.cursor()
+        await _maybe_init_thumb(cur)
+        yield cur
+
 async def get_thumb(path: str) -> Optional[tuple[bytes, str]]:
     """
     returns [image bytes of thumbnail, mime type] if supported, 
@@ -58,20 +66,17 @@ async def get_thumb(path: str) -> Optional[tuple[bytes, str]]:
     if path.endswith('/'):
         return None
 
-    async with aiosqlite.connect(THUMB_DB) as conn:
-        cur = await conn.cursor()
-        await _maybe_init_thumb(cur)
-
-        async with unique_cursor() as main_c:
-            fconn = FileConn(main_c)
-            r = await fconn.get_file_record(path)
-            if r is None:
+    async with unique_cursor() as main_c:
+        fconn = FileConn(main_c)
+        r = await fconn.get_file_record(path)
+        if r is None:
+            async with cache_cursor() as cur:
                 await _delete_cache_thumb(cur, path)
-                raise FileNotFoundError(f'File not found: {path}')
-        
-            if not r.mime_type.startswith('image/'):
-                return None
+            raise FileNotFoundError(f'File not found: {path}')
+        if not r.mime_type.startswith('image/'):
+            return None
 
+    async with cache_cursor() as cur:
         c_time = r.create_time
         thumb_blob = await _get_cache_thumb(cur, path, c_time)
         if thumb_blob is not None:

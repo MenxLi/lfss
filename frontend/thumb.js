@@ -36,9 +36,9 @@ function getIconSVGFromMimeType(mimeType){
     }
     if ([
         "text/html", "application/xhtml+xml", "application/xml", "text/css", "application/javascript", "text/javascript", "application/json", "text/x-python", "text/x-java-source",
-        "application/x-httpd-php", "text/x-ruby", "text/x-perl", "application/x-sh", "application/sql", "text/x-csrc", "text/x-c++src", "text/x-csharp", "text/x-go", "text/x-haskell",
+        "application/x-httpd-php", "text/x-ruby", "text/x-perl", "application/x-sh", "application/sql", "text/x-c", "text/x-c++", "text/x-csharp", "text/x-go", "text/x-haskell",
         "text/x-lua", "text/x-markdown", "application/wasm", "application/x-tcl", "text/x-yaml", "application/x-latex", "application/x-tex", "text/x-scss", "application/x-lisp",
-        "application/x-rustsrc", "application/x-ruby", "text/x-asm"
+        "application/x-rust", "application/x-ruby", "text/x-asm"
     ].includes(mimeType)){
         return ICON_CODE;
     }

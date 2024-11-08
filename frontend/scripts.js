@@ -35,6 +35,8 @@ store.init();
     endpointInput.value = store.endpoint;
     pathInput.value = store.dirpath;
     uploadFilePrefixLabel.textContent = pathInput.value;
+    sortBySelect.value = store.sortby;
+    sortOrderSelect.value = store.sortorder;
     maybeRefreshUserRecord().then(
         () => maybeRefreshFileList()
     );
@@ -210,39 +212,37 @@ function maybeRefreshFileList(){
     }
 }
 
-let sortBy = sortBySelect.value;
-let sortOrder = sortOrderSelect.value;
 /** @param {import('./api.js').DirectoryRecord} dirs */
 function sortDirList(dirs){
-    if (sortBy === 'name'){
+    if (store.sortby === 'name'){
         dirs.sort((a, b) => { return a.url.localeCompare(b.url); });
     }
-    if (sortOrder === 'desc'){ dirs.reverse(); }
+    if (store.sortorder === 'desc'){ dirs.reverse(); }
 }
 /** @param {import('./api.js').FileRecord} files */
 function sortFileList(files){
     function timestr2num(timestr){
         return new Date(timestr).getTime();
     }
-    if (sortBy === 'name'){
+    if (store.sortby === 'name'){
         files.sort((a, b) => { return a.url.localeCompare(b.url); });
     }
-    if (sortBy === 'size'){
+    if (store.sortby === 'size'){
         files.sort((a, b) => { return a.file_size - b.file_size; });
     }
-    if (sortBy === 'access'){
+    if (store.sortby === 'access'){
         files.sort((a, b) => { return timestr2num(a.access_time) - timestr2num(b.access_time); });
     }
-    if (sortBy === 'create'){
+    if (store.sortby === 'create'){
         files.sort((a, b) => { return timestr2num(a.create_time) - timestr2num(b.create_time); });
     }
-    if (sortBy === 'mime'){
+    if (store.sortby === 'mime'){
         files.sort((a, b) => { return a.mime_type.localeCompare(b.mime_type); });
     }
-    if (sortOrder === 'desc'){ files.reverse(); }
+    if (store.sortorder === 'desc'){ files.reverse(); }
 }
-sortBySelect.addEventListener('change', (elem) => {sortBy = elem.target.value; refreshFileList();});
-sortOrderSelect.addEventListener('change', (elem) => {sortOrder = elem.target.value; refreshFileList();});
+sortBySelect.addEventListener('change', (elem) => {store.sortby = elem.target.value; refreshFileList();});
+sortOrderSelect.addEventListener('change', (elem) => {store.sortorder = elem.target.value; refreshFileList();});
 
 function refreshFileList(){
     conn.listPath(store.dirpath)

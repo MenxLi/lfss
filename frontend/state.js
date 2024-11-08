@@ -40,4 +40,18 @@ export const store = {
     set dirpath(pth) {
         setPersistedState('dirpath', pth);
     },
+
+    get sortby () {
+        return loadPersistedState('sortby', 'none');
+    }, 
+    set sortby (sb) {
+        setPersistedState('sortby', sb);
+    }, 
+
+    get sortorder () {
+        return loadPersistedState('sortorder', 'asc');
+    },
+    set sortorder (so) {
+        setPersistedState('sortorder', so);
+    },
 };

@@ -24,25 +24,26 @@ function getIconSVGFromMimeType(mimeType){
     if (mimeType.startsWith('image/')){
         return ICON_IMAGE;
     }
-    switch (mimeType){
-        case 
-            'application/pdf' || 'application/x-pdf':
-            return ICON_PDF;
-        case 
-            'application/x-msdownload' || 'application/x-msdos-program' || 'application/x-msi' || 'application/x-ms-wim' || 'application/octet-stream' || 'application/x-apple-diskimage':
-            return ICON_EXE;
-        case 
-            'application/zip' || 'application/x-zip-compressed' || 'application/x-7z-compressed' || 'application/x-rar-compressed' || 'application/x-tar' || 'application/x-gzip':
-            return ICON_ZIP;
-        case 
-            "text/html" || "application/xhtml+xml" || "application/xml" || "text/css" || "application/javascript" || "text/javascript" || "application/json" || "text/x-python" || "text/x-java-source" || 
-            "application/x-httpd-php" || "text/x-ruby" || "text/x-perl" || "application/x-sh" || "application/sql" || "text/x-csrc" || "text/x-c++src" || "text/x-csharp" || "text/x-go" || "text/x-haskell" || 
-            "text/x-lua" || "text/x-markdown" || "application/wasm" || "application/x-tcl" || "text/x-yaml" || "application/x-latex" || "application/x-tex" || "text/x-scss" || "application/x-lisp" || 
-            "application/x-rustsrc" || "application/x-ruby" || "text/x-asm":
-            return ICON_CODE;
-        default: 
-            return ICON_FILE;
+
+    if (['application/pdf', 'application/x-pdf'].includes(mimeType)){
+        return ICON_PDF;
     }
+    if (['application/x-msdownload', 'application/x-msdos-program', 'application/x-msi', 'application/x-ms-wim', 'application/octet-stream', 'application/x-apple-diskimage'].includes(mimeType)){
+        return ICON_EXE;
+    }
+    if (['application/zip', 'application/x-zip-compressed', 'application/x-7z-compressed', 'application/x-rar-compressed', 'application/x-tar', 'application/x-gzip'].includes(mimeType)){
+        return ICON_ZIP;
+    }
+    if ([
+        "text/html", "application/xhtml+xml", "application/xml", "text/css", "application/javascript", "text/javascript", "application/json", "text/x-python", "text/x-java-source",
+        "application/x-httpd-php", "text/x-ruby", "text/x-perl", "application/x-sh", "application/sql", "text/x-csrc", "text/x-c++src", "text/x-csharp", "text/x-go", "text/x-haskell",
+        "text/x-lua", "text/x-markdown", "application/wasm", "application/x-tcl", "text/x-yaml", "application/x-latex", "application/x-tex", "text/x-scss", "application/x-lisp",
+        "application/x-rustsrc", "application/x-ruby", "text/x-asm"
+    ].includes(mimeType)){
+        return ICON_CODE;
+    }
+
+    return ICON_FILE;
 }
 
 function getSafeIconUrl(icon_str){
@@ -66,10 +67,20 @@ export function makeThumbHtml(c, r){
     const mtype = r.mime_type? r.mime_type : 'directory';
     const thumb_id = `thumb-${thumb_counter++}`;
     const url = mtype == 'directory'? ensureSlashEnd(r.url) : r.url;
-    return `
-<div class="thumb" id="${thumb_id}"> \
-    <img src="${c.config.endpoint}/${url}?token=${token}&thumb=true" alt="${r.url}" class="thumb" \
-    onerror="this.src='${getSafeIconUrl(getIconSVGFromMimeType(mtype))}';this.classList.add('thumb-svg');" \
-</div>
-`;
+
+    if (mtype.startsWith('image/')){
+        return `
+        <div class="thumb" id="${thumb_id}"> \
+            <img src="${c.config.endpoint}/${url}?token=${token}&thumb=true" alt="${r.url}" class="thumb" \
+            onerror="this.src='${getSafeIconUrl(getIconSVGFromMimeType(mtype))}';this.classList.add('thumb-svg');" /> \
+        </div>
+        `;
+    }
+    else{
+        return `
+        <div class="thumb" id="${thumb_id}"> \
+            <img src="${getSafeIconUrl(getIconSVGFromMimeType(mtype))}" alt="${r.url}" class="thumb thumb-svg"/ >
+        </div>
+        `;
+    }
 }

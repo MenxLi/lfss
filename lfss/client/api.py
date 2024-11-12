@@ -1,6 +1,8 @@
+from __future__ import annotations
 from typing import Optional, Literal
 import os
 import requests
+import requests.adapters
 import urllib.parse
 from lfss.src.datatype import (
     FileReadPermission, FileRecord, DirectoryRecord, UserRecord, PathContents
@@ -11,12 +13,41 @@ _default_endpoint = os.environ.get('LFSS_ENDPOINT', 'http://localhost:8000')
 _default_token = os.environ.get('LFSS_TOKEN', '')
 
 class Connector:
+    class Session:
+        def __init__(self, connector: Connector, pool_size: int = 10):
+            self.connector = connector
+            self.pool_size = pool_size
+        def open(self):
+            self.close()
+            if self.connector._session is None:
+                s = requests.Session()
+                adapter = requests.adapters.HTTPAdapter(pool_connections=self.pool_size, pool_maxsize=self.pool_size)
+                s.mount('http://', adapter)
+                s.mount('https://', adapter)
+                self.connector._session = s
+        def close(self):
+            if self.connector._session is not None:
+                self.connector._session.close()
+            self.connector._session = None
+        def __call__(self):
+            return self.connector
+        def __enter__(self):
+            self.open()
+            return self.connector
+        def __exit__(self, exc_type, exc_value, traceback):
+            self.close()
+
     def __init__(self, endpoint=_default_endpoint, token=_default_token):
         assert token, "No token provided. Please set LFSS_TOKEN environment variable."
         self.config = {
             "endpoint": endpoint,
             "token": token
         }
+        self._session: Optional[requests.Session] = None
+    
+    def session(self, pool_size: int = 10):
+        """ avoid creating a new session for each request.  """
+        return self.Session(self, pool_size)
     
     def _fetch_factory(
         self, method: Literal['GET', 'POST', 'PUT', 'DELETE'], 
@@ -31,9 +62,13 @@ class Connector:
             headers.update({
                 'Authorization': f"Bearer {self.config['token']}",
             })
-            with requests.Session() as s:
-                response = s.request(method, url, headers=headers, **kwargs)
+            if self._session is not None:
+                response = self._session.request(method, url, headers=headers, **kwargs)
                 response.raise_for_status()
+            else:
+                with requests.Session() as s:
+                    response = s.request(method, url, headers=headers, **kwargs)
+                    response.raise_for_status()
             return response
         return f
 

@@ -34,12 +34,15 @@ if __name__ == '__main__':
     batch_size_sum = 0
     batch_start_time = time.time()
     lock = Lock()
-    file_list = c.list_path(args.path, flat=True).files
-    total_bytes = c.get_metadata(args.path).size    # type: ignore
 
-    s_time = time.time()
-    with ThreadPoolExecutor(max_workers=args.jobs) as executor:
-        executor.map(read_single_file, [f.url for f in file_list])
-    e_time = time.time()
+    with c.session(pool_size=args.jobs):
+        file_list = c.list_path(args.path, flat=True).files
+        path_meta = c.get_metadata(args.path)
+        assert path_meta is not None, "Path not found"
+        total_bytes = path_meta.size    # type: ignore
+        s_time = time.time()
+        with ThreadPoolExecutor(max_workers=args.jobs) as executor:
+            executor.map(read_single_file, [f.url for f in file_list])
+        e_time = time.time()
 
     print(f"Total size: {total_bytes} bytes, num-files: {len(file_list)}, time: {e_time - s_time:.2f}s, avg-speed: {total_bytes / (e_time - s_time) / 1024 / 1024:.2f} MB/s")

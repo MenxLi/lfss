@@ -1,6 +1,7 @@
 import os, time, pathlib
 from threading import Lock
 from .api import Connector
+from ..src.utils import decode_uri_compnents
 from ..src.bounded_pool import BoundedThreadPoolExecutor
 
 def upload_file(
@@ -53,7 +54,7 @@ def upload_directory(
     _counter_lock = Lock()
 
     faild_files = []
-    def put_file(file_path):
+    def put_file(c: Connector, file_path):
         with _counter_lock:
             nonlocal _counter
             _counter += 1
@@ -63,15 +64,16 @@ def upload_directory(
                 print(f"[{this_count}] Uploading {file_path} to {dst_path}")
 
         if not upload_file(
-            connector, file_path, dst_path, 
+            c, file_path, dst_path, 
             n_retries=n_retries, interval=interval, verbose=verbose, **put_kwargs
             ):
             faild_files.append(file_path)
 
-    with BoundedThreadPoolExecutor(n_concurrent) as executor:
-        for root, dirs, files in os.walk(directory):
-            for file in files:
-                executor.submit(put_file, os.path.join(root, file))
+    with connector.session(n_concurrent) as c:
+        with BoundedThreadPoolExecutor(n_concurrent) as executor:
+            for root, dirs, files in os.walk(directory):
+                for file in files:
+                    executor.submit(put_file, c, os.path.join(root, file))
 
     return faild_files
 
@@ -134,22 +136,23 @@ def download_directory(
     _counter = 0
     _counter_lock = Lock()
     failed_files = []
-    def get_file(src_url):
+    def get_file(c, src_url):
         nonlocal _counter, failed_files
         with _counter_lock:
             _counter += 1
             this_count = _counter
-            dst_path = f"{directory}{os.path.relpath(src_url, src_path)}"
+            dst_path = f"{directory}{os.path.relpath(decode_uri_compnents(src_url), decode_uri_compnents(src_path))}"
             if verbose:
                 print(f"[{this_count}] Downloading {src_url} to {dst_path}")
 
         if not download_file(
-            connector, src_url, dst_path, 
+            c, src_url, dst_path, 
             n_retries=n_retries, interval=interval, verbose=verbose, overwrite=overwrite
             ):
             failed_files.append(src_url)
         
-    with BoundedThreadPoolExecutor(n_concurrent) as executor:
-        for file in connector.list_path(src_path, flat=True).files:
-            executor.submit(get_file, file.url)
+    with connector.session(n_concurrent) as c:
+        with BoundedThreadPoolExecutor(n_concurrent) as executor:
+            for file in c.list_path(src_path, flat=True).files:
+                executor.submit(get_file, c, file.url)
     return failed_files

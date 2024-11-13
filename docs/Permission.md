@@ -1,13 +1,15 @@
 
 # Permission System
-There are two roles in the system: Admin and User ('user' are like 'bucket' to some extent).
+There are two user roles in the system: Admin and Normal User ("users" are like "buckets" to some extent).
+
+## Ownership
+A file is owned by the user who created it, may not necessarily be the user under whose path the file is stored (admin can create files under any user's path).
 
 ## File access with `GET` permission
 The `GET` is used to access the file (if path is not ending with `/`), or to list the files under a path (if path is ending with `/`).  
 
 ### File access
 For accessing file content, the user must have `GET` permission of the file, which is determined by the `permission` field of both the owner and the file.   
-(Note: The owner of the file is the user who created the file, may not necessarily be the user under whose path the file is stored.)   
 
 There are four types of permissions: `unset`, `public`, `protected`, `private`.
 Non-admin users can access files based on:   

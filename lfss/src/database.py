@@ -10,7 +10,10 @@ import aiosqlite, aiofiles
 import aiofiles.os
 
 from .connection_pool import execute_sql, unique_cursor, transaction
-from .datatype import UserRecord, FileReadPermission, FileRecord, DirectoryRecord, PathContents
+from .datatype import (
+    UserRecord, FileReadPermission, FileRecord, DirectoryRecord, PathContents, 
+    FileSortKey, DirSortKey, isValidFileSortKey, isValidDirSortKey
+    )
 from .config import LARGE_BLOB_DIR, CHUNK_SIZE
 from .log import get_logger
 from .utils import decode_uri_compnents, hash_credential, concurrent_wrap
@@ -156,55 +159,102 @@ class FileConn(DBObjectBase):
             dirs = [await self.get_path_record(u) for u in dirnames] if not skim else [DirectoryRecord(u) for u in dirnames]
             return dirs
     
+    async def count_path_dirs(self, url: str):
+        if not url.endswith('/'): url += '/'
+        if url == '/': url = ''
+        cursor = await self.cur.execute("""
+        SELECT COUNT(*) FROM (
+            SELECT DISTINCT SUBSTR( 
+                url, LENGTH(?) + 1, 
+                INSTR(SUBSTR(url, LENGTH(?) + 1), '/')
+                ) AS dirname
+            FROM fmeta WHERE url LIKE ? AND dirname != ''
+        )
+        """, (url, url, url + '%'))
+        res = await cursor.fetchone()
+        assert res is not None, "Error: count_path_dirs"
+        return res[0]
+
+    async def list_path_dirs(
+        self, url: str, 
+        offset: int = 0, limit: int = int(1e5), 
+        order_by: DirSortKey = '', order_desc: bool = False,
+        skim: bool = True
+        ) -> list[DirectoryRecord]:
+        if not isValidDirSortKey(order_by):
+            raise ValueError(f"Invalid order_by ({order_by})")
+
+        if not url.endswith('/'): url += '/'
+        if url == '/': url = ''
+
+        sql_qury = """
+            SELECT DISTINCT SUBSTR(
+                url, 
+                1 + LENGTH(?),
+                INSTR(SUBSTR(url, 1 + LENGTH(?)), '/')
+            ) AS dirname 
+            FROM fmeta WHERE url LIKE ? AND dirname != ''
+        """ \
+        + (f"ORDER BY {order_by} {'DESC' if order_desc else 'ASC'}" if order_by else '') \
+        + " LIMIT ? OFFSET ?"
+        cursor = await self.cur.execute(sql_qury, (url, url, url + '%', limit, offset))
+        res = await cursor.fetchall()
+        dirs_str = [r[0] for r in res]
+        async def get_dir(dir_url):
+            if skim:
+                return DirectoryRecord(dir_url)
+            else:
+                return await self.get_path_record(dir_url)
+        dirs = await asyncio.gather(*[get_dir(url + d) for d in dirs_str])
+        return dirs
+    
+    async def count_path_files(self, url: str, flat: bool = False):
+        if not url.endswith('/'): url += '/'
+        if url == '/': url = ''
+        if flat:
+            cursor = await self.cur.execute("SELECT COUNT(*) FROM fmeta WHERE url LIKE ?", (url + '%', ))
+        else:
+            cursor = await self.cur.execute("SELECT COUNT(*) FROM fmeta WHERE url LIKE ? AND url NOT LIKE ?", (url + '%', url + '%/%'))
+        res = await cursor.fetchone()
+        assert res is not None, "Error: count_path_files"
+        return res[0]
+
+    async def list_path_files(
+        self, url: str, 
+        offset: int = 0, limit: int = int(1e5), 
+        order_by: FileSortKey = '', order_desc: bool = False,
+        flat: bool = False, 
+        ) -> list[FileRecord]:
+        if not isValidFileSortKey(order_by):
+            raise ValueError(f"Invalid order_by {order_by}")
+
+        if not url.endswith('/'): url += '/'
+        if url == '/': url = ''
+
+        sql_query = "SELECT * FROM fmeta WHERE url LIKE ?"
+        if not flat: sql_query += " AND url NOT LIKE ?"
+        if order_by: sql_query += f" ORDER BY {order_by} {'DESC' if order_desc else 'ASC'}"
+        sql_query += " LIMIT ? OFFSET ?"
+        if flat:
+            cursor = await self.cur.execute(sql_query, (url + '%', limit, offset))
+        else:
+            cursor = await self.cur.execute(sql_query, (url + '%', url + '%/%', limit, offset))
+        res = await cursor.fetchall()
+        files = [self.parse_record(r) for r in res]
+        return files
+    
     async def list_path(self, url: str, flat: bool = False) -> PathContents:
         """
         List all files and directories under the given path
-        if flat is True, list all files under the path, with out delimiting directories
+        if flat is True, list all files under the path, without delimiting directories
         """
-        self.logger.debug(f"Listing path {url}, flat={flat}")
-        if not url.endswith('/'):
-            url += '/'
-        if url == '/':
-            # users cannot be queried using '/', because we store them without '/' prefix, 
-            # so we need to handle this case separately, 
-            if flat:
-                cursor = await self.cur.execute("SELECT * FROM fmeta")
-                res = await cursor.fetchall()
-                files = [self.parse_record(r) for r in res]
-                return PathContents([], files)
-
-            else:
-                return PathContents(await self.list_root_dirs(), [])
-        
         if flat:
-            cursor = await self.cur.execute("SELECT * FROM fmeta WHERE url LIKE ?", (url + '%', ))
-            res = await cursor.fetchall()
-            files = [self.parse_record(r) for r in res]
-            return PathContents([], files)
-
-        cursor = await self.cur.execute("SELECT * FROM fmeta WHERE url LIKE ? AND url NOT LIKE ?", (url + '%', url + '%/%'))
-        res = await cursor.fetchall()
-        files = [self.parse_record(r) for r in res]
-
-        # substr indexing starts from 1
-        cursor = await self.cur.execute(
-            """
-            SELECT DISTINCT 
-                SUBSTR(
-                    url, 
-                    1 + LENGTH(?),
-                    INSTR(SUBSTR(url, 1 + LENGTH(?)), '/') - 1
-                ) AS subdir 
-                FROM fmeta WHERE url LIKE ?
-            """, 
-            (url, url, url + '%')
-            )
-        res = await cursor.fetchall()
-        dirs_str = [r[0] + '/' for r in res if r[0] != '/']
-        async def get_dir(dir_url):
-            return DirectoryRecord(dir_url, -1)
-        dirs = await asyncio.gather(*[get_dir(url + d) for d in dirs_str])
-        return PathContents(dirs, files)
+            return PathContents(files = await self.list_path_files(url, flat=True))
+        else:
+            return PathContents(
+                dirs = await self.list_path_dirs(url), 
+                files = await self.list_path_files(url, flat=False)
+                )
     
     async def get_path_record(self, url: str) -> DirectoryRecord:
         """

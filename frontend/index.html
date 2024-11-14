@@ -29,21 +29,41 @@
                 <span></span>
                 <label></label>
             </div>
-            <div>
-                <span style="margin-right: 0.25rem; color: #999; font-size: small;">
-                Sort by</span>
-                <select id="sort-by-sel">
-                    <option value="none">None</option>
-                    <option value="name">Name</option>
-                    <option value="size">Size</option>
-                    <option value="access">Accessed</option>
-                    <option value="create">Created</option>
-                    <option value="mime">Type</option>
-                </select>
-                <select id="sort-order-sel">
-                    <option value="asc">Ascending</option>
-                    <option value="desc">Descending</option>
-                </select>
+            <div style="color: #999; font-size: small; display: flex; align-items: center; gap: .75rem;">
+                <div class="page-config">
+                    <span>Limit</span>
+                    <select id="page-limit-sel">
+                        <option value="10">10</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="500">500</option>
+                        <option value="1000">1000</option>
+                        <option value="5000">5000</option>
+                    </select>
+                </div>
+
+                <div class="page-config">
+                    <span>Page</span>
+                    <input type="number" id="page-num-input" value="1" min="1" style="width: 50px;">
+                    /
+                    <label id="page-count-lbl">1</label>
+                </div>
+
+                <div class="page-config">
+                    <span>Sort by</span>
+                    <select id="sort-by-sel">
+                        <option value="none">None</option>
+                        <option value="url">Name</option>
+                        <option value="file_size">Size</option>
+                        <option value="access_time">Accessed</option>
+                        <option value="create_time">Created</option>
+                        <option value="mime_type">Type</option>
+                    </select>
+                    <select id="sort-order-sel">
+                        <option value="asc">Ascending</option>
+                        <option value="desc">Descending</option>
+                    </select>
+                </div>
             </div>
         </div>
         <table id="files">

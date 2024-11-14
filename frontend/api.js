@@ -34,6 +34,8 @@
  * @property {DirectoryRecord[]} dirs - the list of directories in the directory
  * @property {FileRecord[]} files - the list of files in the directory
  * 
+ * @typedef {"" | "url" | "file_size" | "create_time" | "access_time" | "mime_type"} FileSortKey
+ * @typedef {"" | "dirname" } DirectorySortKey
  */
 
 export const permMap = {
@@ -133,6 +135,11 @@ export default class Connector {
         return await res.json();
     }
 
+    _sanitizeDirPath(path){
+        if (path.startsWith('/')){ path = path.slice(1); }
+        if (!path.endsWith('/')){ path += '/'; }
+        return path;
+    }
     /**
      * @param {string} path - the path to the file directory, should ends with '/'
      * @param {Object} options - the options for the request
@@ -141,8 +148,7 @@ export default class Connector {
     async listPath(path, {
         flat = false
     } = {}){
-        if (path.startsWith('/')){ path = path.slice(1); }
-        if (!path.endsWith('/')){ path += '/'; }
+        path = this._sanitizeDirPath(path);
         const dst = new URL(this.config.endpoint + '/' + path);
         dst.searchParams.append('flat', flat);
         const res = await fetch(dst.toString(), {
@@ -153,6 +159,128 @@ export default class Connector {
         });
         if (res.status == 403 || res.status == 401){
             throw new Error(`Access denied to ${path}`);
+        }
+        return await res.json();
+    }
+
+    /**
+     * @param {string} path - the path to the file directory, should ends with '/'
+     * @param {boolean} flat - whether to list the files in subdirectories
+     * @returns {Promise<number>} - the promise of the request
+     * */
+    async countFiles(path, {
+        flat = false
+    } = {}){
+        path = this._sanitizeDirPath(path);
+        const dst = new URL(this.config.endpoint + '/_api/count-files');
+        dst.searchParams.append('path', path);
+        dst.searchParams.append('flat', flat);
+        const res = await fetch(dst.toString(), {
+            method: 'GET',
+            headers: {
+                'Authorization': 'Bearer ' + this.config.token
+            },
+        });
+        if (res.status != 200){
+            throw new Error(`Failed to count files, status code: ${res.status}, message: ${await res.json()}`);
+        }
+        return (await res.json()).count;
+    }
+
+    /**
+     * @typedef {Object} ListFilesOptions
+     * @property {number} offset - the offset of the list
+     * @property {number} limit - the limit of the list
+     * @property {FileSortKey} orderBy - the key to order the files
+     * @property {boolean} orderDesc - whether to order the files in descending order
+     * @property {boolean} flat - whether to list the files in subdirectories
+     * 
+     * @param {string} path - the path to the file directory, should ends with '/'
+     * @param {ListFilesOptions} options - the options for the request
+     * @returns {Promise<FileRecord[]>} - the promise of the request
+     */
+    async listFiles(path, {
+        offset = 0,
+        limit = 1000,
+        orderBy = 'create_time',
+        orderDesc = false,
+        flat = false
+    } = {}){
+        path = this._sanitizeDirPath(path);
+        const dst = new URL(this.config.endpoint + '/_api/list-files');
+        dst.searchParams.append('path', path);
+        dst.searchParams.append('offset', offset);
+        dst.searchParams.append('limit', limit);
+        dst.searchParams.append('order_by', orderBy);
+        dst.searchParams.append('order_desc', orderDesc);
+        dst.searchParams.append('flat', flat);
+        const res = await fetch(dst.toString(), {
+            method: 'GET',
+            headers: {
+                'Authorization': 'Bearer ' + this.config.token
+            },
+        });
+        if (res.status != 200){
+            throw new Error(`Failed to list files, status code: ${res.status}, message: ${await res.json()}`);
+        }
+        return await res.json();
+    }
+
+    /**
+     * @param {string} path - the path to the file directory, should ends with '/'
+     * @returns {Promise<number>} - the promise of the request
+     **/
+    async countDirs(path){
+        path = this._sanitizeDirPath(path);
+        const dst = new URL(this.config.endpoint + '/_api/count-dirs');
+        dst.searchParams.append('path', path);
+        const res = await fetch(dst.toString(), {
+            method: 'GET',
+            headers: {
+                'Authorization': 'Bearer ' + this.config.token
+            },
+        });
+        if (res.status != 200){
+            throw new Error(`Failed to count directories, status code: ${res.status}, message: ${await res.json()}`);
+        }
+        return (await res.json()).count;
+    }
+
+    /**
+     * @typedef {Object} ListDirsOptions
+     * @property {number} offset - the offset of the list
+     * @property {number} limit - the limit of the list
+     * @property {DirectorySortKey} orderBy - the key to order the directories
+     * @property {boolean} orderDesc - whether to order the directories in descending order
+     * @property {boolean} skim - whether to skim the directories
+     * 
+     * @param {string} path - the path to the file directory, should ends with '/'
+     * @param {ListDirsOptions} options - the options for the request
+     * @returns {Promise<DirectoryRecord[]>} - the promise of the request
+     **/
+    async listDirs(path, {
+        offset = 0,
+        limit = 1000,
+        orderBy = 'dirname',
+        orderDesc = false, 
+        skim = true
+    } = {}){
+        path = this._sanitizeDirPath(path);
+        const dst = new URL(this.config.endpoint + '/_api/list-dirs');
+        dst.searchParams.append('path', path);
+        dst.searchParams.append('offset', offset);
+        dst.searchParams.append('limit', limit);
+        dst.searchParams.append('order_by', orderBy);
+        dst.searchParams.append('order_desc', orderDesc);
+        dst.searchParams.append('skim', skim);
+        const res = await fetch(dst.toString(), {
+            method: 'GET',
+            headers: {
+                'Authorization': 'Bearer ' + this.config.token
+            },
+        });
+        if (res.status != 200){
+            throw new Error(`Failed to list directories, status code: ${res.status}, message: ${await res.json()}`);
         }
         return await res.json();
     }
@@ -216,4 +344,89 @@ export default class Connector {
         }
     }
 
+}
+
+/**
+ * a function to wrap the listDirs and listFiles function into one
+ * it will return the list of directories and files in the directory, 
+ * making directories first (if the offset is less than the number of directories), 
+ * and files after that.
+ * 
+ * 
+ * @typedef {Object} ListPathOptions
+ * @property {number} offset - the offset of the list
+ * @property {number} limit - the limit of the list
+ * @property {ListFilesOptions} orderBy - the key to order the files (if set to url, will list the directories using dirname)
+ * @property {boolean} orderDesc - whether to order the files in descending order
+ * 
+ * @param {Connector} conn - the connector to the API
+ * @param {string} path - the path to the file directory
+ * @param {Object} options - the options for the request
+ * @returns {Promise<PathListResponse>} - the promise of the request
+ */
+export async function listPath(conn, path, {
+    offset = 0,
+    limit = 1000,
+    orderBy = '',
+    orderDesc = false,
+} = {}){
+    if (path === '/' || path === ''){
+        // this handles separate case for the root directory... please refer to the backend implementation
+        return await conn.listPath('', {flat: false});
+    }
+
+    orderBy = orderBy == 'none' ? '' : orderBy;
+    console.log('listPath', path, offset, limit, orderBy, orderDesc);
+
+    const dirCount = await conn.countDirs(path);
+    const dirOffset = offset;
+    const fileOffset = Math.max(offset - dirCount, 0);
+    const fileLimit = offset + limit - dirCount;
+
+    const dirOrderBy = orderBy == 'url' ? 'dirname' : '';
+    const fileOrderBy = orderBy;
+
+    let dirList = [];
+    let fileList = [];
+
+    if (offset < dirCount) {
+        dirList = await conn.listDirs(path, {
+            offset: dirOffset,
+            limit: limit,
+            orderBy: dirOrderBy,
+            orderDesc: orderDesc
+        });
+    }
+
+    if (fileLimit>= 0){
+        fileList = await conn.listFiles(path, {
+            offset: fileOffset,
+            limit: fileLimit,
+            orderBy: fileOrderBy,
+            orderDesc: orderDesc
+        });
+    }
+
+    return {
+        dirs: dirList,
+        files: fileList
+    }
+};
+
+/**
+ * @param {Connector} conn - the connector to the API
+ * @param {string} path - the path to the file directory
+ * @returns {Promise<{dirs: number, files: number}>}
+ */
+export async function countPath(conn, path){
+    if (path === '/' || path === ''){
+        return {
+            dirs: 0, 
+            files: 0
+        }
+    }
+    return {
+        dirs: await conn.countDirs(path),
+        files: await conn.countFiles(path)
+    }
 }

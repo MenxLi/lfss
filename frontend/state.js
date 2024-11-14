@@ -41,11 +41,11 @@ export const store = {
         setPersistedState('dirpath', pth);
     },
 
-    get sortby () {
-        return loadPersistedState('sortby', 'none');
+    get orderby () {
+        return loadPersistedState('orderby', 'none');
     }, 
-    set sortby (sb) {
-        setPersistedState('sortby', sb);
+    set orderby (sb) {
+        setPersistedState('orderby', sb);
     }, 
 
     get sortorder () {
@@ -54,4 +54,19 @@ export const store = {
     set sortorder (so) {
         setPersistedState('sortorder', so);
     },
+
+    get pagenum () {
+        return parseInt(loadPersistedState('pagenum', '1'));
+    },
+    set pagenum (pn) {
+        setPersistedState('pagenum', pn.toString());
+    },
+
+    get pagelim () {
+        return parseInt(loadPersistedState('pagelim', '100'));
+    },
+    set pagelim (ps) {
+        setPersistedState('pagelim', ps.toString());
+    },
+
 };

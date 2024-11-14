@@ -18,7 +18,11 @@ from .stat import RequestDB
 from .config import MAX_BUNDLE_BYTES, MAX_FILE_BYTES, LARGE_FILE_BYTES, CHUNK_SIZE
 from .utils import ensure_uri_compnents, format_last_modified, now_stamp
 from .connection_pool import global_connection_init, global_connection_close, unique_cursor
-from .database import Database, UserRecord, DECOY_USER, FileRecord, check_user_permission, FileReadPermission, UserConn, FileConn, PathContents
+from .database import Database, DECOY_USER, check_user_permission, UserConn, FileConn
+from .datatype import (
+    FileReadPermission, FileRecord, UserRecord, PathContents, 
+    FileSortKey, DirSortKey
+)
 from .thumb import get_thumb
 
 logger = get_logger("server", term_level="DEBUG")
@@ -448,6 +452,57 @@ async def update_file_meta(
             await db.move_path(user, path, new_path)
 
     return Response(status_code=200, content="OK")
+
+async def validate_path_permission(path: str, user: UserRecord):
+    if not path.endswith("/"):
+        raise HTTPException(status_code=400, detail="Path must end with /")
+    if not path.startswith(f"{user.username}/") and not user.is_admin:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+@router_api.get("/count-files")
+async def count_files(path: str, flat: bool = False, user: UserRecord = Depends(registered_user)):
+    await validate_path_permission(path, user)
+    path = ensure_uri_compnents(path)
+    async with unique_cursor() as conn:
+        fconn = FileConn(conn)
+        return { "count": await fconn.count_path_files(url = path, flat = flat) }
+@router_api.get("/list-files")
+async def list_files(
+    path: str, offset: int = 0, limit: int = 1000,
+    order_by: FileSortKey = "", order_desc: bool = False,
+    flat: bool = False, user: UserRecord = Depends(registered_user)
+    ):
+    await validate_path_permission(path, user)
+    path = ensure_uri_compnents(path)
+    async with unique_cursor() as conn:
+        fconn = FileConn(conn)
+        return await fconn.list_path_files(
+            url = path, offset = offset, limit = limit,
+            order_by=order_by, order_desc=order_desc, 
+            flat=flat
+        )
+
+@router_api.get("/count-dirs")
+async def count_dirs(path: str, user: UserRecord = Depends(registered_user)):
+    await validate_path_permission(path, user)
+    path = ensure_uri_compnents(path)
+    async with unique_cursor() as conn:
+        fconn = FileConn(conn)
+        return { "count": await fconn.count_path_dirs(url = path) }
+@router_api.get("/list-dirs")
+async def list_dirs(
+    path: str, offset: int = 0, limit: int = 1000,
+    order_by: DirSortKey = "", order_desc: bool = False,
+    skim: bool = True, user: UserRecord = Depends(registered_user)
+    ):
+    await validate_path_permission(path, user)
+    path = ensure_uri_compnents(path)
+    async with unique_cursor() as conn:
+        fconn = FileConn(conn)
+        return await fconn.list_path_dirs(
+            url = path, offset = offset, limit = limit,
+            order_by=order_by, order_desc=order_desc, skim=skim
+        )
     
 @router_api.get("/whoami")
 @handle_exception

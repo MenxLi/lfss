@@ -1,4 +1,5 @@
 from enum import IntEnum
+from typing import Literal
 import dataclasses
 
 class FileReadPermission(IntEnum):
@@ -51,6 +52,10 @@ class DirectoryRecord:
 
 @dataclasses.dataclass
 class PathContents:
-    dirs: list[DirectoryRecord]
-    files: list[FileRecord]
+    dirs: list[DirectoryRecord] = dataclasses.field(default_factory=list)
+    files: list[FileRecord] = dataclasses.field(default_factory=list)
     
+FileSortKey = Literal['', 'url', 'file_size', 'create_time', 'access_time', 'mime_type']
+isValidFileSortKey = lambda x: x in ['', 'url', 'file_size', 'create_time', 'access_time', 'mime_type']
+DirSortKey = Literal['', 'dirname']
+isValidDirSortKey = lambda x: x in ['', 'dirname']

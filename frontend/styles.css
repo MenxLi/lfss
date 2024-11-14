@@ -2,6 +2,11 @@
 @import "./info.css";
 @import "./thumb.css";
 
+html {
+    overflow: -moz-scrollbars-vertical;
+    overflow-y: scroll;
+}
+
 body{
     font-family: Arial, sans-serif;
     background-color: #f1f1f1;

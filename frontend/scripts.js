@@ -1,4 +1,4 @@
-import { permMap } from './api.js';
+import { permMap, countPath, listPath } from './api.js';
 import { showFloatingWindowLineInput, showPopup } from './popup.js';
 import { formatSize, decodePathURI, ensurePathURI, getRandomString, cvtGMT2Local, debounce, encodePathURI, asHtmlText } from './utils.js';
 import { showInfoPanel, showDirInfoPanel } from './info.js';
@@ -24,6 +24,9 @@ const uploadFileSelector = document.querySelector('#file-selector');
 const uploadFileNameInput = document.querySelector('#file-name');
 const uploadButton = document.querySelector('#upload-btn');
 const randomizeFnameButton = document.querySelector('#randomize-fname-btn');
+const pageLimitSelect = document.querySelector('#page-limit-sel');
+const pageNumInput = document.querySelector('#page-num-input');
+const pageCountLabel = document.querySelector('#page-count-lbl');
 const sortBySelect = document.querySelector('#sort-by-sel');
 const sortOrderSelect = document.querySelector('#sort-order-sel');
 
@@ -35,8 +38,10 @@ store.init();
     endpointInput.value = store.endpoint;
     pathInput.value = store.dirpath;
     uploadFilePrefixLabel.textContent = pathInput.value;
-    sortBySelect.value = store.sortby;
+    sortBySelect.value = store.orderby;
     sortOrderSelect.value = store.sortorder;
+    pageLimitSelect.value = store.pagelim;
+    pageNumInput.value = store.pagenum;
     maybeRefreshUserRecord().then(
         () => maybeRefreshFileList()
     );
@@ -56,6 +61,7 @@ endpointInput.addEventListener('blur', () => {
 });
 tokenInput.addEventListener('blur', () => {
     store.token = tokenInput.value;
+    console.log("Token changed to", conn.token);
     maybeRefreshUserRecord().then(
         () => maybeRefreshFileList()
     );
@@ -214,51 +220,44 @@ function maybeRefreshFileList(){
 
 /** @param {import('./api.js').DirectoryRecord} dirs */
 function sortDirList(dirs){
-    if (store.sortby === 'name'){
+    if (store.orderby === 'name'){
         dirs.sort((a, b) => { return a.url.localeCompare(b.url); });
     }
     if (store.sortorder === 'desc'){ dirs.reverse(); }
 }
-/** @param {import('./api.js').FileRecord} files */
-function sortFileList(files){
-    function timestr2num(timestr){
-        return new Date(timestr).getTime();
-    }
-    if (store.sortby === 'name'){
-        files.sort((a, b) => { return a.url.localeCompare(b.url); });
-    }
-    if (store.sortby === 'size'){
-        files.sort((a, b) => { return a.file_size - b.file_size; });
-    }
-    if (store.sortby === 'access'){
-        files.sort((a, b) => { return timestr2num(a.access_time) - timestr2num(b.access_time); });
-    }
-    if (store.sortby === 'create'){
-        files.sort((a, b) => { return timestr2num(a.create_time) - timestr2num(b.create_time); });
-    }
-    if (store.sortby === 'mime'){
-        files.sort((a, b) => { return a.mime_type.localeCompare(b.mime_type); });
-    }
-    if (store.sortorder === 'desc'){ files.reverse(); }
-}
-sortBySelect.addEventListener('change', (elem) => {store.sortby = elem.target.value; refreshFileList();});
+sortBySelect.addEventListener('change', (elem) => {store.orderby = elem.target.value; refreshFileList();});
 sortOrderSelect.addEventListener('change', (elem) => {store.sortorder = elem.target.value; refreshFileList();});
+pageLimitSelect.addEventListener('change', (elem) => {store.pagelim = elem.target.value; refreshFileList();});
+pageNumInput.addEventListener('change', (elem) => {store.pagenum = elem.target.value; refreshFileList();});
 
 function refreshFileList(){
-    conn.listPath(store.dirpath)
+    countPath(conn, store.dirpath).then(
+        (data) => {
+            const total = data.dirs + data.files;
+            const pageCount = Math.ceil(total / store.pagelim);
+            pageCountLabel.textContent = pageCount;
+        },
+        (err) => {
+            console.error("Failed to count path: ", err);
+            showPopup('Failed to count path: ' + err, {level: 'error', timeout: 5000});
+        }
+    )
+
+    listPath(conn, store.dirpath, {
+        offset: (store.pagenum - 1) * store.pagelim,
+        limit: store.pagelim,
+        orderBy: store.orderby,
+        orderDesc: store.sortorder === 'desc'
+    })
         .then(data => {
             pathHintDiv.classList.remove('disconnected');
             pathHintDiv.classList.add('connected');
             pathHintLabel.textContent = store.dirpath;
             tbody.innerHTML = '';
-
             console.log("Got data", data);
 
             if (!data.dirs){ data.dirs = []; }
             if (!data.files){ data.files = []; }
-
-            sortDirList(data.dirs);
-            sortFileList(data.files);
 
             data.dirs.forEach(dir => {
                 const tr = document.createElement('tr');

@@ -5,7 +5,8 @@ import requests
 import requests.adapters
 import urllib.parse
 from lfss.src.datatype import (
-    FileReadPermission, FileRecord, DirectoryRecord, UserRecord, PathContents
+    FileReadPermission, FileRecord, DirectoryRecord, UserRecord, PathContents, 
+    FileSortKey, DirSortKey
     )
 from lfss.src.utils import ensure_uri_compnents
 
@@ -159,6 +160,40 @@ class Connector:
         dirs = [DirectoryRecord(**d) for d in response.json()['dirs']]
         files = [FileRecord(**f) for f in response.json()['files']]
         return PathContents(dirs=dirs, files=files)
+    
+    def count_files(self, path: str, flat: bool = False) -> int:
+        assert path.endswith('/')
+        response = self._fetch_factory('GET', '_api/count-files', {'path': path, 'flat': flat})()
+        return response.json()['count']
+
+    def list_files(
+        self, path: str, offset: int = 0, limit: int = 1000,
+        order_by: FileSortKey = '', order_desc: bool = False, 
+        flat: bool = False
+    ) -> list[FileRecord]:
+        assert path.endswith('/')
+        response = self._fetch_factory('GET', "_api/list-files", {
+            'path': path,
+            'offset': offset, 'limit': limit, 'order_by': order_by, 'order_desc': order_desc, 'flat': flat
+        })()
+        return [FileRecord(**f) for f in response.json()]
+    
+    def count_dirs(self, path: str) -> int:
+        assert path.endswith('/')
+        response = self._fetch_factory('GET', '_api/count-dirs', {'path': path})()
+        return response.json()['count']
+        
+    def list_dirs(
+        self, path: str, offset: int = 0, limit: int = 1000,
+        order_by: DirSortKey = '', order_desc: bool = False, 
+        skim: bool = True
+    ) -> list[DirectoryRecord]:
+        assert path.endswith('/')
+        response = self._fetch_factory('GET', "_api/list-dirs", {
+            'path': path,
+            'offset': offset, 'limit': limit, 'order_by': order_by, 'order_desc': order_desc, 'skim': skim
+        })()
+        return [DirectoryRecord(**d) for d in response.json()]
 
     def set_file_permission(self, path: str, permission: int | FileReadPermission):
         """Sets the file permission for the specified path."""

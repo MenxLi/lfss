@@ -377,12 +377,15 @@ export async function listPath(conn, path, {
     }
 
     orderBy = orderBy == 'none' ? '' : orderBy;
-    console.log('listPath', path, offset, limit, orderBy, orderDesc);
+    console.debug('listPath', path, offset, limit, orderBy, orderDesc);
 
     const dirCount = await conn.countDirs(path);
     const dirOffset = offset;
     const fileOffset = Math.max(offset - dirCount, 0);
-    const fileLimit = offset + limit - dirCount;
+    const dirThispage = Math.max(Math.min(dirCount - dirOffset, limit), 0);
+    const fileLimit = limit - dirThispage;
+
+    console.debug('dirCount', dirCount, 'dirOffset', dirOffset, 'fileOffset', fileOffset, 'dirThispage', dirThispage, 'fileLimit', fileLimit);
 
     const dirOrderBy = orderBy == 'url' ? 'dirname' : '';
     const fileOrderBy = orderBy;

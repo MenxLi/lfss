@@ -213,17 +213,28 @@ function maybeRefreshFileList(){
     }
 }
 
-/** @param {import('./api.js').DirectoryRecord} dirs */
-function sortDirList(dirs){
-    if (store.orderby === 'name'){
-        dirs.sort((a, b) => { return a.url.localeCompare(b.url); });
-    }
-    if (store.sortorder === 'desc'){ dirs.reverse(); }
-}
 sortBySelect.addEventListener('change', (elem) => {store.orderby = elem.target.value; refreshFileList();});
 sortOrderSelect.addEventListener('change', (elem) => {store.sortorder = elem.target.value; refreshFileList();});
 pageLimitSelect.addEventListener('change', (elem) => {store.pagelim = elem.target.value; refreshFileList();});
 pageNumInput.addEventListener('change', (elem) => {store.pagenum = elem.target.value; refreshFileList();});
+
+window.addEventListener('keydown', (e) => {
+    if (document.activeElement !== document.body){
+        return;
+    }
+    if (e.key === 'ArrowLeft'){
+        const num = Math.max(store.pagenum - 1, 1);
+        pageNumInput.value = num;
+        store.pagenum = num;
+        refreshFileList();
+    }
+    else if (e.key === 'ArrowRight'){
+        const num = Math.min(Math.max(store.pagenum + 1, 1), parseInt(pageCountLabel.textContent));
+        pageNumInput.value = num;
+        store.pagenum = num;
+        refreshFileList();
+    }
+})
 
 async function refreshFileList(){
 
@@ -236,7 +247,7 @@ async function refreshFileList(){
         .then(async (res) => {
             pathHintDiv.classList.remove('disconnected');
             pathHintDiv.classList.add('connected');
-            pathHintLabel.textContent = `[${userRecord.username}]${store.endpoint}/${store.dirpath.startsWith('/') ? store.dirpath.slice(1) : store.dirpath}`;
+            pathHintLabel.textContent = `[${userRecord.username}] ${store.endpoint}/${store.dirpath.startsWith('/') ? store.dirpath.slice(1) : store.dirpath}`;
             tbody.innerHTML = '';
             console.log("Got data", res);
 

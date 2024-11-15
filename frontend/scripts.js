@@ -1,4 +1,4 @@
-import { permMap, countPath, listPath } from './api.js';
+import { permMap, listPath } from './api.js';
 import { showFloatingWindowLineInput, showPopup } from './popup.js';
 import { formatSize, decodePathURI, ensurePathURI, getRandomString, cvtGMT2Local, debounce, encodePathURI, asHtmlText } from './utils.js';
 import { showInfoPanel, showDirInfoPanel } from './info.js';
@@ -231,17 +231,6 @@ pageLimitSelect.addEventListener('change', (elem) => {store.pagelim = elem.targe
 pageNumInput.addEventListener('change', (elem) => {store.pagenum = elem.target.value; refreshFileList();});
 
 function refreshFileList(){
-    countPath(conn, store.dirpath).then(
-        (data) => {
-            const total = data.dirs + data.files;
-            const pageCount = Math.ceil(total / store.pagelim);
-            pageCountLabel.textContent = pageCount;
-        },
-        (err) => {
-            console.error("Failed to count path: ", err);
-            showPopup('Failed to count path: ' + err, {level: 'error', timeout: 5000});
-        }
-    )
 
     listPath(conn, store.dirpath, {
         offset: (store.pagenum - 1) * store.pagelim,
@@ -249,13 +238,22 @@ function refreshFileList(){
         orderBy: store.orderby,
         orderDesc: store.sortorder === 'desc'
     })
-        .then(data => {
+        .then((res) => {
             pathHintDiv.classList.remove('disconnected');
             pathHintDiv.classList.add('connected');
             pathHintLabel.textContent = store.dirpath;
             tbody.innerHTML = '';
-            console.log("Got data", data);
+            console.log("Got data", res);
 
+            const [data, count] = res;
+
+            {
+                const total = count.dirs + count.files;
+                const pageCount = Math.ceil(total / store.pagelim);
+                pageCountLabel.textContent = pageCount;
+            }
+
+            // maybe undefined
             if (!data.dirs){ data.dirs = []; }
             if (!data.files){ data.files = []; }
 

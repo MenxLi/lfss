@@ -362,7 +362,7 @@ export default class Connector {
  * @param {Connector} conn - the connector to the API
  * @param {string} path - the path to the file directory
  * @param {Object} options - the options for the request
- * @returns {Promise<PathListResponse>} - the promise of the request
+ * @returns {Promise<[PathListResponse, {dirs: number, files: number}]>} - the promise of the request
  */
 export async function listPath(conn, path, {
     offset = 0,
@@ -370,9 +370,10 @@ export async function listPath(conn, path, {
     orderBy = '',
     orderDesc = false,
 } = {}){
+
     if (path === '/' || path === ''){
         // this handles separate case for the root directory... please refer to the backend implementation
-        return await conn.listPath('', {flat: false});
+        return [await conn.listPath('', {flat: false}), {dirs: 0, files: 0}];
     }
 
     orderBy = orderBy == 'none' ? '' : orderBy;
@@ -398,7 +399,8 @@ export async function listPath(conn, path, {
         });
     }
 
-    if (fileLimit>= 0){
+    const fileCount = await conn.countFiles(path);
+    if (fileLimit>= 0 && fileCount > fileOffset) {
         fileList = await conn.listFiles(path, {
             offset: fileOffset,
             limit: fileLimit,
@@ -407,26 +409,11 @@ export async function listPath(conn, path, {
         });
     }
 
-    return {
+    return [{
         dirs: dirList,
         files: fileList
-    }
+    }, {
+        dirs: dirCount,
+        files: fileCount
+    }];
 };
-
-/**
- * @param {Connector} conn - the connector to the API
- * @param {string} path - the path to the file directory
- * @returns {Promise<{dirs: number, files: number}>}
- */
-export async function countPath(conn, path){
-    if (path === '/' || path === ''){
-        return {
-            dirs: 0, 
-            files: 0
-        }
-    }
-    return {
-        dirs: await conn.countDirs(path),
-        files: await conn.countFiles(path)
-    }
-}

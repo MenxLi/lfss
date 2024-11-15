@@ -379,7 +379,11 @@ export async function listPath(conn, path, {
     orderBy = orderBy == 'none' ? '' : orderBy;
     console.debug('listPath', path, offset, limit, orderBy, orderDesc);
 
-    const dirCount = await conn.countDirs(path);
+    const [dirCount, fileCount] = await Promise.all([
+        conn.countDirs(path),
+        conn.countFiles(path)
+    ]);
+
     const dirOffset = offset;
     const fileOffset = Math.max(offset - dirCount, 0);
     const dirThispage = Math.max(Math.min(dirCount - dirOffset, limit), 0);
@@ -390,27 +394,30 @@ export async function listPath(conn, path, {
     const dirOrderBy = orderBy == 'url' ? 'dirname' : '';
     const fileOrderBy = orderBy;
 
-    let dirList = [];
-    let fileList = [];
-
-    if (offset < dirCount) {
-        dirList = await conn.listDirs(path, {
-            offset: dirOffset,
-            limit: limit,
-            orderBy: dirOrderBy,
-            orderDesc: orderDesc
-        });
-    }
-
-    const fileCount = await conn.countFiles(path);
-    if (fileLimit>= 0 && fileCount > fileOffset) {
-        fileList = await conn.listFiles(path, {
-            offset: fileOffset,
-            limit: fileLimit,
-            orderBy: fileOrderBy,
-            orderDesc: orderDesc
-        });
-    }
+    const [dirList, fileList] = await Promise.all([
+        (async () => {
+            if (offset < dirCount) {
+                return await conn.listDirs(path, {
+                    offset: dirOffset,
+                    limit: dirThispage,
+                    orderBy: dirOrderBy,
+                    orderDesc: orderDesc
+                });
+            }
+            return [];
+        })(), 
+        (async () => {
+            if (fileLimit >= 0 && fileCount > fileOffset) {
+                return await conn.listFiles(path, {
+                    offset: fileOffset,
+                    limit: fileLimit,
+                    orderBy: fileOrderBy,
+                    orderDesc: orderDesc
+                });
+            }
+            return [];
+        })()
+    ]);
 
     return [{
         dirs: dirList,

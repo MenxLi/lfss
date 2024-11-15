@@ -225,7 +225,7 @@ sortOrderSelect.addEventListener('change', (elem) => {store.sortorder = elem.tar
 pageLimitSelect.addEventListener('change', (elem) => {store.pagelim = elem.target.value; refreshFileList();});
 pageNumInput.addEventListener('change', (elem) => {store.pagenum = elem.target.value; refreshFileList();});
 
-function refreshFileList(){
+async function refreshFileList(){
 
     listPath(conn, store.dirpath, {
         offset: (store.pagenum - 1) * store.pagelim,
@@ -233,7 +233,7 @@ function refreshFileList(){
         orderBy: store.orderby,
         orderDesc: store.sortorder === 'desc'
     })
-        .then((res) => {
+        .then(async (res) => {
             pathHintDiv.classList.remove('disconnected');
             pathHintDiv.classList.add('connected');
             pathHintLabel.textContent = `[${userRecord.username}]${store.endpoint}/${store.dirpath.startsWith('/') ? store.dirpath.slice(1) : store.dirpath}`;
@@ -249,6 +249,9 @@ function refreshFileList(){
                 if (store.pagenum > pageCount){
                     store.pagenum = pageCount;
                     pageNumInput.value = pageCount;
+
+                    await refreshFileList();
+                    return;
                 }
             }
 

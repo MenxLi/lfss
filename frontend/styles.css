@@ -1,6 +1,7 @@
 @import "./popup.css";
 @import "./info.css";
 @import "./thumb.css";
+@import "./login.css"; 
 
 html {
     overflow: -moz-scrollbars-vertical;
@@ -49,7 +50,9 @@ div.container.header, div.container.footer{
 
 div.container.header{
     top: 0;
-    height: 10rem;
+    height: 6.5rem;
+    justify-content: flex-end;
+    gap: 0.2rem;
 }
 div.container.footer{
     bottom: 0;
@@ -59,7 +62,7 @@ div.container.footer{
 div.container.content{
     width: 100%;
     padding-inline: 0.5rem;
-    margin-top: calc(10rem + 1rem);
+    margin-top: calc(6.5rem + 1rem);
     margin-bottom: calc(4rem + 0.5rem);
 }
 
@@ -127,13 +130,22 @@ input#path{
 }
 
 div#top-bar{
+    color: grey;
+    display: flex;
+    flex-direction: row;
+    width: calc(100% - 2rem);
+}
+div#settings-bar{
+    width: calc(100% - 2rem);
     display: flex;
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
     gap: 1rem;
+    padding-bottom: 0.2rem;
 }
 div#position-hint{
+    cursor: pointer;
     color: rgb(138, 138, 138);
     border-radius: 0.5rem;
     display: flex;
@@ -142,6 +154,7 @@ div#position-hint{
     gap: 0.25rem;
     height: 1rem;
     margin-bottom: 0.25rem;
+    font-size: x-small;
 
     padding: 0.25rem;
 }
@@ -155,12 +168,6 @@ div#position-hint.disconnected span{
 }
 div#position-hint.connected span{
     background-color: rgb(0, 166, 0);
-}
-
-div#settings {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
 }
 
 label#bucket-label{

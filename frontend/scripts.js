@@ -4,6 +4,7 @@ import { formatSize, decodePathURI, ensurePathURI, getRandomString, cvtGMT2Local
 import { showInfoPanel, showDirInfoPanel } from './info.js';
 import { makeThumbHtml } from './thumb.js';
 import { store } from './state.js';
+import { maybeShowLoginPanel } from './login.js';
 
 /** @type {import('./api.js').UserRecord}*/
 let userRecord = null;
@@ -12,8 +13,6 @@ const ensureSlashEnd = (path) => {
     return path.endsWith('/') ? path : path + '/';
 }
 
-const endpointInput = document.querySelector('input#endpoint');
-const tokenInput = document.querySelector('input#token');
 const pathInput = document.querySelector('input#path');
 const pathBackButton = document.querySelector('span#back-btn');
 const pathHintDiv = document.querySelector('#position-hint');
@@ -31,20 +30,24 @@ const sortBySelect = document.querySelector('#sort-by-sel');
 const sortOrderSelect = document.querySelector('#sort-order-sel');
 
 const conn = store.conn;
-store.init();
 
 {
-    tokenInput.value = store.token;
-    endpointInput.value = store.endpoint;
+    // initialization
+    store.init();
     pathInput.value = store.dirpath;
     uploadFilePrefixLabel.textContent = pathInput.value;
     sortBySelect.value = store.orderby;
     sortOrderSelect.value = store.sortorder;
     pageLimitSelect.value = store.pagelim;
     pageNumInput.value = store.pagenum;
-    maybeRefreshUserRecord().then(
-        () => maybeRefreshFileList()
-    );
+
+    maybeShowLoginPanel(store,).then(
+        (user) => {
+            console.log("User record", user);
+            userRecord = user;
+            maybeRefreshFileList();
+        }
+    )
 }
 
 function onPathChange(){
@@ -53,19 +56,11 @@ function onPathChange(){
     maybeRefreshFileList();
 }
 
-endpointInput.addEventListener('blur', () => {
-    store.endpoint = endpointInput.value;
-    maybeRefreshUserRecord().then(
-        () => maybeRefreshFileList()
-    );
+pathHintDiv.addEventListener('click', () => {
+    showPopup('Refresh :)')
+    refreshFileList();
 });
-tokenInput.addEventListener('blur', () => {
-    store.token = tokenInput.value;
-    console.log("Token changed to", conn.token);
-    maybeRefreshUserRecord().then(
-        () => maybeRefreshFileList()
-    );
-});
+
 pathInput.addEventListener('input', () => {
     onPathChange();
 });
@@ -241,7 +236,7 @@ function refreshFileList(){
         .then((res) => {
             pathHintDiv.classList.remove('disconnected');
             pathHintDiv.classList.add('connected');
-            pathHintLabel.textContent = store.dirpath;
+            pathHintLabel.textContent = `[${userRecord.username}]${store.endpoint}/${store.dirpath.startsWith('/') ? store.dirpath.slice(1) : store.dirpath}`;
             tbody.innerHTML = '';
             console.log("Got data", res);
 
@@ -511,26 +506,6 @@ function refreshFileList(){
             console.error(err);
         }
     );
-}
-
-
-async function maybeRefreshUserRecord(){
-    if (store.endpoint && store.token){
-        await refreshUserRecord();
-    }
-}
-
-async function refreshUserRecord(){
-    try{
-        userRecord = await conn.whoami();
-        console.log("User record: ", userRecord);
-    }
-    catch (err){
-        userRecord = null;
-        console.error("Failed to get user record");
-        return false;
-    }
-    return true;
 }
 
 console.log("Hello World");

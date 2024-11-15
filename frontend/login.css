@@ -1,0 +1,21 @@
+
+div#login-container{
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    width: calc(max(70vw, 420px));
+    min-width: 420px;
+}
+
+label.login-lbl{
+    text-align: left;
+    font-weight: bold;
+}
+
+button#login-btn{
+    padding: 0.8rem;
+    padding-inline: 3rem;
+    margin-top: 0.5rem;
+}

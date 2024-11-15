@@ -11,7 +11,20 @@ import { createFloatingWindow, showPopup } from "./popup.js";
  */
 export async function maybeShowLoginPanel(
     store, 
+    forceShowup = false
 ){
+    if (!forceShowup){
+        try {
+            const user = await store.conn.whoami();
+            if (user.id !== 0){
+                return user;
+            }
+        }
+        catch (e) {
+            console.error(e);
+        }
+    }
+
     const innerHTML = `
     <div id="login-container">
         <div class="input-group" style="min-width: 300px;">

@@ -50,16 +50,21 @@ const conn = store.conn;
     )
 }
 
+pathHintDiv.addEventListener('click', () => {
+    maybeShowLoginPanel(store, true).then(
+        (user) => {
+            console.log("User record", user);
+            userRecord = user;
+            maybeRefreshFileList();
+        }
+    );
+});
+
 function onPathChange(){
     uploadFilePrefixLabel.textContent = pathInput.value;
     store.dirpath = pathInput.value;
     maybeRefreshFileList();
 }
-
-pathHintDiv.addEventListener('click', () => {
-    showPopup('Refresh :)')
-    refreshFileList();
-});
 
 pathInput.addEventListener('input', () => {
     onPathChange();

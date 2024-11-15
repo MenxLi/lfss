@@ -157,6 +157,12 @@ div#position-hint{
     font-size: x-small;
 
     padding: 0.25rem;
+    transition: all 0.2s;
+}
+div#position-hint:hover{
+    background-color: rgb(240, 244, 246);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    color:rgb(91, 107, 116)
 }
 div#position-hint span{
     width: 0.75rem;

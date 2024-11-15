@@ -244,8 +244,12 @@ function refreshFileList(){
 
             {
                 const total = count.dirs + count.files;
-                const pageCount = Math.ceil(total / store.pagelim);
+                const pageCount = Math.max(Math.ceil(total / store.pagelim), 1);
                 pageCountLabel.textContent = pageCount;
+                if (store.pagenum > pageCount){
+                    store.pagenum = pageCount;
+                    pageNumInput.value = pageCount;
+                }
             }
 
             // maybe undefined

@@ -154,9 +154,13 @@ class Connector:
                 return None
             raise e
     
-    def list_path(self, path: str, flat: bool = False) -> PathContents:
+    def list_path(self, path: str) -> PathContents:
+        """ 
+        shorthand list with limited options, 
+        for large directories / more options, use list_files and list_dirs instead.
+        """
         assert path.endswith('/')
-        response = self._fetch_factory('GET', path, {'flat': flat})()
+        response = self._fetch_factory('GET', path)()
         dirs = [DirectoryRecord(**d) for d in response.json()['dirs']]
         files = [FileRecord(**f) for f in response.json()['files']]
         return PathContents(dirs=dirs, files=files)

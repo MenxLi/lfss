@@ -142,15 +142,11 @@ export default class Connector {
     }
     /**
      * @param {string} path - the path to the file directory, should ends with '/'
-     * @param {Object} options - the options for the request
      * @returns {Promise<PathListResponse>} - the promise of the request
      */
-    async listPath(path, {
-        flat = false
-    } = {}){
+    async listPath(path){
         path = this._sanitizeDirPath(path);
         const dst = new URL(this.config.endpoint + '/' + path);
-        dst.searchParams.append('flat', flat);
         const res = await fetch(dst.toString(), {
             method: 'GET',
             headers: {
@@ -373,7 +369,7 @@ export async function listPath(conn, path, {
 
     if (path === '/' || path === ''){
         // this handles separate case for the root directory... please refer to the backend implementation
-        return [await conn.listPath('', {flat: false}), {dirs: 0, files: 0}];
+        return [await conn.listPath(''), {dirs: 0, files: 0}];
     }
 
     orderBy = orderBy == 'none' ? '' : orderBy;

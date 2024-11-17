@@ -53,6 +53,7 @@ def handle_exception(fn):
             if isinstance(e, InvalidPathError): raise HTTPException(status_code=400, detail=str(e))
             if isinstance(e, FileNotFoundError): raise HTTPException(status_code=404, detail=str(e))
             if isinstance(e, FileExistsError): raise HTTPException(status_code=409, detail=str(e))
+            if isinstance(e, TooManyItemsError): raise HTTPException(status_code=400, detail=str(e))
             logger.error(f"Uncaptured error in {fn.__name__}: {e}")
             raise 
     return wrapper
@@ -186,7 +187,7 @@ async def emit_file(
 @handle_exception
 async def get_file(
     path: str, 
-    download: bool = False, flat: bool = False, thumb: bool = False,
+    download: bool = False, thumb: bool = False,
     user: UserRecord = Depends(get_current_user)
     ):
     path = ensure_uri_compnents(path)
@@ -203,8 +204,6 @@ async def get_file(
                 return await emit_thumbnail(path, download, create_time=None)
             
             if path == "/":
-                if flat:
-                    raise HTTPException(status_code=400, detail="Flat query not supported for root path")
                 return PathContents(
                     dirs = await fconn.list_root_dirs(user.username, skim=True) \
                         if not user.is_admin else await fconn.list_root_dirs(skim=True),
@@ -214,7 +213,7 @@ async def get_file(
             if not path.startswith(f"{user.username}/") and not user.is_admin:
                 raise HTTPException(status_code=403, detail="Permission denied, path must start with username")
 
-            return await fconn.list_path(path, flat = flat)
+            return await fconn.list_path(path)
     
     # handle file query
     async with unique_cursor() as conn:
@@ -370,7 +369,10 @@ async def bundle_files(path: str, user: UserRecord = Depends(registered_user)):
     
     async with unique_cursor() as conn:
         fconn = FileConn(conn)
-        files = (await fconn.list_path(path, flat = True)).files
+        files = await fconn.list_path_files(
+            url = path, flat = True, 
+            limit=(await fconn.count_path_files(url = path, flat = True))
+            )
     files = [f for f in files if await is_access_granted(f)]
     if len(files) == 0:
         raise HTTPException(status_code=404, detail="No files found")

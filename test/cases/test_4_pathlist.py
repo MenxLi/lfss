@@ -1,5 +1,6 @@
 import pytest
 import subprocess
+from lfss.src.bounded_pool import BoundedThreadPoolExecutor
 from .common import get_conn, create_server_context
 from ..config import SANDBOX_DIR
 
@@ -89,3 +90,22 @@ def test_forbidden(server):
     c = get_conn('u1')
     with pytest.raises(Exception, match='403'):
         c.list_files('u0/a/', order_by='url', order_desc=True)
+
+def test_shorthand_list(server):
+    import time
+    c = get_conn('u0')
+    
+    def upload_one_file(i: int):
+        c.put(f'u0/test-sl-{i}.txt', f'hello world {i}'.encode(), conflict='overwrite')
+    
+    s_time = time.time()
+    concurrent = 32
+    with c.session(concurrent):
+        with BoundedThreadPoolExecutor(concurrent) as executor:
+            for i in range(10001):
+                executor.submit(upload_one_file, i)
+    e_time = time.time()
+    print(f"Time taken for file upload: {e_time - s_time}")
+
+    with pytest.raises(Exception, match='400'):
+        c.list_path('u0/')

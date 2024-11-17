@@ -1,6 +1,7 @@
 import os, time, pathlib
 from threading import Lock
 from .api import Connector
+from ..src.datatype import FileRecord
 from ..src.utils import decode_uri_compnents
 from ..src.bounded_pool import BoundedThreadPoolExecutor
 
@@ -156,8 +157,16 @@ def download_directory(
             ))[0]:
             failed_items.append((src_url, res[1]))
         
+    batch_size = 10000
+    file_list: list[FileRecord] = []
     with connector.session(n_concurrent) as c:
+        file_count = c.count_files(src_path, flat=True)
+        for offset in range(0, file_count, batch_size):
+            file_list.extend(c.list_files(
+                src_path, offset=offset, limit=batch_size, flat=True
+            ))
+
         with BoundedThreadPoolExecutor(n_concurrent) as executor:
-            for file in c.list_path(src_path, flat=True).files:
+            for file in file_list:
                 executor.submit(get_file, c, file.url)
     return failed_items

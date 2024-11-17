@@ -243,18 +243,24 @@ class FileConn(DBObjectBase):
         files = [self.parse_record(r) for r in res]
         return files
     
-    async def list_path(self, url: str, flat: bool = False) -> PathContents:
+    async def list_path(self, url: str) -> PathContents:
         """
-        List all files and directories under the given path
-        if flat is True, list all files under the path, without delimiting directories
+        List all files and directories under the given path.  
+        This method is a handy way file browsing, but has limitaions:
+        - It does not support pagination
+        - It does not support sorting
+        - It cannot flatten directories
+        - It cannot list directories with details
         """
-        if flat:
-            return PathContents(files = await self.list_path_files(url, flat=True))
-        else:
-            return PathContents(
-                dirs = await self.list_path_dirs(url), 
-                files = await self.list_path_files(url, flat=False)
-                )
+        MAX_ITEMS = int(1e4)
+        dir_count = await self.count_path_dirs(url)
+        file_count = await self.count_path_files(url, flat=False)
+        if dir_count + file_count > MAX_ITEMS:
+            raise TooManyItemsError("Too many items, please paginate")
+        return PathContents(
+            dirs = await self.list_path_dirs(url, skim=True, limit=MAX_ITEMS),
+            files = await self.list_path_files(url, flat=False, limit=MAX_ITEMS)
+            )
     
     async def get_path_record(self, url: str) -> DirectoryRecord:
         """
@@ -703,7 +709,8 @@ class Database:
         async with unique_cursor() as cur:
             fconn = FileConn(cur)
             if urls is None:
-                urls = [r.url for r in (await fconn.list_path(top_url, flat=True)).files]
+                fcount = await fconn.count_path_files(top_url, flat=True)
+                urls = [r.url for r in (await fconn.list_path_files(top_url, flat=True, limit=fcount))]
 
             for url in urls:
                 if not url.startswith(top_url):

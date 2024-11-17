@@ -3,7 +3,7 @@ import os, pathlib
 import tempfile
 from ..config import SANDBOX_DIR
 from .common import get_conn, create_server_context
-from lfss.client import upload_directory, download_directory
+from lfss.api import upload_directory, download_directory
 import pytest
 
 server = create_server_context()

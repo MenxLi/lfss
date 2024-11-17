@@ -5,7 +5,7 @@ from threading import Lock
 from multiprocessing.managers import ValueProxy
 from concurrent.futures import ProcessPoolExecutor
 
-from lfss.client import Connector
+from lfss.api import Connector
 from lfss.src.utils import parse_storage_size
 
 c = Connector()

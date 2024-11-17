@@ -1,7 +1,7 @@
 import subprocess, time
 from .config import SANDBOX_DIR, SERVER_PORT
 import requests
-from lfss.client import Connector
+from lfss.api import Connector
 
 def start_server_thread(cwd, port):
     return subprocess.Popen(['lfss-serve', '--workers', '2', '--port', str(port)], cwd=cwd)

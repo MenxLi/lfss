@@ -2,7 +2,7 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 import argparse
 import time
-from lfss.client import Connector
+from lfss.api import Connector
 
 c = Connector()
 
@@ -36,7 +36,7 @@ if __name__ == '__main__':
     lock = Lock()
 
     with c.session(pool_size=args.jobs):
-        file_list = c.list_path(args.path, flat=True).files
+        file_list = c.list_files(args.path, flat=True, limit=int(1e6))
         path_meta = c.get_metadata(args.path)
         assert path_meta is not None, "Path not found"
         total_bytes = path_meta.size    # type: ignore

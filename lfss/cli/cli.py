@@ -1,4 +1,4 @@
-from lfss.client import Connector, upload_directory, upload_file, download_file, download_directory
+from lfss.api import Connector, upload_directory, upload_file, download_file, download_directory
 from pathlib import Path
 import argparse
 from lfss.src.datatype import FileReadPermission

@@ -1,6 +1,6 @@
 import os, time, pathlib
 from threading import Lock
-from .api import Connector
+from .connector import Connector
 from ..src.datatype import FileRecord
 from ..src.utils import decode_uri_compnents
 from ..src.bounded_pool import BoundedThreadPoolExecutor

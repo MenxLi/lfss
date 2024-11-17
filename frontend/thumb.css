@@ -7,4 +7,10 @@ img.thumb{
     width: 32px;
     object-fit: contain;
     border-radius: 0.1rem;
+    transition: all 0.2s;
+}
+img.thumb:hover{
+    cursor: pointer;
+    height: 48px;   /* smaller than backend */
+    width: 48px;
 }

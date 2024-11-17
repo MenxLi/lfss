@@ -463,12 +463,6 @@ async function refreshFileList(){
                     });
                     actContainer.appendChild(infoButton);
 
-                    const viewButton = document.createElement('a');
-                    viewButton.textContent = 'View';
-                    viewButton.href = conn.config.endpoint + '/' + file.url + '?token=' + conn.config.token;
-                    viewButton.target = '_blank';
-                    actContainer.appendChild(viewButton);
-
                     const moveButton = document.createElement('a');
                     moveButton.textContent = 'Move';
                     moveButton.style.cursor = 'pointer';

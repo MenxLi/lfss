@@ -50,22 +50,23 @@ def debounce_async(delay: float = 0.1, max_wait: float = 1.):
         last_execution_time = 0
 
         async def delayed_func(*args, **kwargs):
+            nonlocal last_execution_time
             await asyncio.sleep(delay)
             await func(*args, **kwargs)
+            last_execution_time = time.monotonic()
 
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
             nonlocal task_record, last_execution_time
-            current_time = time.monotonic()
 
             async with lock_debounce_task_queue:
                 if task_record is not None:
                     task_record[1].cancel()
                     g_debounce_tasks.pop(task_record[0], None)
             
-            if current_time - last_execution_time > max_wait:
+            if time.monotonic() - last_execution_time > max_wait:
                 await func(*args, **kwargs)
-                last_execution_time = current_time
+                last_execution_time = time.monotonic()
                 return
 
             task = asyncio.create_task(delayed_func(*args, **kwargs))

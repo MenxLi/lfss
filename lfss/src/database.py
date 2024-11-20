@@ -458,27 +458,33 @@ class FileConn(DBObjectBase):
         await self.cur.execute("DELETE FROM blobs.fdata WHERE file_id IN ({})".format(','.join(['?'] * len(file_ids))), file_ids)
 
 _log_active_queue = []
+_log_active_lock = asyncio.Lock()
 @debounce_async()
 async def _set_all_active():
     async with transaction() as conn:
         uconn = UserConn(conn)
-        for u in _log_active_queue:
-            await uconn.set_active(u)
-        _log_active_queue.clear()
+        async with _log_active_lock:
+            for u in _log_active_queue:
+                await uconn.set_active(u)
+            _log_active_queue.clear()
 async def delayed_log_activity(username: str):
-    _log_active_queue.append(username)
+    async with _log_active_lock:
+        _log_active_queue.append(username)
     await _set_all_active()
 
 _log_access_queue = []
+_log_access_lock = asyncio.Lock()
 @debounce_async()
 async def _log_all_access():
     async with transaction() as conn:
         fconn = FileConn(conn)
-        for r in _log_access_queue:
-            await fconn.log_access(r)
-        _log_access_queue.clear()
+        async with _log_access_lock:
+            for r in _log_access_queue:
+                await fconn.log_access(r)
+            _log_access_queue.clear()
 async def delayed_log_access(url: str):
-    _log_access_queue.append(url)
+    async with _log_access_lock:
+        _log_access_queue.append(url)
     await _log_all_access()
 
 def validate_url(url: str, is_file = True):

@@ -42,7 +42,7 @@ class RequestDB:
     async def commit(self):
         await self.conn.commit()
     
-    @debounce_async(0.05)
+    @debounce_async()
     async def ensure_commit_once(self):
         await self.commit()
     

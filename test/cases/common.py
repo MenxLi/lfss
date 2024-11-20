@@ -28,6 +28,8 @@ def create_server_context():
     def server():
         s = Server()
         s.start(cwd=str(SANDBOX_DIR), port=SERVER_PORT)
+        # TODO: Somehow the server is not ready when the test starts...
+        import time; time.sleep(1)
         yield s
         s.stop()
         clear_sandbox()

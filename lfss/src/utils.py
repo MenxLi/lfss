@@ -1,4 +1,4 @@
-import datetime
+import datetime, time
 import urllib.parse
 import asyncio
 import functools
@@ -6,6 +6,7 @@ import hashlib
 from concurrent.futures import ThreadPoolExecutor
 from typing import TypeVar, Callable, Awaitable
 from functools import wraps, partial
+from uuid import uuid4
 import os
 
 def hash_credential(username: str, password: str):
@@ -25,25 +26,47 @@ def ensure_uri_compnents(path: str):
     """ Ensure the path components are safe to use """
     return encode_uri_compnents(decode_uri_compnents(path))
 
-def debounce_async(delay: float = 0):
-    """ Debounce the async procedure """
+g_debounce_tasks: dict[str, asyncio.Task] = {}
+async def wait_for_debounce_tasks():
+    async def stop_task(task: asyncio.Task):
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+    await asyncio.gather(*map(stop_task, g_debounce_tasks.values()))
+
+def debounce_async(delay: float = 0.1, max_wait: float = 1.):
+    """ 
+    Debounce the async procedure, 
+    ensuring execution at least once every `max_wait` seconds. 
+    """
     def debounce_wrap(func):
-        # https://docs.python.org/3/library/asyncio-task.html#asyncio.Task.cancel
+        task_record: tuple[str, asyncio.Task] | None = None
+        last_execution_time = 0
+
         async def delayed_func(*args, **kwargs):
             await asyncio.sleep(delay)
             await func(*args, **kwargs)
 
-        task_record: asyncio.Task | None = None
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
-            nonlocal task_record
+            nonlocal task_record, last_execution_time
+            current_time = time.monotonic()
+
             if task_record is not None:
-                task_record.cancel()
-            task_record = asyncio.create_task(delayed_func(*args, **kwargs))
-            try:
-                await task_record
-            except asyncio.CancelledError:
-                pass
+                task_record[1].cancel()
+                g_debounce_tasks.pop(task_record[0], None)
+            
+            if current_time - last_execution_time > max_wait:
+                await func(*args, **kwargs)
+                last_execution_time = current_time
+                return
+
+            task = asyncio.create_task(delayed_func(*args, **kwargs))
+            task_uid = uuid4().hex
+            task_record = (task_uid, task)
+            g_debounce_tasks[task_uid] = task
         return wrapper
     return debounce_wrap
 

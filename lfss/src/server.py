@@ -16,7 +16,7 @@ from .error import *
 from .log import get_logger
 from .stat import RequestDB
 from .config import MAX_BUNDLE_BYTES, MAX_FILE_BYTES, LARGE_FILE_BYTES, CHUNK_SIZE
-from .utils import ensure_uri_compnents, format_last_modified, now_stamp
+from .utils import ensure_uri_compnents, format_last_modified, now_stamp, wait_for_debounce_tasks
 from .connection_pool import global_connection_init, global_connection_close, unique_cursor
 from .database import Database, DECOY_USER, check_user_permission, UserConn, FileConn
 from .datatype import (
@@ -39,6 +39,7 @@ async def lifespan(app: FastAPI):
         yield
         await req_conn.commit()
     finally:
+        await wait_for_debounce_tasks()
         await asyncio.gather(req_conn.close(), global_connection_close())
 
 def handle_exception(fn):

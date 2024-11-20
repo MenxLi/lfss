@@ -29,7 +29,7 @@ async def _main():
     sp_set.add_argument('username', type=str)
     sp_set.add_argument('-p', '--password', type=str, default=None)
     sp_set.add_argument('-a', '--admin', type=parse_bool, default=None)
-    sp_set.add_argument('--permission', type=int, default=None)
+    sp_set.add_argument('--permission', type=parse_permission, default=None)
     sp_set.add_argument('--max-storage', type=parse_storage_size, default=None)
     
     sp_list = sp.add_parser('list')

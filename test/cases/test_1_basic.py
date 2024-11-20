@@ -49,6 +49,12 @@ def test_put_get_perm(server):
     c.put(f'u2/test3_from_u0.txt', b'hello world 3, private', permission=FileReadPermission.PRIVATE)
     assert c.get(f'u2/test1_from_u0.txt') == b'hello world 1', "Admin get put failed"
 
+    # test stream get
+    blobs = b""
+    for chunk in c.get_stream(f'u2/test1_from_u0.txt'):
+        blobs += chunk
+    assert blobs == b'hello world 1', "Get stream failed"
+
     # user
     c = get_conn('u1')
     with pytest.raises(Exception):

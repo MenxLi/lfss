@@ -1,9 +1,10 @@
 from __future__ import annotations
-from typing import Optional, Literal
+from typing import Optional, Literal, Iterator
 import os
 import requests
 import requests.adapters
 import urllib.parse
+from lfss.src.error import PathNotFoundError
 from lfss.src.datatype import (
     FileReadPermission, FileRecord, DirectoryRecord, UserRecord, PathContents, 
     FileSortKey, DirSortKey
@@ -116,9 +117,9 @@ class Connector:
         )
         return response.json()
     
-    def _get(self, path: str) -> Optional[requests.Response]:
+    def _get(self, path: str, stream: bool = False) -> Optional[requests.Response]:
         try:
-            response = self._fetch_factory('GET', path)()
+            response = self._fetch_factory('GET', path)(stream=stream)
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
                 return None
@@ -130,6 +131,12 @@ class Connector:
         response = self._get(path)
         if response is None: return None
         return response.content
+    
+    def get_stream(self, path: str) -> Iterator[bytes]:
+        """Downloads a file from the specified path, will raise PathNotFoundError if path not found."""
+        response = self._get(path, stream=True)
+        if response is None: raise PathNotFoundError("Path not found: " + path)
+        return response.iter_content(chunk_size=1024)
 
     def get_json(self, path: str) -> Optional[dict]:
         response = self._get(path)

@@ -3,6 +3,8 @@ import urllib.parse
 import asyncio
 import functools
 import hashlib
+from asyncio import Lock
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from typing import TypeVar, Callable, Awaitable
 from functools import wraps, partial
@@ -26,7 +28,8 @@ def ensure_uri_compnents(path: str):
     """ Ensure the path components are safe to use """
     return encode_uri_compnents(decode_uri_compnents(path))
 
-g_debounce_tasks: dict[str, asyncio.Task] = {}
+g_debounce_tasks: OrderedDict[str, asyncio.Task] = OrderedDict()
+lock_debounce_task_queue = Lock()
 async def wait_for_debounce_tasks():
     async def stop_task(task: asyncio.Task):
         task.cancel()
@@ -35,6 +38,7 @@ async def wait_for_debounce_tasks():
         except asyncio.CancelledError:
             pass
     await asyncio.gather(*map(stop_task, g_debounce_tasks.values()))
+    g_debounce_tasks.clear()
 
 def debounce_async(delay: float = 0.1, max_wait: float = 1.):
     """ 
@@ -54,9 +58,10 @@ def debounce_async(delay: float = 0.1, max_wait: float = 1.):
             nonlocal task_record, last_execution_time
             current_time = time.monotonic()
 
-            if task_record is not None:
-                task_record[1].cancel()
-                g_debounce_tasks.pop(task_record[0], None)
+            async with lock_debounce_task_queue:
+                if task_record is not None:
+                    task_record[1].cancel()
+                    g_debounce_tasks.pop(task_record[0], None)
             
             if current_time - last_execution_time > max_wait:
                 await func(*args, **kwargs)
@@ -66,7 +71,12 @@ def debounce_async(delay: float = 0.1, max_wait: float = 1.):
             task = asyncio.create_task(delayed_func(*args, **kwargs))
             task_uid = uuid4().hex
             task_record = (task_uid, task)
-            g_debounce_tasks[task_uid] = task
+            async with lock_debounce_task_queue:
+                g_debounce_tasks[task_uid] = task
+                if len(g_debounce_tasks) > 2048:
+                    # finished tasks are not removed from the dict
+                    # so we need to clear it periodically
+                    await wait_for_debounce_tasks()
         return wrapper
     return debounce_wrap
 

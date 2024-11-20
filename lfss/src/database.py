@@ -16,7 +16,7 @@ from .datatype import (
     )
 from .config import LARGE_BLOB_DIR, CHUNK_SIZE
 from .log import get_logger
-from .utils import decode_uri_compnents, hash_credential, concurrent_wrap
+from .utils import decode_uri_compnents, hash_credential, concurrent_wrap, debounce_async
 from .error import *
 
 class DBObjectBase(ABC):
@@ -417,7 +417,8 @@ class FileConn(DBObjectBase):
     async def set_file_blob(self, file_id: str, blob: bytes):
         await self.cur.execute("INSERT OR REPLACE INTO blobs.fdata (file_id, data) VALUES (?, ?)", (file_id, blob))
     
-    async def set_file_blob_external(self, file_id: str, stream: AsyncIterable[bytes])->int:
+    @staticmethod
+    async def set_file_blob_external(file_id: str, stream: AsyncIterable[bytes])->int:
         size_sum = 0
         try:
             async with aiofiles.open(LARGE_BLOB_DIR / file_id, 'wb') as f:
@@ -445,7 +446,8 @@ class FileConn(DBObjectBase):
                 if not chunk: break
                 yield chunk
     
-    async def delete_file_blob_external(self, file_id: str):
+    @staticmethod
+    async def delete_file_blob_external(file_id: str):
         if (LARGE_BLOB_DIR / file_id).exists():
             await aiofiles.os.remove(LARGE_BLOB_DIR / file_id)
     
@@ -454,6 +456,30 @@ class FileConn(DBObjectBase):
     
     async def delete_file_blobs(self, file_ids: list[str]):
         await self.cur.execute("DELETE FROM blobs.fdata WHERE file_id IN ({})".format(','.join(['?'] * len(file_ids))), file_ids)
+
+_log_active_queue = []
+@debounce_async()
+async def _set_all_active():
+    async with transaction() as conn:
+        uconn = UserConn(conn)
+        for u in _log_active_queue:
+            await uconn.set_active(u)
+        _log_active_queue.clear()
+async def delayed_log_activity(username: str):
+    _log_active_queue.append(username)
+    await _set_all_active()
+
+_log_access_queue = []
+@debounce_async()
+async def _log_all_access():
+    async with transaction() as conn:
+        fconn = FileConn(conn)
+        for r in _log_access_queue:
+            await fconn.log_access(r)
+        _log_access_queue.clear()
+async def delayed_log_access(url: str):
+    _log_access_queue.append(url)
+    await _log_all_access()
 
 def validate_url(url: str, is_file = True):
     prohibited_chars = ['..', ';', "'", '"', '\\', '\0', '\n', '\r', '\t', '\x0b', '\x0c']
@@ -489,11 +515,6 @@ class Database:
             await execute_sql(conn, 'init.sql')
         return self
     
-    async def record_user_activity(self, u: str):
-        async with transaction() as conn:
-            uconn = UserConn(conn)
-            await uconn.set_active(u)
-    
     async def update_file_record(self, user: UserRecord, url: str, permission: FileReadPermission):
         validate_url(url)
         async with transaction() as conn:
@@ -515,9 +536,7 @@ class Database:
         if file_size is not provided, the blob must be bytes
         """
         validate_url(url)
-        async with transaction() as cur:
-            uconn = UserConn(cur)
-            fconn = FileConn(cur)
+        async with unique_cursor() as cur:
             user = await get_user(cur, u)
             if user is None:
                 return
@@ -533,27 +552,35 @@ class Database:
                     if await get_user(cur, first_component) is None:
                         raise PermissionDeniedError(f"Invalid path: {first_component} is not a valid username")
             
-            user_size_used = await fconn.user_size(user.id)
+            fconn_r = FileConn(cur)
+            user_size_used = await fconn_r.user_size(user.id)
+
             if isinstance(blob, bytes):
                 file_size = len(blob)
                 if user_size_used + file_size > user.max_storage:
                     raise StorageExceededError(f"Unable to save file, user {user.username} has storage limit of {user.max_storage}, used {user_size_used}, requested {file_size}")
                 f_id = uuid.uuid4().hex
-                await fconn.set_file_blob(f_id, blob)
-                await fconn.set_file_record(
-                    url, owner_id=user.id, file_id=f_id, file_size=file_size, 
-                    permission=permission, external=False, mime_type=mime_type)
+
+                async with transaction() as w_cur:
+                    fconn_w = FileConn(w_cur)
+                    await fconn_w.set_file_blob(f_id, blob)
+                    await fconn_w.set_file_record(
+                        url, owner_id=user.id, file_id=f_id, file_size=file_size, 
+                        permission=permission, external=False, mime_type=mime_type)
             else:
                 assert isinstance(blob, AsyncIterable)
                 f_id = uuid.uuid4().hex
-                file_size = await fconn.set_file_blob_external(f_id, blob)
+                file_size = await FileConn.set_file_blob_external(f_id, blob)
                 if user_size_used + file_size > user.max_storage:
-                    await fconn.delete_file_blob_external(f_id)
+                    await FileConn.delete_file_blob_external(f_id)
                     raise StorageExceededError(f"Unable to save file, user {user.username} has storage limit of {user.max_storage}, used {user_size_used}, requested {file_size}")
-                await fconn.set_file_record(
-                    url, owner_id=user.id, file_id=f_id, file_size=file_size, 
-                    permission=permission, external=True, mime_type=mime_type)
-            await uconn.set_active(user.username)
+                
+                async with transaction() as w_cur:
+                    await FileConn(w_cur).set_file_record(
+                        url, owner_id=user.id, file_id=f_id, file_size=file_size, 
+                        permission=permission, external=True, mime_type=mime_type)
+            
+        await delayed_log_activity(user.username)
 
     async def read_file_stream(self, url: str) -> AsyncIterable[bytes]:
         validate_url(url)
@@ -566,9 +593,7 @@ class Database:
                 raise ValueError(f"File {url} is not stored externally, should use read_file instead")
             ret = fconn.get_file_blob_external(r.file_id)
 
-        async with transaction() as w_cur:
-            await FileConn(w_cur).log_access(url)
-        
+        await delayed_log_access(url)
         return ret
 
 
@@ -588,9 +613,7 @@ class Database:
             if blob is None:
                 raise FileNotFoundError(f"File {url} data not found")
 
-        async with transaction() as w_cur:
-            await FileConn(w_cur).log_access(url)
-
+        await delayed_log_access(url)
         return blob
 
     async def delete_file(self, url: str, assure_user: Optional[UserRecord] = None) -> Optional[FileRecord]:

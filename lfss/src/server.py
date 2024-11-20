@@ -18,7 +18,7 @@ from .stat import RequestDB
 from .config import MAX_BUNDLE_BYTES, MAX_FILE_BYTES, LARGE_FILE_BYTES, CHUNK_SIZE
 from .utils import ensure_uri_compnents, format_last_modified, now_stamp, wait_for_debounce_tasks
 from .connection_pool import global_connection_init, global_connection_close, unique_cursor
-from .database import Database, DECOY_USER, check_user_permission, UserConn, FileConn
+from .database import Database, DECOY_USER, check_user_permission, UserConn, FileConn, delayed_log_activity
 from .datatype import (
     FileReadPermission, FileRecord, UserRecord, PathContents, 
     FileSortKey, DirSortKey
@@ -336,7 +336,7 @@ async def delete_file(path: str, user: UserRecord = Depends(registered_user)):
     else:
         res = await db.delete_file(path, user if not user.is_admin else None)
 
-    await db.record_user_activity(user.username)
+    await delayed_log_activity(user.username)
     if res:
         return Response(status_code=200, content="Deleted")
     else:
@@ -428,7 +428,7 @@ async def update_file_meta(
     path = ensure_uri_compnents(path)
     if path.startswith("/"):
         path = path[1:]
-    await db.record_user_activity(user.username)
+    await delayed_log_activity(user.username)
 
     # file
     if not path.endswith("/"):

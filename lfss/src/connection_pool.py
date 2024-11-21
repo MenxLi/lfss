@@ -46,7 +46,7 @@ class SqlConnection:
 
 class SqlConnectionPool:
     _r_sem: Semaphore
-    _w_sem: Semaphore
+    _w_sem: Lock | Semaphore
     def __init__(self):
         self._readers: list[SqlConnection] = []
         self._writer: None | SqlConnection = None
@@ -57,7 +57,8 @@ class SqlConnectionPool:
         self._readers = []
 
         self._writer = SqlConnection(await get_connection(read_only=False))
-        self._w_sem = Semaphore(1)
+        self._w_sem = Lock()
+        # self._w_sem = Semaphore(1)
 
         for _ in range(n_read):
             conn = await get_connection(read_only=True)

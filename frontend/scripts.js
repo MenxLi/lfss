@@ -1,4 +1,4 @@
-import { permMap, listPath } from './api.js';
+import { permMap, listPath, uploadFile } from './api.js';
 import { showFloatingWindowLineInput, showPopup } from './popup.js';
 import { formatSize, decodePathURI, ensurePathURI, getRandomString, cvtGMT2Local, debounce, encodePathURI, asHtmlText } from './utils.js';
 import { showInfoPanel, showDirInfoPanel } from './info.js';
@@ -132,7 +132,7 @@ uploadButton.addEventListener('click', () => {
     }
     path = path + fileName;
     showPopup('Uploading...', {level: 'info', timeout: 3000});
-    conn.put(path, file, {'conflict': 'overwrite'})
+    uploadFile(conn, path, file, {'conflict': 'overwrite'})
         .then(() => {
             refreshFileList();
             uploadFileNameInput.value = '';
@@ -178,10 +178,10 @@ Are you sure you want to proceed?
                 `)){ return; }
             
             let counter = 0;
-            async function uploadFile(...args){
+            async function uploadFileFn(...args){
                 const [file, path] = args;
                 try{
-                    await conn.put(path, file, {conflict: 'overwrite'});
+                    await uploadFile(conn, path, file, {conflict: 'overwrite'});
                 }
                 catch (err){
                     showPopup('Failed to upload file [' + file.name + ']: ' + err, {level: 'error', timeout: 5000});
@@ -194,7 +194,7 @@ Are you sure you want to proceed?
             for (let i = 0; i < files.length; i++){
                 const file = files[i];
                 const path = dstPath + file.name;
-                promises.push(uploadFile(file, path));
+                promises.push(uploadFileFn(file, path));
             }
             showPopup('Uploading multiple files...', {level: 'info', timeout: 3000});
             Promise.all(promises).then(

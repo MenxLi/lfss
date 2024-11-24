@@ -73,10 +73,43 @@ export default class Connector {
             method: 'PUT',
             headers: {
                 'Authorization': 'Bearer ' + this.config.token, 
-                'Content-Type': 'application/octet-stream'
+                'Content-Type': 'application/octet-stream', 
+                'Content-Length': fileBytes.byteLength
             },
             body: fileBytes
         });
+        if (res.status != 200 && res.status != 201){
+            throw new Error(`Failed to upload file, status code: ${res.status}, message: ${await res.json()}`);
+        }
+        return (await res.json()).url;
+    }
+
+    /**
+    * @param {string} path - the path to the file (url)
+    * @param {File} file - the file to upload
+    * @returns {Promise<string>} - the promise of the request, the url of the file
+    */
+    async post(path, file, {
+        conflict = 'abort',
+        permission = 0
+    } = {}){
+        if (path.startsWith('/')){ path = path.slice(1); }
+        const dst = new URL(this.config.endpoint + '/' + path);
+        dst.searchParams.append('conflict', conflict);
+        dst.searchParams.append('permission', permission);
+        // post as multipart form data
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(dst.toString(), {
+            method: 'POST',
+            // don't include the content type, let the browser handle it
+            // https://muffinman.io/blog/uploading-files-using-fetch-multipart-form-data/
+            headers: {
+                'Authorization': 'Bearer ' + this.config.token, 
+            },
+            body: formData
+        });
+                
         if (res.status != 200 && res.status != 201){
             throw new Error(`Failed to upload file, status code: ${res.status}, message: ${await res.json()}`);
         }
@@ -423,3 +456,27 @@ export async function listPath(conn, path, {
         files: fileCount
     }];
 };
+
+/**
+ * a function to wrap the upload function into one
+ * it will return the url of the file
+ * 
+ * @typedef {Object} UploadOptions
+ * @property {string} conflict - the conflict resolution strategy, can be 'abort', 'replace', 'rename'
+ * @property {number} permission - the permission of the file, can be 0, 1, 2, 3
+ * 
+ * @param {Connector} conn - the connector to the API
+ * @param {string} path - the path to the file (url)
+ * @param {File} file - the file to upload
+ * @param {UploadOptions} options - the options for the request
+ * @returns {Promise<string>} - the promise of the request, the url of the file
+ */
+export async function uploadFile(conn, path, file, {
+    conflict = 'abort',
+    permission = 0
+} = {}){
+    if (file.size < 1024 * 1024 * 10){
+        return await conn.put(path, file, {conflict, permission});
+    }
+    return await conn.post(path, file, {conflict, permission});
+}

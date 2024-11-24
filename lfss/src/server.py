@@ -1,7 +1,7 @@
 from typing import Optional, Literal
 from functools import wraps
 
-from fastapi import FastAPI, APIRouter, Depends, Request, Response
+from fastapi import FastAPI, APIRouter, Depends, Request, Response, UploadFile
 from fastapi.responses import StreamingResponse
 from fastapi.exceptions import HTTPException 
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from .error import *
 from .log import get_logger
 from .stat import RequestDB
-from .config import MAX_BUNDLE_BYTES, MAX_FILE_BYTES, LARGE_FILE_BYTES, CHUNK_SIZE
+from .config import MAX_BUNDLE_BYTES, MAX_PUT_BYTES, LARGE_FILE_BYTES, CHUNK_SIZE
 from .utils import ensure_uri_compnents, format_last_modified, now_stamp, wait_for_debounce_tasks
 from .connection_pool import global_connection_init, global_connection_close, unique_cursor
 from .database import Database, DECOY_USER, check_user_permission, UserConn, FileConn, delayed_log_activity
@@ -246,18 +246,19 @@ async def put_file(
     path: str, 
     conflict: Literal["overwrite", "skip", "abort"] = "abort",
     permission: int = 0,
-    user: UserRecord = Depends(registered_user)):
+    user: UserRecord = Depends(registered_user)
+    ):
     path = ensure_uri_compnents(path)
     if not path.startswith(f"{user.username}/") and not user.is_admin:
         logger.debug(f"Reject put request from {user.username} to {path}")
         raise HTTPException(status_code=403, detail="Permission denied")
     
     content_length = request.headers.get("Content-Length")
-    if content_length is not None:
+    if not content_length is None:
         content_length = int(content_length)
-        if content_length > MAX_FILE_BYTES:
+        if content_length > MAX_PUT_BYTES:
             logger.debug(f"Reject put request from {user.username} to {path}, file too large")
-            raise HTTPException(status_code=413, detail="File too large")
+            raise HTTPException(status_code=413, detail="File too large, please post form-data instead")
     
     logger.info(f"PUT {path}, user: {user.username}")
     exists_flag = False
@@ -283,17 +284,10 @@ async def put_file(
     if content_type == "application/json":
         body = await request.json()
         blobs = json.dumps(body).encode('utf-8')
-    elif content_type == "application/x-www-form-urlencoded":
-        # may not work...
-        body = await request.form()
-        file = body.get("file")
-        if isinstance(file, str) or file is None:
-            raise HTTPException(status_code=400, detail="Invalid form data, file required")
-        blobs = await file.read()
     elif content_type == "application/octet-stream":
         blobs = await request.body()
     else:
-        blobs = await request.body()
+        raise HTTPException(status_code=415, detail="Unsupported content type, put request must be application/json or application/octet-stream")
     
     # check file type
     assert not path.endswith("/"), "Path must be a file"
@@ -304,23 +298,84 @@ async def put_file(
     if mime_t is None:
         mime_t = "application/octet-stream"
 
+    async def blob_reader():
+        for b in range(0, len(blobs), CHUNK_SIZE):
+            yield blobs[b:b+CHUNK_SIZE]
     if len(blobs) > LARGE_FILE_BYTES:
-        async def blob_reader():
-            for b in range(0, len(blobs), CHUNK_SIZE):
-                yield blobs[b:b+CHUNK_SIZE]
         await db.save_file(user.id, path, blob_reader(), permission = FileReadPermission(permission), mime_type = mime_t)
     else:
         await db.save_file(user.id, path, blobs, permission = FileReadPermission(permission), mime_type=mime_t)
-
+    
     # https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Methods/PUT
-    if exists_flag:
-        return Response(status_code=201, headers={
-            "Content-Type": "application/json",
-        }, content=json.dumps({"url": path}))
+    return Response(status_code=200 if exists_flag else 201, headers={
+        "Content-Type": "application/json",
+    }, content=json.dumps({"url": path}))
+
+# post file is used for large file upload, 
+# using form-data instead of raw body
+@router_fs.post("/{path:path}")
+@handle_exception
+async def post_file(
+    request: Request, 
+    path: str, 
+    file: UploadFile,
+    conflict: Literal["overwrite", "skip", "abort"] = "abort",
+    permission: int = 0,
+    user: UserRecord = Depends(registered_user)
+    ):
+    path = ensure_uri_compnents(path)
+    if not path.startswith(f"{user.username}/") and not user.is_admin:
+        logger.debug(f"Reject put request from {user.username} to {path}")
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    logger.info(f"POST {path}, user: {user.username}")
+    exists_flag = False
+    async with unique_cursor() as conn:
+        fconn = FileConn(conn)
+        file_record = await fconn.get_file_record(path)
+
+    if file_record:
+        if conflict == "abort":
+            raise HTTPException(status_code=409, detail="File exists")
+        if conflict == "skip":
+            return Response(status_code=200, headers={
+                "Content-Type": "application/json",
+            }, content=json.dumps({"url": path}))
+        exists_flag = True
+        if not user.is_admin and not file_record.owner_id == user.id:
+            raise HTTPException(status_code=403, detail="Permission denied, cannot overwrite other's file")
+        await db.delete_file(path)
+    
+    # check content-type
+    # mime_t = file.content_type
+    if file.filename is not None:
+        mime_t, _ = mimetypes.guess_type(file.filename)
     else:
-        return Response(status_code=200, headers={
-            "Content-Type": "application/json",
-        }, content=json.dumps({"url": path}))
+        fname = path.split("/")[-1]
+        mime_t, _ = mimetypes.guess_type(fname)
+        if mime_t is None:
+            mime_t = mimesniff.what(file.file)
+    if mime_t is None:
+        mime_t = "application/octet-stream"
+            
+    async def blob_reader():
+        file.file.seek(0)
+        while (chunk := await file.read(CHUNK_SIZE)):
+            yield chunk
+
+    fsize = await db.save_file(
+        user.id, path, 
+        blob_reader(),
+        permission = FileReadPermission(permission), mime_type = mime_t
+        )
+    
+    if fsize <= LARGE_FILE_BYTES:
+        logger.warning(f"File {path} is not large, consider using PUT instead")
+
+    return Response(status_code=200 if exists_flag else 201, headers={
+        "Content-Type": "application/json",
+    }, content=json.dumps({"url": path}))
+    
 
 @router_fs.delete("/{path:path}")
 @handle_exception

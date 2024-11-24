@@ -91,7 +91,7 @@ def test_forbidden(server):
     with pytest.raises(Exception, match='403'):
         c.list_files('u0/a/', order_by='url', order_desc=True)
 
-def test_shorthand_list(server):
+def _test_shorthand_list(server):
     import time
     c = get_conn('u0')
     

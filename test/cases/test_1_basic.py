@@ -1,10 +1,23 @@
 import pytest
 import subprocess
-from .common import get_conn, upload_basic, create_server_context
+from tempfile import NamedTemporaryFile
+from .common import get_conn, create_server_context
 from lfss.src.datatype import FileReadPermission
 from ..config import SANDBOX_DIR
 
 server = create_server_context()
+
+def upload_basic(username: str):
+    c = get_conn(username)
+    c.put(f'{username}/test1.txt', b'hello world 1')
+    c.post(f'{username}/a/test2.txt', b'hello world 2')
+    c.put(f'{username}/a/test3.txt', b'hello world 3')
+    c.put(f'{username}/a/b/test4.txt', b'hello world 4')
+    p_list = c.list_path(f'{username}/')
+    assert len(p_list.dirs) == 1, "Directory count is not correct"
+    assert len(p_list.files) == 1, "File count is not correct"
+    assert p_list.dirs[0].url == f'{username}/a/', "Directory name is not correct"
+    assert p_list.files[0].url == f'{username}/test1.txt', "File name is not correct"
 
 def test_user_creation(server):
     s = subprocess.check_output(['lfss-user', 'add', 'u0', 'test', '--admin', '--max-storage', '1G'], cwd=SANDBOX_DIR)
@@ -100,3 +113,19 @@ def test_user_deletion(server):
     
     c0 = get_conn('u0')
     assert c0.get('u2/test1_from_u0.txt') is None
+
+def test_post(server):
+    c = get_conn('u0')
+    with NamedTemporaryFile() as f:
+        f.write(b'hello world 1')
+        f.flush()
+        c.post('u0/test1_post_file.txt', f.name, permission=FileReadPermission.PROTECTED)
+
+    assert c.get('u0/test1_post_file.txt') == b'hello world 1', "Post file failed"
+    assert c.get_metadata('u0/test1_post_file.txt').permission == FileReadPermission.PROTECTED, "Post file permission failed"   # type: ignore
+    
+    c.post('u0/test1_post_bytes.txt', b'hello world 2')
+    c.post('u0/test1_post_bytes.txt', b'hello world 2', conflict='skip')
+    c.post('u0/test1_post_bytes.txt', b'hello world 2', conflict='skip-ahead')
+    with pytest.raises(Exception, match='409'):
+        c.post('u0/test1_post_bytes.txt', b'hello world 2', conflict='abort')

@@ -537,7 +537,7 @@ class Database:
         blob: bytes | AsyncIterable[bytes], 
         permission: FileReadPermission = FileReadPermission.UNSET, 
         mime_type: str = 'application/octet-stream'
-        ):
+        ) -> int:
         """
         if file_size is not provided, the blob must be bytes
         """
@@ -545,7 +545,7 @@ class Database:
         async with unique_cursor() as cur:
             user = await get_user(cur, u)
             if user is None:
-                return
+                return -1
             
             # check if the user is the owner of the path, or is admin
             if url.startswith('/'):
@@ -587,6 +587,7 @@ class Database:
                         permission=permission, external=True, mime_type=mime_type)
             
         await delayed_log_activity(user.username)
+        return file_size
 
     async def read_file_stream(self, url: str) -> AsyncIterable[bytes]:
         validate_url(url)

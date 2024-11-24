@@ -4,6 +4,7 @@ import os
 import requests
 import requests.adapters
 import urllib.parse
+from tempfile import SpooledTemporaryFile
 from lfss.src.error import PathNotFoundError
 from lfss.src.datatype import (
     FileReadPermission, FileRecord, DirectoryRecord, UserRecord, PathContents, 
@@ -93,6 +94,42 @@ class Connector:
             data=file_data, 
             headers={'Content-Type': 'application/octet-stream'}
         )
+        return response.json()
+    
+    def post(self, path, file: str | bytes, permission: int | FileReadPermission = 0, conflict: Literal['overwrite', 'abort', 'skip', 'skip-ahead'] = 'abort'):
+        """
+        Uploads a file to the specified path, 
+        using the POST method, with form-data/multipart.
+        file can be a path to a file on disk, or bytes.
+        """
+
+        # Skip ahead by checking if the file already exists
+        if conflict == 'skip-ahead':
+            exists = self.get_metadata(path)
+            if exists is None:
+                conflict = 'skip'
+            else:
+                return {'status': 'skipped', 'path': path}
+        
+        if isinstance(file, str):
+            assert os.path.exists(file), "File does not exist on disk"
+            fsize = os.path.getsize(file)
+
+        with open(file, 'rb') if isinstance(file, str) else SpooledTemporaryFile(max_size=1024*1024*10) as fp:
+
+            if isinstance(file, bytes):
+                fsize = len(file)
+                fp.write(file)
+                fp.seek(0)
+
+            # https://stackoverflow.com/questions/12385179/
+            print(f"Uploading {fsize} bytes")
+            response = self._fetch_factory('POST', path, search_params={
+                'permission': int(permission),
+                'conflict': conflict
+                })(
+                files={'file': fp},
+            )
         return response.json()
     
     def put_json(self, path: str, data: dict, permission: int | FileReadPermission = 0, conflict: Literal['overwrite', 'abort', 'skip', 'skip-ahead'] = 'abort'):

@@ -50,10 +50,11 @@ def test_delete(server):
 
 def test_move(server):
     c = get_conn('u0')
-    c.move('u0/a/test2.txt', 'u0/test2.txt')
+    c.move('u0/a/test2.txt', 'u0/test2.json')
     p_list = c.list_path('u0/')
     assert len(p_list.files) == 1, "File move failed"
-    assert p_list.files[0].url == 'u0/test2.txt', "File move failed"
+    assert p_list.files[0].url == 'u0/test2.json', "File move failed"
+    assert p_list.files[0].mime_type == 'application/json', "Mime type is not correct"
 
 def test_put_get_perm(server):
     # admin

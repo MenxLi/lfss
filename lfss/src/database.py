@@ -314,7 +314,7 @@ class FileConn(DBObjectBase):
         ):
         if permission is not None:
             await self.cur.execute("UPDATE fmeta SET permission = ? WHERE url = ?", (int(permission), url))
-        if mime_type is None:
+        if mime_type is not None:
             await self.cur.execute("UPDATE fmeta SET mime_type = ? WHERE url = ?", (mime_type, url))
         self.logger.info(f"Updated file {url}")
     
@@ -561,8 +561,7 @@ class Database:
                 
                 # check mime type
                 if mime_type is None:
-                    fname = url.split('/')[-1]
-                    mime_type, _ = mimetypes.guess_type(fname)
+                    mime_type, _ = mimetypes.guess_type(url)
                 if mime_type is None:
                     await f.seek(0)
                     mime_type = mimesniff.what(await f.read(1024))
@@ -663,6 +662,10 @@ class Database:
                 if r.owner_id != op_user.id:
                     raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot move file {old_url}")
             await fconn.move_file(old_url, new_url)
+
+            new_mime, _ = mimetypes.guess_type(new_url)
+            if not new_mime is None:
+                await fconn.update_file_record(new_url, mime_type=new_mime)
 
         if op_user:
             await delayed_log_activity(op_user.username)

@@ -6,7 +6,6 @@ from fastapi.responses import StreamingResponse
 from fastapi.exceptions import HTTPException 
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
-import mimesniff
 
 import asyncio, json, time
 from contextlib import asynccontextmanager
@@ -14,10 +13,11 @@ from contextlib import asynccontextmanager
 from .error import *
 from .log import get_logger
 from .stat import RequestDB
-from .config import MAX_BUNDLE_BYTES, MAX_MEM_FILE_BYTES, LARGE_FILE_BYTES, CHUNK_SIZE
+from .config import MAX_BUNDLE_BYTES, CHUNK_SIZE
 from .utils import ensure_uri_compnents, format_last_modified, now_stamp, wait_for_debounce_tasks
 from .connection_pool import global_connection_init, global_connection_close, unique_cursor
-from .database import Database, DECOY_USER, check_user_permission, UserConn, FileConn, delayed_log_activity, get_user
+from .database import Database, DECOY_USER, check_user_permission, UserConn, FileConn
+from .database import delayed_log_activity, delayed_log_access
 from .datatype import (
     FileReadPermission, FileRecord, UserRecord, PathContents, 
     FileSortKey, DirSortKey
@@ -80,6 +80,10 @@ async def get_current_user(
 
     if not user:
         raise HTTPException(status_code=401, detail="Invalid token")
+    
+    if not user.id == 0:
+        await delayed_log_activity(user.username)
+
     return user
 
 async def registered_user(user: UserRecord = Depends(get_current_user)):
@@ -165,6 +169,8 @@ async def emit_file(
         media_type = file_record.mime_type
     path = file_record.url
     fname = path.split("/")[-1]
+
+    await delayed_log_access(path)
     if not file_record.external:
         fblob = await db.read_file(path)
         return Response(
@@ -364,7 +370,6 @@ async def delete_file(path: str, user: UserRecord = Depends(registered_user)):
     else:
         res = await db.delete_file(path, user)
 
-    await delayed_log_activity(user.username)
     if res:
         return Response(status_code=200, content="Deleted")
     else:
@@ -456,7 +461,6 @@ async def update_file_meta(
     path = ensure_uri_compnents(path)
     if path.startswith("/"):
         path = path[1:]
-    await delayed_log_activity(user.username)
 
     # file
     if not path.endswith("/"):

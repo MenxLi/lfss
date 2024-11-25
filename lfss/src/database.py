@@ -528,9 +528,6 @@ class Database:
                 if r.owner_id != op_user.id and not op_user.is_admin:
                     raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot update file {url}")
             await fconn.update_file_record(url, permission=permission)
-
-        if op_user:
-            await delayed_log_activity(op_user.username)
     
     async def save_file(
         self, u: int | str, url: str, 
@@ -590,8 +587,6 @@ class Database:
                         await FileConn(w_cur).set_file_record(
                             url, owner_id=user.id, file_id=f_id, file_size=file_size, 
                             permission=permission, external=True, mime_type=mime_type)
-
-        await delayed_log_activity(user.username)
         return file_size
 
     async def read_file_stream(self, url: str) -> AsyncIterable[bytes]:
@@ -604,8 +599,6 @@ class Database:
             if not r.external:
                 raise ValueError(f"File {url} is not stored externally, should use read_file instead")
             ret = fconn.get_file_blob_external(r.file_id)
-
-        await delayed_log_access(url)
         return ret
 
     async def read_file(self, url: str) -> bytes:
@@ -623,8 +616,6 @@ class Database:
             blob = await fconn.get_file_blob(f_id)
             if blob is None:
                 raise FileNotFoundError(f"File {url} data not found")
-
-        await delayed_log_access(url)
         return blob
 
     async def delete_file(self, url: str, op_user: Optional[UserRecord] = None) -> Optional[FileRecord]:
@@ -645,9 +636,6 @@ class Database:
             else:
                 await fconn.delete_file_blob(f_id)
             return r
-
-        if op_user:
-            await delayed_log_activity(op_user.username)
     
     async def move_file(self, old_url: str, new_url: str, op_user: Optional[UserRecord] = None):
         validate_url(old_url)
@@ -666,9 +654,6 @@ class Database:
             new_mime, _ = mimetypes.guess_type(new_url)
             if not new_mime is None:
                 await fconn.update_file_record(new_url, mime_type=new_mime)
-
-        if op_user:
-            await delayed_log_activity(op_user.username)
     
     async def move_path(self, old_url: str, new_url: str, op_user: UserRecord):
         validate_url(old_url, is_file=False)
@@ -699,8 +684,6 @@ class Database:
             fconn = FileConn(cur)
             await fconn.move_path(old_url, new_url, 'overwrite', op_user.id)
 
-        await delayed_log_activity(op_user.username)
-
     async def __batch_delete_file_blobs(self, fconn: FileConn, file_records: list[FileRecord], batch_size: int = 512):
         # https://github.com/langchain-ai/langchain/issues/10321
         internal_ids = []
@@ -730,8 +713,6 @@ class Database:
                 return None
             await self.__batch_delete_file_blobs(fconn, records)
             return records
-        
-        await delayed_log_activity(op_user.username)
     
     async def delete_user(self, u: str | int):
         async with transaction() as cur:

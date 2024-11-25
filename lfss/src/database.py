@@ -8,13 +8,14 @@ import zipfile, io, asyncio
 
 import aiosqlite, aiofiles
 import aiofiles.os
+import mimetypes, mimesniff
 
 from .connection_pool import execute_sql, unique_cursor, transaction
 from .datatype import (
     UserRecord, FileReadPermission, FileRecord, DirectoryRecord, PathContents, 
     FileSortKey, DirSortKey, isValidFileSortKey, isValidDirSortKey
     )
-from .config import LARGE_BLOB_DIR, CHUNK_SIZE
+from .config import LARGE_BLOB_DIR, CHUNK_SIZE, LARGE_FILE_BYTES, MAX_MEM_FILE_BYTES
 from .log import get_logger
 from .utils import decode_uri_compnents, hash_credential, concurrent_wrap, debounce_async
 from .error import *
@@ -534,58 +535,63 @@ class Database:
     
     async def save_file(
         self, u: int | str, url: str, 
-        blob: bytes | AsyncIterable[bytes], 
+        blob_stream: AsyncIterable[bytes], 
         permission: FileReadPermission = FileReadPermission.UNSET, 
-        mime_type: str = 'application/octet-stream'
+        mime_type: Optional[str] = None
         ) -> int:
         """
-        if file_size is not provided, the blob must be bytes
+        if file_size is not provided, the blob must be bytes, 
+        should check permission before calling this method
         """
         validate_url(url)
         async with unique_cursor() as cur:
             user = await get_user(cur, u)
-            if user is None:
-                return -1
-            
-            # check if the user is the owner of the path, or is admin
-            if url.startswith('/'):
-                url = url[1:]
-            first_component = url.split('/')[0]
-            if first_component != user.username:
-                if not user.is_admin:
-                    raise PermissionDeniedError(f"Permission denied: {user.username} cannot write to {url}")
-                else:
-                    if await get_user(cur, first_component) is None:
-                        raise PermissionDeniedError(f"Invalid path: {first_component} is not a valid username")
+            assert user is not None, f"User {u} not found"
             
             fconn_r = FileConn(cur)
             user_size_used = await fconn_r.user_size(user.id)
 
-            if isinstance(blob, bytes):
-                file_size = len(blob)
+            f_id = uuid.uuid4().hex
+            async with aiofiles.tempfile.SpooledTemporaryFile(max_size=MAX_MEM_FILE_BYTES) as f:
+                async for chunk in blob_stream:
+                    await f.write(chunk)
+                await f.seek(0)
+                file_size = await f.tell()
                 if user_size_used + file_size > user.max_storage:
-                    raise StorageExceededError(f"Unable to save file, user {user.username} has storage limit of {user.max_storage}, used {user_size_used}, requested {file_size}")
-                f_id = uuid.uuid4().hex
-
-                async with transaction() as w_cur:
-                    fconn_w = FileConn(w_cur)
-                    await fconn_w.set_file_blob(f_id, blob)
-                    await fconn_w.set_file_record(
-                        url, owner_id=user.id, file_id=f_id, file_size=file_size, 
-                        permission=permission, external=False, mime_type=mime_type)
-            else:
-                assert isinstance(blob, AsyncIterable)
-                f_id = uuid.uuid4().hex
-                file_size = await FileConn.set_file_blob_external(f_id, blob)
-                if user_size_used + file_size > user.max_storage:
-                    await FileConn.delete_file_blob_external(f_id)
                     raise StorageExceededError(f"Unable to save file, user {user.username} has storage limit of {user.max_storage}, used {user_size_used}, requested {file_size}")
                 
-                async with transaction() as w_cur:
-                    await FileConn(w_cur).set_file_record(
-                        url, owner_id=user.id, file_id=f_id, file_size=file_size, 
-                        permission=permission, external=True, mime_type=mime_type)
-            
+                # check mime type
+                if mime_type is None:
+                    fname = url.split('/')[-1]
+                    mime_type, _ = mimetypes.guess_type(fname)
+                if mime_type is None:
+                    mime_type = mimesniff.what(await f.read(1024))
+                if mime_type is None:
+                    mime_type = 'application/octet-stream'
+                await f.seek(0)
+                
+                if file_size < LARGE_FILE_BYTES:
+                    blob = await f.read()
+                    async with transaction() as w_cur:
+                        fconn_w = FileConn(w_cur)
+                        await fconn_w.set_file_blob(f_id, blob)
+                        await fconn_w.set_file_record(
+                            url, owner_id=user.id, file_id=f_id, file_size=file_size, 
+                            permission=permission, external=False, mime_type=mime_type)
+                
+                else:
+                    async def blob_stream_tempfile():
+                        nonlocal f
+                        while True:
+                            chunk = await f.read(CHUNK_SIZE)
+                            if not chunk: break
+                            yield chunk
+                    await FileConn.set_file_blob_external(f_id, blob_stream_tempfile())
+                    async with transaction() as w_cur:
+                        await FileConn(w_cur).set_file_record(
+                            url, owner_id=user.id, file_id=f_id, file_size=file_size, 
+                            permission=permission, external=True, mime_type=mime_type)
+
         await delayed_log_activity(user.username)
         return file_size
 

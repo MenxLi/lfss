@@ -9,16 +9,15 @@ from fastapi.middleware.cors import CORSMiddleware
 import mimesniff
 
 import asyncio, json, time
-import mimetypes
 from contextlib import asynccontextmanager
 
 from .error import *
 from .log import get_logger
 from .stat import RequestDB
-from .config import MAX_BUNDLE_BYTES, MAX_PUT_BYTES, LARGE_FILE_BYTES, CHUNK_SIZE
+from .config import MAX_BUNDLE_BYTES, MAX_MEM_FILE_BYTES, LARGE_FILE_BYTES, CHUNK_SIZE
 from .utils import ensure_uri_compnents, format_last_modified, now_stamp, wait_for_debounce_tasks
 from .connection_pool import global_connection_init, global_connection_close, unique_cursor
-from .database import Database, DECOY_USER, check_user_permission, UserConn, FileConn, delayed_log_activity
+from .database import Database, DECOY_USER, check_user_permission, UserConn, FileConn, delayed_log_activity, get_user
 from .datatype import (
     FileReadPermission, FileRecord, UserRecord, PathContents, 
     FileSortKey, DirSortKey
@@ -249,16 +248,18 @@ async def put_file(
     user: UserRecord = Depends(registered_user)
     ):
     path = ensure_uri_compnents(path)
-    if not path.startswith(f"{user.username}/") and not user.is_admin:
-        logger.debug(f"Reject put request from {user.username} to {path}")
-        raise HTTPException(status_code=403, detail="Permission denied")
-    
-    content_length = request.headers.get("Content-Length")
-    if not content_length is None:
-        content_length = int(content_length)
-        if content_length > MAX_PUT_BYTES:
-            logger.debug(f"Reject put request from {user.username} to {path}, file too large")
-            raise HTTPException(status_code=413, detail="File too large, please post form-data instead")
+    assert not path.endswith("/"), "Path must not end with /"
+    if not path.startswith(f"{user.username}/"):
+        if not user.is_admin:
+            logger.debug(f"Reject put request from {user.username} to {path}")
+            raise HTTPException(status_code=403, detail="Permission denied")
+        else:
+            first_comp = path.split("/")[0]
+            async with unique_cursor() as c:
+                uconn = UserConn(c)
+                owner = await uconn.get_user(first_comp)
+                if not owner:
+                    raise HTTPException(status_code=404, detail="Owner not found")
     
     logger.info(f"PUT {path}, user: {user.username}")
     exists_flag = False
@@ -281,42 +282,25 @@ async def put_file(
     # check content-type
     content_type = request.headers.get("Content-Type")
     logger.debug(f"Content-Type: {content_type}")
-    if content_type == "application/json":
-        body = await request.json()
-        blobs = json.dumps(body).encode('utf-8')
-    elif content_type == "application/octet-stream":
-        blobs = await request.body()
-    else:
+    if not (content_type == "application/octet-stream" or content_type == "application/json"):
         raise HTTPException(status_code=415, detail="Unsupported content type, put request must be application/json or application/octet-stream")
     
-    # check file type
-    assert not path.endswith("/"), "Path must be a file"
-    fname = path.split("/")[-1]
-    mime_t, _ = mimetypes.guess_type(fname)
-    if mime_t is None:
-        mime_t = mimesniff.what(blobs)
-    if mime_t is None:
-        mime_t = "application/octet-stream"
-
     async def blob_reader():
-        for b in range(0, len(blobs), CHUNK_SIZE):
-            yield blobs[b:b+CHUNK_SIZE]
-    if len(blobs) > LARGE_FILE_BYTES:
-        await db.save_file(user.id, path, blob_reader(), permission = FileReadPermission(permission), mime_type = mime_t)
-    else:
-        await db.save_file(user.id, path, blobs, permission = FileReadPermission(permission), mime_type=mime_t)
-    
+        nonlocal request
+        async for chunk in request.stream():
+            yield chunk
+
+    await db.save_file(user.id, path, blob_reader(), permission = FileReadPermission(permission))
+
     # https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Methods/PUT
     return Response(status_code=200 if exists_flag else 201, headers={
         "Content-Type": "application/json",
     }, content=json.dumps({"url": path}))
 
-# post file is used for large file upload, 
 # using form-data instead of raw body
 @router_fs.post("/{path:path}")
 @handle_exception
 async def post_file(
-    request: Request, 
     path: str, 
     file: UploadFile,
     conflict: Literal["overwrite", "skip", "abort"] = "abort",
@@ -324,10 +308,19 @@ async def post_file(
     user: UserRecord = Depends(registered_user)
     ):
     path = ensure_uri_compnents(path)
-    if not path.startswith(f"{user.username}/") and not user.is_admin:
-        logger.debug(f"Reject put request from {user.username} to {path}")
-        raise HTTPException(status_code=403, detail="Permission denied")
-    
+    assert not path.endswith("/"), "Path must not end with /"
+    if not path.startswith(f"{user.username}/"):
+        if not user.is_admin:
+            logger.debug(f"Reject put request from {user.username} to {path}")
+            raise HTTPException(status_code=403, detail="Permission denied")
+        else:
+            first_comp = path.split("/")[0]
+            async with unique_cursor() as conn:
+                uconn = UserConn(conn)
+                owner = await uconn.get_user(first_comp)
+                if not owner:
+                    raise HTTPException(status_code=404, detail="Owner not found")
+
     logger.info(f"POST {path}, user: {user.username}")
     exists_flag = False
     async with unique_cursor() as conn:
@@ -346,32 +339,12 @@ async def post_file(
             raise HTTPException(status_code=403, detail="Permission denied, cannot overwrite other's file")
         await db.delete_file(path)
     
-    # check content-type
-    # mime_t = file.content_type
-    if file.filename is not None:
-        mime_t, _ = mimetypes.guess_type(file.filename)
-    else:
-        fname = path.split("/")[-1]
-        mime_t, _ = mimetypes.guess_type(fname)
-        if mime_t is None:
-            mime_t = mimesniff.what(file.file)
-    if mime_t is None:
-        mime_t = "application/octet-stream"
-            
     async def blob_reader():
-        file.file.seek(0)
+        nonlocal file
         while (chunk := await file.read(CHUNK_SIZE)):
             yield chunk
 
-    fsize = await db.save_file(
-        user.id, path, 
-        blob_reader(),
-        permission = FileReadPermission(permission), mime_type = mime_t
-        )
-    
-    if fsize <= LARGE_FILE_BYTES:
-        logger.warning(f"File {path} is not large, consider using PUT instead")
-
+    await db.save_file(user.id, path, blob_reader(), permission = FileReadPermission(permission))
     return Response(status_code=200 if exists_flag else 201, headers={
         "Content-Type": "application/json",
     }, content=json.dumps({"url": path}))

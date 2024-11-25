@@ -1,8 +1,9 @@
 import pytest
-import subprocess
+import subprocess, os
 from tempfile import NamedTemporaryFile
 from .common import get_conn, create_server_context
 from lfss.src.datatype import FileReadPermission
+from lfss.src.config import MAX_MEM_FILE_BYTES
 from ..config import SANDBOX_DIR
 
 server = create_server_context()
@@ -129,3 +130,12 @@ def test_post(server):
     c.post('u0/test1_post_bytes.txt', b'hello world 2', conflict='skip-ahead')
     with pytest.raises(Exception, match='409'):
         c.post('u0/test1_post_bytes.txt', b'hello world 2', conflict='abort')
+
+def test_large_file(server):
+    c = get_conn('u0')
+    content = os.urandom(MAX_MEM_FILE_BYTES + 1)
+    with NamedTemporaryFile() as f:
+        f.write(content)
+        f.flush()
+        c.post('u0/test_large_file.txt', f.name, permission=FileReadPermission.PROTECTED)
+    assert c.get('u0/test_large_file.txt') == content, "Large file failed"

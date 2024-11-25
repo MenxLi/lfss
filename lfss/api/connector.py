@@ -115,7 +115,7 @@ class Connector:
             assert os.path.exists(file), "File does not exist on disk"
             fsize = os.path.getsize(file)
 
-        with open(file, 'rb') if isinstance(file, str) else SpooledTemporaryFile(max_size=1024*1024*10) as fp:
+        with open(file, 'rb') if isinstance(file, str) else SpooledTemporaryFile(max_size=1024*1024*32) as fp:
 
             if isinstance(file, bytes):
                 fsize = len(file)

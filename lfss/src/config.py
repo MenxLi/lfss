@@ -18,7 +18,7 @@ if __env_large_file is not None:
     LARGE_FILE_BYTES = parse_storage_size(__env_large_file)
 else:
     LARGE_FILE_BYTES = 8 * 1024 * 1024  # 8MB
-MAX_PUT_BYTES = 512 * 1024 * 1024   # 512MB
+MAX_MEM_FILE_BYTES = 128 * 1024 * 1024   # 128MB
 MAX_BUNDLE_BYTES = 512 * 1024 * 1024   # 512MB
 CHUNK_SIZE = 1024 * 1024   # 1MB chunks for streaming (on large files)
 

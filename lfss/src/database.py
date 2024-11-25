@@ -286,8 +286,7 @@ class FileConn(DBObjectBase):
     async def user_size(self, user_id: int) -> int:
         cursor = await self.cur.execute("SELECT size FROM usize WHERE user_id = ?", (user_id, ))
         res = await cursor.fetchone()
-        if res is None:
-            return -1
+        if res is None: return 0
         return res[0]
     async def _user_size_inc(self, user_id: int, inc: int):
         self.logger.debug(f"Increasing user {user_id} size by {inc}")
@@ -540,8 +539,9 @@ class Database:
         mime_type: Optional[str] = None
         ) -> int:
         """
-        if file_size is not provided, the blob must be bytes, 
-        should check permission before calling this method
+        Save a file to the database. 
+        Will check file size and user storage limit, 
+        should check permission before calling this method. 
         """
         validate_url(url)
         async with unique_cursor() as cur:
@@ -555,7 +555,6 @@ class Database:
             async with aiofiles.tempfile.SpooledTemporaryFile(max_size=MAX_MEM_FILE_BYTES) as f:
                 async for chunk in blob_stream:
                     await f.write(chunk)
-                await f.seek(0)
                 file_size = await f.tell()
                 if user_size_used + file_size > user.max_storage:
                     raise StorageExceededError(f"Unable to save file, user {user.username} has storage limit of {user.max_storage}, used {user_size_used}, requested {file_size}")
@@ -565,6 +564,7 @@ class Database:
                     fname = url.split('/')[-1]
                     mime_type, _ = mimetypes.guess_type(fname)
                 if mime_type is None:
+                    await f.seek(0)
                     mime_type = mimesniff.what(await f.read(1024))
                 if mime_type is None:
                     mime_type = 'application/octet-stream'

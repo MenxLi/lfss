@@ -18,9 +18,13 @@ def upload_file(
     error_msg = ""
     while this_try <= n_retries:
         try:
-            with open(file_path, 'rb') as f:
-                blob = f.read()
-            connector.put(dst_url, blob, **put_kwargs)
+            fsize = os.path.getsize(file_path)
+            if fsize < 32 * 1024 * 1024:     # 32MB
+                with open(file_path, 'rb') as f:
+                    blob = f.read()
+                connector.put(dst_url, blob, **put_kwargs)
+            else:
+                connector.post(dst_url, file_path, **put_kwargs)
             break
         except Exception as e:
             if isinstance(e, KeyboardInterrupt):
@@ -97,14 +101,24 @@ def download_file(
                 print(f"File {file_path} already exists, skipping download.")
             return True, error_msg
         try:
-            blob = connector.get(src_url)
-            if blob is None:
+            fmeta = connector.get_metadata(src_url)
+            if fmeta is None:
                 error_msg = "File not found."
                 return False, error_msg
+
             pathlib.Path(file_path).parent.mkdir(parents=True, exist_ok=True)
-            with open(file_path, 'wb') as f:
-                f.write(blob)
+            fsize = fmeta.file_size   # type: ignore
+            if fsize < 32 * 1024 * 1024:     # 32MB
+                blob = connector.get(src_url)
+                assert blob is not None
+                with open(file_path, 'wb') as f:
+                    f.write(blob)
+            else:
+                with open(file_path, 'wb') as f:
+                    for chunk in connector.get_stream(src_url):
+                        f.write(chunk)
             break
+
         except Exception as e:
             if isinstance(e, KeyboardInterrupt):
                 raise e

@@ -1,5 +1,5 @@
 import subprocess
-import os, pathlib
+import os, pathlib, random
 import tempfile
 from ..config import SANDBOX_DIR
 from .common import get_conn, create_server_context
@@ -11,11 +11,12 @@ server = create_server_context()
 @pytest.fixture(scope='module')
 def temp_dir():
     def _prepare_files(d):
-        files = [ pathlib.Path(f"{d}/f{i}.bin") for i in range(5) ] + [ pathlib.Path(f"{d}/d{i}/f{j}.bin") for i in range(5) for j in range(5) ]
+        files = [ pathlib.Path(f"{d}/f{i}.bin") for i in range(2) ] + [ pathlib.Path(f"{d}/d{i}/f{j}.bin") for i in range(2) for j in range(2) ]
         for f in files:
             f.parent.mkdir(exist_ok=True)
             with open(f, 'wb') as fp:
-                rand_data = os.urandom(1024)
+                f_size = random.randint(1, 1024) * 1024 * 64    # 64KB - 64MB
+                rand_data = os.urandom(f_size)
                 fp.write(rand_data)
         return files
     with tempfile.TemporaryDirectory() as d_str:

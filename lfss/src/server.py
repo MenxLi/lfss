@@ -360,9 +360,9 @@ async def delete_file(path: str, user: UserRecord = Depends(registered_user)):
     logger.info(f"DELETE {path}, user: {user.username}")
 
     if path.endswith("/"):
-        res = await db.delete_path(path, user if not user.is_admin else None)
+        res = await db.delete_path(path, user)
     else:
-        res = await db.delete_file(path, user if not user.is_admin else None)
+        res = await db.delete_file(path, user)
 
     await delayed_log_activity(user.username)
     if res:
@@ -463,9 +463,9 @@ async def update_file_meta(
         if perm is not None:
             logger.info(f"Update permission of {path} to {perm}")
             await db.update_file_record(
-                user = user,
                 url = path, 
-                permission = FileReadPermission(perm)
+                permission = FileReadPermission(perm), 
+                op_user = user,
             )
     
         if new_path is not None:
@@ -480,7 +480,7 @@ async def update_file_meta(
             new_path = ensure_uri_compnents(new_path)
             logger.info(f"Update path of {path} to {new_path}")
             # currently only move own file, with overwrite
-            await db.move_path(user, path, new_path)
+            await db.move_path(path, new_path, user)
 
     return Response(status_code=200, content="OK")
 

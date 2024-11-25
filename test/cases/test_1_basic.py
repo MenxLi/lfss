@@ -139,3 +139,36 @@ def test_large_file(server):
         f.flush()
         c.post('u0/test_large_file.txt', f.name, permission=FileReadPermission.PROTECTED)
     assert c.get('u0/test_large_file.txt') == content, "Large file failed"
+
+def test_set_perm(server):
+    c = get_conn('u0')
+    c.put('u0/test1_set_perm.txt', b'hello world 1', permission=FileReadPermission.PUBLIC)
+
+    c1 = get_conn('u1')
+    assert c1.get('u0/test1_set_perm.txt') == b'hello world 1', "Initial permission failed"
+
+    c.set_file_permission('u0/test1_set_perm.txt', FileReadPermission.PROTECTED)
+    assert c1.get('u0/test1_set_perm.txt') == b'hello world 1', "Protected permission failed"
+    
+    c.set_file_permission('u0/test1_set_perm.txt', FileReadPermission.PRIVATE)
+    with pytest.raises(Exception, match='403'):
+        c1.get('u0/test1_set_perm.txt')
+
+def test_path_deletion(server):
+    c = get_conn('u0')
+    c.delete('u0/')
+    p_list = c.list_path('u0/')
+    assert len(p_list.dirs) == 0, "Directory deletion failed"
+    assert len(p_list.files) == 0, "File deletion failed"
+
+    c.put('u1/upload_by_u0.txt', b'hello world 1')
+
+    c1 = get_conn('u1')
+    c1.delete('u1/')
+
+    assert c.get('u1/upload_by_u0.txt') == b'hello world 1', "File deleted by other user"
+
+    c1_list = c1.list_path('u1/')
+    assert len(c1_list.dirs) == 0, "Directory deletion failed"
+    assert len(c1_list.files) == 1, "File deletion failed"
+    assert c1_list.files[0].url == 'u1/upload_by_u0.txt', "File deletion failed"

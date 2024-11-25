@@ -23,7 +23,7 @@ class Server:
                     break
                 if isinstance(e, KeyboardInterrupt):
                     raise e
-                # time.sleep(0.1)
+                time.sleep(0.1)
                 continue
             break
     

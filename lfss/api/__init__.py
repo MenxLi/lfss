@@ -36,7 +36,9 @@ def upload_file(
                 raise e
             if verbose:
                 print(f"Error uploading {file_path}: {e}, retrying...")
-                error_msg = str(e)
+            error_msg = str(e)
+            if hasattr(e, 'response'):
+                error_msg = f"{error_msg}, {e.response.text}"   # type: ignore
             this_try += 1
         finally:
             time.sleep(interval)
@@ -134,7 +136,9 @@ def download_file(
                 raise e
             if verbose:
                 print(f"Error downloading {src_url}: {e}, retrying...")
-                error_msg = str(e)
+            error_msg = str(e)
+            if hasattr(e, 'response'):
+                error_msg = f"{error_msg}, {e.response.text}"   # type: ignore
             this_try += 1
         finally:
             time.sleep(interval)

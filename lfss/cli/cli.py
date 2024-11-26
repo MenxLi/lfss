@@ -91,11 +91,11 @@ def main():
                 permission=args.permission
             )
             if failed_upload:
-                print("Failed to upload:")
+                print("\033[91mFailed to upload:\033[0m")
                 for path in failed_upload:
                     print(f"  {path}")
         else:
-            success = upload_file(
+            success, msg = upload_file(
                 connector, 
                 file_path = args.src, 
                 dst_url = args.dst, 
@@ -106,7 +106,7 @@ def main():
                 permission=args.permission
             )
             if not success:
-                print("Failed to upload.")
+                print("\033[91mFailed to upload: \033[0m", msg)
     
     elif args.command == "download":
         is_dir = args.src.endswith("/")
@@ -120,11 +120,11 @@ def main():
                 overwrite=args.overwrite
             )
             if failed_download:
-                print("Failed to download:")
+                print("\033[91mFailed to download:\033[0m")
                 for path in failed_download:
                     print(f"  {path}")
         else:
-            success = download_file(
+            success, msg = download_file(
                 connector, 
                 src_url = args.src, 
                 file_path = args.dst, 
@@ -134,7 +134,7 @@ def main():
                 overwrite=args.overwrite
             )
             if not success:
-                print("Failed to download.")
+                print("\033[91mFailed to download: \033[0m", msg)
     
     elif args.command == "query":
         for path in args.path:

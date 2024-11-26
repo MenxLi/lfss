@@ -141,7 +141,8 @@ router_fs = APIRouter(prefix="")
 @skip_request_log
 async def emit_thumbnail(
     path: str, download: bool,
-    create_time: Optional[str] = None
+    create_time: Optional[str] = None, 
+    _head = False
     ):
     if path.endswith("/"):
         fname = path.split("/")[-2]
@@ -157,44 +158,47 @@ async def emit_thumbnail(
     }
     if create_time is not None:
         headers["Last-Modified"] = format_last_modified(create_time)
+    if _head: return Response(status_code=200, headers=headers)
     return Response(
         content=thumb_blob, media_type=mime_type, headers=headers
     )
 async def emit_file(
     file_record: FileRecord, 
     media_type: Optional[str] = None, 
-    disposition = "attachment"
+    disposition = "attachment", 
+    _head = False
     ):
     if media_type is None:
         media_type = file_record.mime_type
     path = file_record.url
     fname = path.split("/")[-1]
 
+    headers = {
+        "Content-Disposition": f"{disposition}; filename={fname}", 
+        "Content-Length": str(file_record.file_size), 
+        "Last-Modified": format_last_modified(file_record.create_time)
+    }
+
+    if _head: return Response(status_code=200, headers=headers)
+
     await delayed_log_access(path)
     if not file_record.external:
         fblob = await db.read_file(path)
+        if len(fblob) != file_record.file_size:
+            logger.warning(f"File size mismatch for {path}, expected: {file_record.file_size}, actual: {len(fblob)}")
         return Response(
-            content=fblob, media_type=media_type, headers={
-                "Content-Disposition": f"{disposition}; filename={fname}", 
-                "Content-Length": str(len(fblob)), 
-                "Last-Modified": format_last_modified(file_record.create_time)
-            }
+            content=fblob, media_type=media_type, headers=headers
         )
     else:
         return StreamingResponse(
-            await db.read_file_stream(path), media_type=media_type, headers={
-                "Content-Disposition": f"{disposition}; filename={fname}", 
-                "Content-Length": str(file_record.file_size),
-                "Last-Modified": format_last_modified(file_record.create_time)
-            }
+            await db.read_file_stream(path), media_type=media_type, headers=headers
         )
 
-@router_fs.get("/{path:path}")
-@handle_exception
-async def get_file(
+async def get_file_impl(
+    user: UserRecord, 
     path: str, 
     download: bool = False, thumb: bool = False,
-    user: UserRecord = Depends(get_current_user)
+    _head = False,
     ):
     path = ensure_uri_compnents(path)
 
@@ -240,9 +244,35 @@ async def get_file(
         return await emit_thumbnail(path, download, create_time=file_record.create_time)
     else:
         if download:
-            return await emit_file(file_record, 'application/octet-stream', "attachment")
+            return await emit_file(file_record, 'application/octet-stream', "attachment", _head = _head)
         else:
-            return await emit_file(file_record, None, "inline")
+            return await emit_file(file_record, None, "inline", _head = _head)
+
+@router_fs.get("/{path:path}")
+@handle_exception
+async def get_file(
+    path: str, 
+    download: bool = False, thumb: bool = False,
+    user: UserRecord = Depends(get_current_user)
+    ):
+    return await get_file_impl(
+        user = user, path = path, download = download, thumb = thumb
+        )
+
+@router_fs.head("/{path:path}")
+@handle_exception
+async def head_file(
+    path: str, 
+    download: bool = False, thumb: bool = False,
+    user: UserRecord = Depends(get_current_user)
+    ):
+    if path.startswith("_api/"):
+        raise HTTPException(status_code=405, detail="HEAD not supported for API")
+    if path.endswith("/"):
+        raise HTTPException(status_code=405, detail="HEAD not supported for directory")
+    return await get_file_impl(
+        user = user, path = path, download = download, thumb = thumb, _head = True
+        )
 
 @router_fs.put("/{path:path}")
 @handle_exception

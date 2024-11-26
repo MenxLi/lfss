@@ -109,6 +109,17 @@ def parse_storage_size(s: str) -> int:
         case 'g': return int(s[:-1]) * 1024**3
         case 't': return int(s[:-1]) * 1024**4
         case _: raise ValueError(f"Invalid file size string: {s}")
+def fmt_storage_size(size: int) -> str:
+    """ Format the file size to human-readable format """
+    if size < 1024:
+        return f"{size}B"
+    if size < 1024**2:
+        return f"{size/1024:.2f}K"
+    if size < 1024**3:
+        return f"{size/1024**2:.2f}M"
+    if size < 1024**4:
+        return f"{size/1024**3:.2f}G"
+    return f"{size/1024**4:.2f}T"
 
 _FnReturnT = TypeVar('_FnReturnT')
 _AsyncReturnT = Awaitable[_FnReturnT]
@@ -137,3 +148,25 @@ def concurrent_wrap(executor=None):
             return loop.run_until_complete(func(*args, **kwargs))
         return sync_fn
     return _concurrent_wrap
+
+# https://stackoverflow.com/a/279586/6775765
+def static_vars(**kwargs):
+    def decorate(func):
+        for k in kwargs:
+            setattr(func, k, kwargs[k])
+        return func
+    return decorate
+
+def term_line_sep(iter, enable=True, start=True, end=True, color="\033[90m"):
+    screen_width = os.get_terminal_size().columns
+    def print_ln():
+        print(color + "-" * screen_width + "\033[0m")
+
+    if start and enable:
+        print_ln()
+    for i, line in enumerate(iter):
+        if enable and i > 0:
+            print_ln()
+        yield line
+    if end and enable:
+        print_ln()

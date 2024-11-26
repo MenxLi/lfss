@@ -1,8 +1,8 @@
-import argparse, asyncio
+import argparse, asyncio, os
 from contextlib import asynccontextmanager
 from .cli import parse_permission, FileReadPermission
-from ..src.utils import parse_storage_size
-from ..src.database import Database, FileReadPermission, transaction, UserConn
+from ..src.utils import parse_storage_size, fmt_storage_size
+from ..src.database import Database, FileReadPermission, transaction, UserConn, unique_cursor, FileConn
 from ..src.connection_pool import global_entrance
 
 @global_entrance(1)
@@ -33,6 +33,7 @@ async def _main():
     sp_set.add_argument('--max-storage', type=parse_storage_size, default=None)
     
     sp_list = sp.add_parser('list')
+    sp_list.add_argument("username", nargs='*', type=str, default=None)
     sp_list.add_argument("-l", "--long", action="store_true")
     
     args = parser.parse_args()
@@ -73,10 +74,18 @@ async def _main():
     
     if args.subparser_name == 'list':
         async with get_uconn() as uconn:
+            term_width = os.get_terminal_size().columns
             async for user in uconn.all():
+                if args.username and not user.username in args.username:
+                    continue
+                print("\033[90m-\033[0m" * term_width)
                 print(user)
                 if args.long:
-                    print('  ', user.credential)
+                    async with unique_cursor() as c:
+                        fconn = FileConn(c)
+                        user_size_used = await fconn.user_size(user.id)
+                    print('- Credential: ', user.credential)
+                    print(f'- Storage: {fmt_storage_size(user_size_used)} / {fmt_storage_size(user.max_storage)}')
         
 def main():
     asyncio.run(_main())

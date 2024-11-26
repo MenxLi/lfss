@@ -16,6 +16,11 @@ def upload_file(
     ) -> tuple[bool, str]:
     this_try = 0
     error_msg = ""
+    assert not file_path.endswith('/'), "File path must not end with a slash."
+    if dst_url.endswith('/'):
+        fname = file_path.split('/')[-1]
+        dst_url = f"{dst_url}{fname}"
+
     while this_try <= n_retries:
         try:
             fsize = os.path.getsize(file_path)
@@ -95,7 +100,12 @@ def download_file(
     ) -> tuple[bool, str]:
     this_try = 0
     error_msg = ""
+    assert not src_url.endswith('/'), "Source URL must not end with a slash."
     while this_try <= n_retries:
+        if os.path.isdir(file_path):
+            fname = src_url.split('/')[-1]
+            file_path = os.path.join(file_path, fname)
+
         if not overwrite and os.path.exists(file_path):
             if verbose:
                 print(f"File {file_path} already exists, skipping download.")

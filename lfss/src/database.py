@@ -21,6 +21,12 @@ from .utils import decode_uri_compnents, hash_credential, concurrent_wrap, debou
 from .error import *
 
 class DBObjectBase(ABC):
+    """
+    NOTE: 
+    The object of this class should hold a cursor to the database. 
+    The methods calling the cursor should not be called concurrently. 
+    """
+
     logger = get_logger('database', global_instance=True)
     _cur: aiosqlite.Cursor
 
@@ -206,7 +212,7 @@ class FileConn(DBObjectBase):
                 return DirectoryRecord(dir_url)
             else:
                 return await self.get_path_record(dir_url)
-        dirs = await asyncio.gather(*[get_dir(url + d) for d in dirs_str])
+        dirs = [await get_dir(url + d) for d in dirs_str]
         return dirs
     
     async def count_path_files(self, url: str, flat: bool = False):

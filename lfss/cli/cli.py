@@ -1,18 +1,9 @@
 from lfss.api import Connector, upload_directory, upload_file, download_file, download_directory
 from pathlib import Path
-import argparse, requests, typing
+import argparse, typing
 from lfss.src.datatype import FileReadPermission, FileSortKey, DirSortKey
-from lfss.src.utils import term_line_sep, decode_uri_compnents
-from contextlib import contextmanager
-
-@contextmanager
-def catch_request_error():
-    try:
-        yield
-    except requests.RequestException as e:
-        print(f"\033[31m[Request error]: {e}\033[0m")
-        if e.response is not None:
-            print(f"\033[91m[Error message]: {e.response.text}\033[0m")
+from lfss.src.utils import decode_uri_compnents
+from . import catch_request_error, line_sep
 
 def parse_permission(s: str) -> FileReadPermission:
     if s.lower() == "public":
@@ -155,7 +146,7 @@ def main():
                 order_by=args.order,
                 order_desc=args.reverse,
             )
-            for i, f in enumerate(term_line_sep(res)):
+            for i, f in enumerate(line_sep(res)):
                 f.url = decode_uri_compnents(f.url)
                 print(f"[{i+1}] {f if args.long else f.url}")
 
@@ -172,7 +163,7 @@ def main():
                 order_by=args.order,
                 order_desc=args.reverse,
             )
-            for i, d in enumerate(term_line_sep(res)):
+            for i, d in enumerate(line_sep(res)):
                 d.url = decode_uri_compnents(d.url)
                 print(f"[{i+1}] {d if args.long else d.url}")
 

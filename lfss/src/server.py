@@ -261,9 +261,7 @@ async def get_file_impl(
             raise HTTPException(status_code=400, detail="Multiple ranges not supported")
         if "-" not in range_str:
             raise HTTPException(status_code=400, detail="Invalid range request")
-        range_start, range_end = map(int, range_str.split("-"))
-    else:
-        range_start, range_end = -1, -1
+        range_start, range_end = map(lambda x: int(x) if x != "" else -1 , range_str.split("-"))
     
     if thumb:
         return await emit_thumbnail(path, download, create_time=file_record.create_time, is_head=is_head)

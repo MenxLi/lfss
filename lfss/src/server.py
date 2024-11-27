@@ -142,7 +142,7 @@ router_fs = APIRouter(prefix="")
 async def emit_thumbnail(
     path: str, download: bool,
     create_time: Optional[str] = None, 
-    _head = False
+    is_head = False
     ):
     if path.endswith("/"):
         fname = path.split("/")[-2]
@@ -158,7 +158,7 @@ async def emit_thumbnail(
     }
     if create_time is not None:
         headers["Last-Modified"] = format_last_modified(create_time)
-    if _head: return Response(status_code=200, headers=headers)
+    if is_head: return Response(status_code=200, headers=headers)
     return Response(
         content=thumb_blob, media_type=mime_type, headers=headers
     )
@@ -166,39 +166,50 @@ async def emit_file(
     file_record: FileRecord, 
     media_type: Optional[str] = None, 
     disposition = "attachment", 
-    _head = False
+    is_head = False, 
+    range_start = -1,
+    range_end = -1
     ):
     if media_type is None:
         media_type = file_record.mime_type
     path = file_record.url
     fname = path.split("/")[-1]
 
+    if range_start == -1:
+        range_start = 0
+    if range_end == -1:
+        range_end = file_record.file_size - 1
+    
+    if range_start >= file_record.file_size or range_end >= file_record.file_size:
+        raise HTTPException(status_code=416, detail="Range not satisfiable")
+    if range_start > range_end:
+        raise HTTPException(status_code=416, detail="Invalid range")
+
     headers = {
         "Content-Disposition": f"{disposition}; filename={fname}", 
-        "Content-Length": str(file_record.file_size), 
-        "Last-Modified": format_last_modified(file_record.create_time)
+        "Content-Length": str(range_end - range_start + 1),
+        "Content-Range": f"bytes {range_start}-{range_end}/{file_record.file_size}",
+        "Last-Modified": format_last_modified(file_record.create_time), 
+        "Accept-Ranges": "bytes", 
     }
 
-    if _head: return Response(status_code=200, headers=headers)
+    if is_head: return Response(status_code=200, headers=headers)
 
     await delayed_log_access(path)
-    if not file_record.external:
-        fblob = await db.read_file(path)
-        if len(fblob) != file_record.file_size:
-            logger.warning(f"File size mismatch for {path}, expected: {file_record.file_size}, actual: {len(fblob)}")
-        return Response(
-            content=fblob, media_type=media_type, headers=headers
-        )
-    else:
-        return StreamingResponse(
-            await db.read_file_stream(path), media_type=media_type, headers=headers
-        )
+    return StreamingResponse(
+        await db.read_file(path, start_byte=range_start, end_byte=range_end + 1),
+        media_type=media_type, 
+        headers=headers, 
+        status_code=206 if range_start != -1 or range_end != -1 else 200
+    )
 
 async def get_file_impl(
+    request: Request,
     user: UserRecord, 
     path: str, 
-    download: bool = False, thumb: bool = False,
-    _head = False,
+    download: bool = False, 
+    thumb: bool = False,
+    is_head = False,
     ):
     path = ensure_uri_compnents(path)
 
@@ -240,28 +251,45 @@ async def get_file_impl(
     if not allow_access:
         raise HTTPException(status_code=403, detail=reason)
     
+    req_range = request.headers.get("Range", None)
+    if not req_range is None:
+        # handle range request
+        if not req_range.startswith("bytes="):
+            raise HTTPException(status_code=400, detail="Invalid range request")
+        range_str = req_range[6:].strip()
+        if "," in range_str:
+            raise HTTPException(status_code=400, detail="Multiple ranges not supported")
+        if "-" not in range_str:
+            raise HTTPException(status_code=400, detail="Invalid range request")
+        range_start, range_end = map(int, range_str.split("-"))
+    else:
+        range_start, range_end = -1, -1
+    
     if thumb:
-        return await emit_thumbnail(path, download, create_time=file_record.create_time)
+        return await emit_thumbnail(path, download, create_time=file_record.create_time, is_head=is_head)
     else:
         if download:
-            return await emit_file(file_record, 'application/octet-stream', "attachment", _head = _head)
+            return await emit_file(file_record, 'application/octet-stream', "attachment", is_head = is_head, range_start=range_start, range_end=range_end)
         else:
-            return await emit_file(file_record, None, "inline", _head = _head)
+            return await emit_file(file_record, None, "inline", is_head = is_head, range_start=range_start, range_end=range_end)
 
 @router_fs.get("/{path:path}")
 @handle_exception
 async def get_file(
+    request: Request,
     path: str, 
     download: bool = False, thumb: bool = False,
     user: UserRecord = Depends(get_current_user)
     ):
     return await get_file_impl(
+        request = request,
         user = user, path = path, download = download, thumb = thumb
         )
 
 @router_fs.head("/{path:path}")
 @handle_exception
 async def head_file(
+    request: Request,
     path: str, 
     download: bool = False, thumb: bool = False,
     user: UserRecord = Depends(get_current_user)
@@ -271,7 +299,8 @@ async def head_file(
     if path.endswith("/"):
         raise HTTPException(status_code=405, detail="HEAD not supported for directory")
     return await get_file_impl(
-        user = user, path = path, download = download, thumb = thumb, _head = True
+        request = request,
+        user = user, path = path, download = download, thumb = thumb, is_head = True
         )
 
 @router_fs.put("/{path:path}")

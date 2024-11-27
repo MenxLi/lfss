@@ -433,20 +433,41 @@ class FileConn(DBObjectBase):
             raise
         return size_sum
     
-    async def get_file_blob(self, file_id: str) -> Optional[bytes]:
+    async def get_file_blob(self, file_id: str, start_byte = -1, end_byte = -1) -> bytes:
         cursor = await self.cur.execute("SELECT data FROM blobs.fdata WHERE file_id = ?", (file_id, ))
         res = await cursor.fetchone()
         if res is None:
-            return None
-        return res[0]
+            raise FileNotFoundError(f"File {file_id} not found")
+        blob = res[0]
+        match (start_byte, end_byte):
+            case (-1, -1):
+                return blob
+            case (s, -1):
+                return blob[s:]
+            case (-1, e):
+                return blob[:e]
+            case (s, e):
+                return blob[s:e]
     
-    async def get_file_blob_external(self, file_id: str) -> AsyncIterable[bytes]:
+    @staticmethod
+    async def get_file_blob_external(file_id: str, start_byte = -1, end_byte = -1) -> AsyncIterable[bytes]:
         assert (LARGE_BLOB_DIR / file_id).exists(), f"File {file_id} not found"
         async with aiofiles.open(LARGE_BLOB_DIR / file_id, 'rb') as f:
-            while True:
-                chunk = await f.read(CHUNK_SIZE)
-                if not chunk: break
-                yield chunk
+            if start_byte >= 0:
+                await f.seek(start_byte)
+            if end_byte >= 0:
+                while True:
+                    head_ptr = await f.tell()
+                    if head_ptr >= end_byte:
+                        break
+                    chunk = await f.read(min(CHUNK_SIZE, end_byte - head_ptr))
+                    if not chunk: break
+                    yield chunk
+            else:
+                while True:
+                    chunk = await f.read(CHUNK_SIZE)
+                    if not chunk: break
+                    yield chunk
     
     @staticmethod
     async def delete_file_blob_external(file_id: str):
@@ -595,34 +616,21 @@ class Database:
                             permission=permission, external=True, mime_type=mime_type)
         return file_size
 
-    async def read_file_stream(self, url: str) -> AsyncIterable[bytes]:
+    async def read_file(self, url: str, start_byte = -1, end_byte = -1) -> AsyncIterable[bytes]:
+        # end byte is exclusive: [start_byte, end_byte)
         validate_url(url)
-        async with unique_cursor() as cur:
-            fconn = FileConn(cur)
-            r = await fconn.get_file_record(url)
-            if r is None:
-                raise FileNotFoundError(f"File {url} not found")
-            if not r.external:
-                raise ValueError(f"File {url} is not stored externally, should use read_file instead")
-            ret = fconn.get_file_blob_external(r.file_id)
-        return ret
-
-    async def read_file(self, url: str) -> bytes:
-        validate_url(url)
-
         async with unique_cursor() as cur:
             fconn = FileConn(cur)
             r = await fconn.get_file_record(url)
             if r is None:
                 raise FileNotFoundError(f"File {url} not found")
             if r.external:
-                raise ValueError(f"File {url} is stored externally, should use read_file_stream instead")
-
-            f_id = r.file_id
-            blob = await fconn.get_file_blob(f_id)
-            if blob is None:
-                raise FileNotFoundError(f"File {url} data not found")
-        return blob
+                ret = fconn.get_file_blob_external(r.file_id, start_byte=start_byte, end_byte=end_byte)
+            else:
+                async def blob_stream():
+                    yield await fconn.get_file_blob(r.file_id, start_byte=start_byte, end_byte=end_byte)
+                ret = blob_stream()
+        return ret
 
     async def delete_file(self, url: str, op_user: Optional[UserRecord] = None) -> Optional[FileRecord]:
         validate_url(url)
@@ -758,9 +766,6 @@ class Database:
                     blob = fconn.get_file_blob_external(f_id)
                 else:
                     blob = await fconn.get_file_blob(f_id)
-                    if blob is None:
-                        self.logger.warning(f"Blob not found for {url}")
-                        continue
                 yield r, blob
 
     @concurrent_wrap()

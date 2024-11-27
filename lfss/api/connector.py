@@ -54,7 +54,7 @@ class Connector:
     
     def _fetch_factory(
         self, method: Literal['GET', 'POST', 'PUT', 'DELETE'], 
-        path: str, search_params: dict = {}
+        path: str, search_params: dict = {}, extra_headers: dict = {}
     ):
         if path.startswith('/'):
             path = path[1:]
@@ -65,6 +65,7 @@ class Connector:
             headers.update({
                 'Authorization': f"Bearer {self.config['token']}",
             })
+            headers.update(extra_headers)
             if self._session is not None:
                 response = self._session.request(method, url, headers=headers, **kwargs)
                 response.raise_for_status()
@@ -166,6 +167,17 @@ class Connector:
     def get(self, path: str) -> Optional[bytes]:
         """Downloads a file from the specified path."""
         response = self._get(path)
+        if response is None: return None
+        return response.content
+
+    def get_partial(self, path: str, range_start: int, range_end: int) -> Optional[bytes]:
+        """
+        Downloads a partial file from the specified path.
+        start and end are the byte offsets, both inclusive.
+        """
+        response = self._fetch_factory('GET', path, extra_headers={
+            'Range': f"bytes={range_start}-{range_end}"
+        })()
         if response is None: return None
         return response.content
     

@@ -262,6 +262,8 @@ async def get_file_impl(
         if "-" not in range_str:
             raise HTTPException(status_code=400, detail="Invalid range request")
         range_start, range_end = map(lambda x: int(x) if x != "" else -1 , range_str.split("-"))
+    else:
+        range_start, range_end = -1, -1
     
     if thumb:
         return await emit_thumbnail(path, download, create_time=file_record.create_time, is_head=is_head)

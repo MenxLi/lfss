@@ -170,34 +170,45 @@ async def emit_file(
     range_start = -1,
     range_end = -1
     ):
+    if range_start < 0: assert range_start == -1
+    if range_end < 0: assert range_end == -1
+
     if media_type is None:
         media_type = file_record.mime_type
     path = file_record.url
     fname = path.split("/")[-1]
 
     if range_start == -1:
-        range_start = 0
+        arng_s = 0          # actual range start
+    else:
+        arng_s = range_start
     if range_end == -1:
-        range_end = file_record.file_size - 1
+        arng_e = file_record.file_size - 1
+    else:
+        arng_e = range_end
     
-    if range_start >= file_record.file_size or range_end >= file_record.file_size:
+    if arng_s >= file_record.file_size or arng_e >= file_record.file_size:
         raise HTTPException(status_code=416, detail="Range not satisfiable")
-    if range_start > range_end:
+    if arng_s > arng_e:
         raise HTTPException(status_code=416, detail="Invalid range")
 
     headers = {
         "Content-Disposition": f"{disposition}; filename={fname}", 
-        "Content-Length": str(range_end - range_start + 1),
-        "Content-Range": f"bytes {range_start}-{range_end}/{file_record.file_size}",
+        "Content-Length": str(arng_e - arng_s + 1),
+        "Content-Range": f"bytes {arng_s}-{arng_e}/{file_record.file_size}",
         "Last-Modified": format_last_modified(file_record.create_time), 
         "Accept-Ranges": "bytes", 
     }
 
-    if is_head: return Response(status_code=200, headers=headers)
+    if is_head: return Response(status_code=200 if (range_start == -1 and range_end == -1) else 206, headers=headers)
 
     await delayed_log_access(path)
     return StreamingResponse(
-        await db.read_file(path, start_byte=range_start, end_byte=range_end + 1),
+        await db.read_file(
+            path, 
+            start_byte=arng_s if range_start != -1 else -1,
+            end_byte=arng_e + 1 if range_end != -1 else -1
+        ),
         media_type=media_type, 
         headers=headers, 
         status_code=206 if range_start != -1 or range_end != -1 else 200
@@ -266,6 +277,7 @@ async def get_file_impl(
         range_start, range_end = -1, -1
     
     if thumb:
+        if (range_start != -1 or range_end != -1): logger.warning("Range request for thumbnail")
         return await emit_thumbnail(path, download, create_time=file_record.create_time, is_head=is_head)
     else:
         if download:

@@ -114,7 +114,6 @@ class Connector:
         
         if isinstance(file, str):
             assert os.path.exists(file), "File does not exist on disk"
-            fsize = os.path.getsize(file)
 
         with open(file, 'rb') if isinstance(file, str) else SpooledTemporaryFile(max_size=1024*1024*32) as fp:
 
@@ -124,7 +123,6 @@ class Connector:
                 fp.seek(0)
 
             # https://stackoverflow.com/questions/12385179/
-            print(f"Uploading {fsize} bytes")
             response = self._fetch_factory('POST', path, search_params={
                 'permission': int(permission),
                 'conflict': conflict

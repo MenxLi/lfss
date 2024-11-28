@@ -13,6 +13,7 @@ const ICON_ZIP = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><t
 const ICON_CODE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><title>file-code-outline</title><path d="M14 2H6C4.89 2 4 2.9 4 4V20C4 21.11 4.89 22 6 22H18C19.11 22 20 21.11 20 20V8L14 2M18 20H6V4H13V9H18V20M9.54 15.65L11.63 17.74L10.35 19L7 15.65L10.35 12.3L11.63 13.56L9.54 15.65M17 15.65L13.65 19L12.38 17.74L14.47 15.65L12.38 13.56L13.65 12.3L17 15.65Z" /></svg>'
 const ICON_VIDEO = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><title>television-play</title><path d="M21,3H3C1.89,3 1,3.89 1,5V17A2,2 0 0,0 3,19H8V21H16V19H21A2,2 0 0,0 23,17V5C23,3.89 22.1,3 21,3M21,17H3V5H21M16,11L9,15V7" /></svg>'
 const ICON_IMAGE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><title>image-outline</title><path d="M19,19H5V5H19M19,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3M13.96,12.29L11.21,15.83L9.25,13.47L6.5,17H17.5L13.96,12.29Z" /></svg>'
+const ICON_MUSIC = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><title>music-box-outline</title><path d="M16,9H13V14.5A2.5,2.5 0 0,1 10.5,17A2.5,2.5 0 0,1 8,14.5A2.5,2.5 0 0,1 10.5,12C11.07,12 11.58,12.19 12,12.5V7H16V9M19,3A2,2 0 0,1 21,5V19A2,2 0 0,1 19,21H5A2,2 0 0,1 3,19V5A2,2 0 0,1 5,3H19M5,5V19H19V5H5Z" /></svg>'
 
 function getIconSVGFromMimeType(mimeType){
     if (mimeType == 'directory'){
@@ -23,6 +24,9 @@ function getIconSVGFromMimeType(mimeType){
     }
     if (mimeType.startsWith('image/')){
         return ICON_IMAGE;
+    }
+    if (mimeType.startsWith('audio/')){
+        return ICON_MUSIC;
     }
 
     if (['application/pdf', 'application/x-pdf'].includes(mimeType)){

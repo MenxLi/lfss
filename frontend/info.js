@@ -12,8 +12,10 @@ const ensureSlashEnd = (path) => {
 /**
  * @param {FileRecord} r
  * @param {UserRecord} u
+ * @param {Connector} c
  */
-export function showInfoPanel(r, u){
+export function showInfoPanel(r, u, c){
+    const origin = c.config.endpoint;
     const innerHTML = `
 <div class="info-container">
     <div class="info-container-left">
@@ -46,7 +48,7 @@ export function showInfoPanel(r, u){
     </div>
     <div class="info-container-right">
         <div class="info-path-copy">
-            <input type="text" value="${window.location.origin}/${r.url}" readonly>
+            <input type="text" value="${origin}/${r.url}" readonly>
             <button class="copy-button" id='copy-btn-full-path'>📋</button>
         </div>
         <div class="info-path-copy">
@@ -58,7 +60,7 @@ export function showInfoPanel(r, u){
     `
     const [win, closeWin] = createFloatingWindow(innerHTML, {title: 'File Info'});
     document.getElementById('copy-btn-full-path').onclick = () => {
-        copyToClipboard(window.location.origin + '/' + r.url);
+        copyToClipboard(origin + '/' + r.url);
         showPopup('Path copied to clipboard', {timeout: 2000, level: 'success'});
     }
     document.getElementById('copy-btn-rel-path').onclick = () => {
@@ -77,6 +79,7 @@ export function showDirInfoPanel(r, u, c){
     if (fmtPath.endsWith('/')) {
         fmtPath = fmtPath.slice(0, -1);
     }
+    const origin = c.config.endpoint;
     const innerHTML = `
 <div class="info-container">
     <div class="info-container-left">
@@ -105,7 +108,7 @@ export function showDirInfoPanel(r, u, c){
     </div>
     <div class="info-container-right">
         <div class="info-path-copy">
-            <input type="text" value="${window.location.origin}/${ensureSlashEnd(r.url)}" readonly>
+            <input type="text" value="${origin}/${ensureSlashEnd(r.url)}" readonly>
             <button class="copy-button" id='copy-btn-full-path'>📋</button>
         </div>
         <div class="info-path-copy">
@@ -117,7 +120,7 @@ export function showDirInfoPanel(r, u, c){
     `
     const [win, closeWin] = createFloatingWindow(innerHTML, {title: 'File Info'});
     document.getElementById('copy-btn-full-path').onclick = () => {
-        copyToClipboard(window.location.origin + '/' + ensureSlashEnd(r.url));
+        copyToClipboard(origin + '/' + ensureSlashEnd(r.url));
         showPopup('Path copied to clipboard', {timeout: 2000, level: 'success'});
     }
     document.getElementById('copy-btn-rel-path').onclick = () => {

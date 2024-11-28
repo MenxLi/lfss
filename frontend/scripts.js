@@ -459,7 +459,7 @@ async function refreshFileList(){
                     infoButton.style.cursor = 'pointer';
                     infoButton.textContent = 'Details';
                     infoButton.addEventListener('click', () => {
-                        showInfoPanel(file, userRecord);
+                        showInfoPanel(file, userRecord, conn);
                     });
                     actContainer.appendChild(infoButton);
 

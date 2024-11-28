@@ -21,8 +21,15 @@ def test_small(server):
     partial_blob = c.get_partial('u0/1.bin', 0, 1023)
     assert partial_blob == blob, "Partial blob is not correct"
 
-    partial_blob = c.get_partial('u0/1.bin', 10, 20)
-    assert partial_blob == blob[10:21], "Partial blob is not correct"
+    for (s, e) in [(0, 0), (10, 20), (25, 32), (1023, 1023)]:
+        partial_blob = c.get_partial('u0/1.bin', s, e)
+        assert partial_blob == blob[s:e+1], "Partial blob is not correct"
+    
+    partial_blob = c.get_partial('u0/1.bin', -1, 10)
+    assert partial_blob == blob[:11], "Partial blob is not correct"
+
+    partial_blob = c.get_partial('u0/1.bin', 10, -1)
+    assert partial_blob == blob[10:], "Partial blob is not correct"
 
 def test_large(server):
     c = get_conn('u0')
@@ -34,6 +41,16 @@ def test_large(server):
 
     partial_blob = c.get_partial('u0/1l.bin', 10, 20)
     assert partial_blob == blob[10:21], "Partial blob is not correct"
+
+    for (s, e) in [(0, 0), (10, 20), (25, 32), (fsize // 2, fsize - 1), (fsize - 1, fsize - 1)]:
+        partial_blob = c.get_partial('u0/1l.bin', s, e)
+        assert partial_blob == blob[s:e+1], "Partial blob is not correct"
+    
+    partial_blob = c.get_partial('u0/1l.bin', -1, 10)
+    assert partial_blob == blob[:11], "Partial blob is not correct"
+    
+    partial_blob = c.get_partial('u0/1l.bin', 10, -1)
+    assert partial_blob == blob[10:], "Partial blob is not correct"
 
 def test_invalid_range(server):
     c = get_conn('u0')

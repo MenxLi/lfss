@@ -170,13 +170,13 @@ class Connector:
         if response is None: return None
         return response.content
 
-    def get_partial(self, path: str, range_start: int, range_end: int) -> Optional[bytes]:
+    def get_partial(self, path: str, range_start: int = -1, range_end: int = -1) -> Optional[bytes]:
         """
         Downloads a partial file from the specified path.
         start and end are the byte offsets, both inclusive.
         """
         response = self._fetch_factory('GET', path, extra_headers={
-            'Range': f"bytes={range_start}-{range_end}"
+            'Range': f"bytes={range_start if range_start >= 0 else ''}-{range_end if range_end >= 0 else ''}"
         })()
         if response is None: return None
         return response.content

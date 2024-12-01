@@ -1,5 +1,6 @@
 from enum import IntEnum
 import dataclasses, typing
+from .utils import fmt_storage_size
 
 class FileReadPermission(IntEnum):
     UNSET = 0           # not set
@@ -18,8 +19,12 @@ class UserRecord:
     max_storage: int
     permission: 'FileReadPermission'
 
+    def __post_init__(self):
+        self.permission = FileReadPermission(self.permission)
+
     def __str__(self):
-        return f"User {self.username} (id={self.id}, admin={self.is_admin}, created at {self.create_time}, last active at {self.last_active}, storage={self.max_storage}, permission={self.permission})"
+        return  f"User {self.username} (id={self.id}, admin={self.is_admin}, created at {self.create_time}, last active at {self.last_active}, " + \
+                f"storage={fmt_storage_size(self.max_storage)}, permission={self.permission.name})"
 
 @dataclasses.dataclass
 class FileRecord:
@@ -33,9 +38,12 @@ class FileRecord:
     external: bool
     mime_type: str
 
+    def __post_init__(self):
+        self.permission = FileReadPermission(self.permission)
+
     def __str__(self):
         return  f"File {self.url} [{self.mime_type}] (owner={self.owner_id}, created at {self.create_time}, accessed at {self.access_time}, " + \
-                f"file_id={self.file_id}, permission={self.permission}, size={self.file_size}, external={self.external})"
+                f"file_id={self.file_id}, permission={self.permission.name}, size={fmt_storage_size(self.file_size)}, external={self.external})"
 
 @dataclasses.dataclass
 class DirectoryRecord:
@@ -47,7 +55,7 @@ class DirectoryRecord:
     n_files: int = -1
 
     def __str__(self):
-        return f"Directory {self.url} (size={self.size}, created at {self.create_time}, updated at {self.update_time}, accessed at {self.access_time}, n_files={self.n_files})"
+        return f"Directory {self.url} (size={fmt_storage_size(self.size)}, created at {self.create_time}, updated at {self.update_time}, accessed at {self.access_time}, n_files={self.n_files})"
 
 @dataclasses.dataclass
 class PathContents:

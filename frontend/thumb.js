@@ -39,10 +39,14 @@ function getIconSVGFromMimeType(mimeType){
         return ICON_ZIP;
     }
     if ([
-        "text/html", "application/xhtml+xml", "application/xml", "text/css", "application/javascript", "text/javascript", "application/json", "text/x-python", "text/x-java-source",
-        "application/x-httpd-php", "text/x-ruby", "text/x-perl", "application/x-sh", "application/sql", "text/x-c", "text/x-c++", "text/x-csharp", "text/x-go", "text/x-haskell",
-        "text/x-lua", "text/x-markdown", "application/wasm", "application/x-tcl", "text/x-yaml", "application/x-latex", "application/x-tex", "text/x-scss", "application/x-lisp",
-        "application/x-rust", "application/x-ruby", "text/x-asm"
+        "text/html", "application/xhtml+xml", "application/xml", "text/css", "text/x-scss", "application/javascript", "text/javascript",
+        "application/json", "text/x-yaml", "text/x-markdown", "application/wasm", 
+        "text/x-ruby", "application/x-ruby", "text/x-perl", "application/x-lisp", 
+        "text/x-haskell", "text/x-lua", "application/x-tcl", 
+        "text/x-python", "text/x-java-source", "text/x-go", "application/x-rust", "text/x-asm", 
+        "application/sql", "text/x-c", "text/x-c++", "text/x-csharp", 
+        "application/x-httpd-php", "application/x-sh", "application/x-shellscript", 
+        "application/x-latex", "application/x-tex", 
     ].includes(mimeType)){
         return ICON_CODE;
     }

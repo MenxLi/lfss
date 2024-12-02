@@ -17,12 +17,13 @@ class ThreadSafeAsyncLock(Lock):
         super().__init__()
     
     async def acquire(self, *args, **kwargs):
-        self._t_lock.acquire(blocking=True)
+        # order is important!
         await super().acquire(*args, **kwargs)
+        self._t_lock.acquire(blocking=True, timeout=10)
     
     def release(self):
-        super().release()
         self._t_lock.release()
+        super().release()
 
 def hash_credential(username: str, password: str):
     return hashlib.sha256((username + password).encode()).hexdigest()

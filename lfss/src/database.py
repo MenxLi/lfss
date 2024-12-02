@@ -638,44 +638,45 @@ class Database:
             user_size_used = await fconn_r.user_size(user.id)
 
             f_id = uuid.uuid4().hex
-            async with aiofiles.tempfile.SpooledTemporaryFile(max_size=MAX_MEM_FILE_BYTES) as f:
-                async for chunk in blob_stream:
-                    await f.write(chunk)
-                file_size = await f.tell()
-                if user_size_used + file_size > user.max_storage:
-                    raise StorageExceededError(f"Unable to save file, user {user.username} has storage limit of {user.max_storage}, used {user_size_used}, requested {file_size}")
-                
-                # check mime type
-                if mime_type is None:
-                    mime_type, _ = mimetypes.guess_type(url)
-                if mime_type is None:
-                    await f.seek(0)
-                    mime_type = mimesniff.what(await f.read(1024))
-                if mime_type is None:
-                    mime_type = 'application/octet-stream'
+
+        async with aiofiles.tempfile.SpooledTemporaryFile(max_size=MAX_MEM_FILE_BYTES) as f:
+            async for chunk in blob_stream:
+                await f.write(chunk)
+            file_size = await f.tell()
+            if user_size_used + file_size > user.max_storage:
+                raise StorageExceededError(f"Unable to save file, user {user.username} has storage limit of {user.max_storage}, used {user_size_used}, requested {file_size}")
+            
+            # check mime type
+            if mime_type is None:
+                mime_type, _ = mimetypes.guess_type(url)
+            if mime_type is None:
                 await f.seek(0)
-                
-                if file_size < LARGE_FILE_BYTES:
-                    blob = await f.read()
-                    async with transaction() as w_cur:
-                        fconn_w = FileConn(w_cur)
-                        await fconn_w.set_file_blob(f_id, blob)
-                        await fconn_w.set_file_record(
-                            url, owner_id=user.id, file_id=f_id, file_size=file_size, 
-                            permission=permission, external=False, mime_type=mime_type)
-                
-                else:
-                    async def blob_stream_tempfile():
-                        nonlocal f
-                        while True:
-                            chunk = await f.read(CHUNK_SIZE)
-                            if not chunk: break
-                            yield chunk
-                    await FileConn.set_file_blob_external(f_id, blob_stream_tempfile())
-                    async with transaction() as w_cur:
-                        await FileConn(w_cur).set_file_record(
-                            url, owner_id=user.id, file_id=f_id, file_size=file_size, 
-                            permission=permission, external=True, mime_type=mime_type)
+                mime_type = mimesniff.what(await f.read(1024))
+            if mime_type is None:
+                mime_type = 'application/octet-stream'
+            await f.seek(0)
+            
+            if file_size < LARGE_FILE_BYTES:
+                blob = await f.read()
+                async with transaction() as w_cur:
+                    fconn_w = FileConn(w_cur)
+                    await fconn_w.set_file_blob(f_id, blob)
+                    await fconn_w.set_file_record(
+                        url, owner_id=user.id, file_id=f_id, file_size=file_size, 
+                        permission=permission, external=False, mime_type=mime_type)
+            
+            else:
+                async def blob_stream_tempfile():
+                    nonlocal f
+                    while True:
+                        chunk = await f.read(CHUNK_SIZE)
+                        if not chunk: break
+                        yield chunk
+                await FileConn.set_file_blob_external(f_id, blob_stream_tempfile())
+                async with transaction() as w_cur:
+                    await FileConn(w_cur).set_file_record(
+                        url, owner_id=user.id, file_id=f_id, file_size=file_size, 
+                        permission=permission, external=True, mime_type=mime_type)
         return file_size
 
     async def read_file(self, url: str, start_byte = -1, end_byte = -1) -> AsyncIterable[bytes]:

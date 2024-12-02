@@ -45,6 +45,17 @@ export const permMap = {
     3: 'private'
 }
 
+async function fmtFailedResponse(res){
+    const raw = await res.text();
+    const json = raw ? JSON.parse(raw) : {};
+    const txt = JSON.stringify(json.detail || json || "No message");
+    const maxWords = 32;
+    if (txt.length > maxWords){
+        return txt.slice(0, maxWords) + '...';
+    }
+    return txt;
+}
+
 export default class Connector {
 
     constructor(){
@@ -79,7 +90,7 @@ export default class Connector {
             body: fileBytes
         });
         if (res.status != 200 && res.status != 201){
-            throw new Error(`Failed to upload file, status code: ${res.status}, message: ${await res.json()}`);
+            throw new Error(`Failed to upload file, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
         }
         return (await res.json()).url;
     }
@@ -111,7 +122,7 @@ export default class Connector {
         });
                 
         if (res.status != 200 && res.status != 201){
-            throw new Error(`Failed to upload file, status code: ${res.status}, message: ${await res.json()}`);
+            throw new Error(`Failed to upload file, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
         }
         return (await res.json()).url;
     }
@@ -133,7 +144,7 @@ export default class Connector {
             body: JSON.stringify(data)
         });
         if (res.status != 200 && res.status != 201){
-            throw new Error(`Failed to upload object, status code: ${res.status}, message: ${await res.json()}`);
+            throw new Error(`Failed to upload object, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
         }
         return (await res.json()).url;
     }
@@ -147,7 +158,7 @@ export default class Connector {
             }, 
         });
         if (res.status == 200) return;
-        throw new Error(`Failed to delete file, status code: ${res.status}, message: ${await res.json()}`);
+        throw new Error(`Failed to delete file, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
     }
 
     /**
@@ -211,7 +222,7 @@ export default class Connector {
             },
         });
         if (res.status != 200){
-            throw new Error(`Failed to count files, status code: ${res.status}, message: ${await res.json()}`);
+            throw new Error(`Failed to count files, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
         }
         return (await res.json()).count;
     }
@@ -250,7 +261,7 @@ export default class Connector {
             },
         });
         if (res.status != 200){
-            throw new Error(`Failed to list files, status code: ${res.status}, message: ${await res.json()}`);
+            throw new Error(`Failed to list files, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
         }
         return await res.json();
     }
@@ -270,7 +281,7 @@ export default class Connector {
             },
         });
         if (res.status != 200){
-            throw new Error(`Failed to count directories, status code: ${res.status}, message: ${await res.json()}`);
+            throw new Error(`Failed to count directories, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
         }
         return (await res.json()).count;
     }
@@ -309,7 +320,7 @@ export default class Connector {
             },
         });
         if (res.status != 200){
-            throw new Error(`Failed to list directories, status code: ${res.status}, message: ${await res.json()}`);
+            throw new Error(`Failed to list directories, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
         }
         return await res.json();
     }
@@ -347,7 +358,7 @@ export default class Connector {
             },
         });
         if (res.status != 200){
-            throw new Error(`Failed to set permission, status code: ${res.status}, message: ${await res.json()}`);
+            throw new Error(`Failed to set permission, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
         }
     }
 
@@ -369,7 +380,7 @@ export default class Connector {
             },
         });
         if (res.status != 200){
-            throw new Error(`Failed to move file, status code: ${res.status}, message: ${await res.json()}`);
+            throw new Error(`Failed to move file, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
         }
     }
 

@@ -9,7 +9,20 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TypeVar, Callable, Awaitable
 from functools import wraps, partial
 from uuid import uuid4
-import os
+import os, threading
+
+class ThreadSafeAsyncLock(Lock):
+    def __init__(self):
+        self._t_lock = threading.Lock()
+        super().__init__()
+    
+    async def acquire(self, *args, **kwargs):
+        self._t_lock.acquire(blocking=True)
+        await super().acquire(*args, **kwargs)
+    
+    def release(self):
+        super().release()
+        self._t_lock.release()
 
 def hash_credential(username: str, password: str):
     return hashlib.sha256((username + password).encode()).hexdigest()
@@ -29,7 +42,7 @@ def ensure_uri_compnents(path: str):
     return encode_uri_compnents(decode_uri_compnents(path))
 
 g_debounce_tasks: OrderedDict[str, asyncio.Task] = OrderedDict()
-lock_debounce_task_queue = Lock()
+lock_debounce_task_queue = ThreadSafeAsyncLock()
 async def wait_for_debounce_tasks():
     async def stop_task(task: asyncio.Task):
         task.cancel()
@@ -47,13 +60,15 @@ def debounce_async(delay: float = 0.1, max_wait: float = 1.):
     """
     def debounce_wrap(func):
         task_record: tuple[str, asyncio.Task] | None = None
+        fn_execution_lock = Lock()
         last_execution_time = 0
 
         async def delayed_func(*args, **kwargs):
             nonlocal last_execution_time
             await asyncio.sleep(delay)
-            await func(*args, **kwargs)
-            last_execution_time = time.monotonic()
+            async with fn_execution_lock:
+                await func(*args, **kwargs)
+                last_execution_time = time.monotonic()
 
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
@@ -64,10 +79,11 @@ def debounce_async(delay: float = 0.1, max_wait: float = 1.):
                     task_record[1].cancel()
                     g_debounce_tasks.pop(task_record[0], None)
             
-            if time.monotonic() - last_execution_time > max_wait:
-                await func(*args, **kwargs)
-                last_execution_time = time.monotonic()
-                return
+            async with fn_execution_lock:
+                if time.monotonic() - last_execution_time > max_wait:
+                    await func(*args, **kwargs)
+                    last_execution_time = time.monotonic()
+                    return
 
             task = asyncio.create_task(delayed_func(*args, **kwargs))
             task_uid = uuid4().hex

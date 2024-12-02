@@ -9,6 +9,7 @@ from typing import Callable, Awaitable
 
 from .log import get_logger
 from .config import DATA_HOME
+from .utils import ThreadSafeAsyncLock
 
 async def execute_sql(conn: aiosqlite.Connection | aiosqlite.Cursor, name: str):
     this_dir = Path(__file__).parent
@@ -50,7 +51,7 @@ class SqlConnectionPool:
     def __init__(self):
         self._readers: list[SqlConnection] = []
         self._writer: None | SqlConnection = None
-        self._lock = Lock()
+        self._lock = ThreadSafeAsyncLock()
     
     async def init(self, n_read: int):
         await self.close()

@@ -9,21 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TypeVar, Callable, Awaitable
 from functools import wraps, partial
 from uuid import uuid4
-import os, threading
-
-class ThreadSafeAsyncLock(Lock):
-    def __init__(self):
-        self._t_lock = threading.Lock()
-        super().__init__()
-    
-    async def acquire(self, *args, **kwargs):
-        # order is important!
-        await super().acquire(*args, **kwargs)
-        self._t_lock.acquire(blocking=True, timeout=10)
-    
-    def release(self):
-        self._t_lock.release()
-        super().release()
+import os
 
 def hash_credential(username: str, password: str):
     return hashlib.sha256((username + password).encode()).hexdigest()
@@ -43,7 +29,7 @@ def ensure_uri_compnents(path: str):
     return encode_uri_compnents(decode_uri_compnents(path))
 
 g_debounce_tasks: OrderedDict[str, asyncio.Task] = OrderedDict()
-lock_debounce_task_queue = ThreadSafeAsyncLock()
+lock_debounce_task_queue = Lock()
 async def wait_for_debounce_tasks():
     async def stop_task(task: asyncio.Task):
         task.cancel()

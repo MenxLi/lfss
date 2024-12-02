@@ -8,6 +8,7 @@ from functools import wraps
 from typing import Callable, Awaitable
 
 from .log import get_logger
+from .error import DatabaseLockedError
 from .config import DATA_HOME
 from .utils import ThreadSafeAsyncLock
 
@@ -29,7 +30,7 @@ async def get_connection(read_only: bool = False) -> aiosqlite.Connection:
 
     conn = await aiosqlite.connect(
         get_db_uri(DATA_HOME / 'index.db', read_only=read_only), 
-        timeout = 60, uri = True
+        timeout = 20, uri = True
         )
     async with conn.cursor() as c:
         await c.execute(
@@ -143,6 +144,10 @@ async def unique_cursor(is_write: bool = False):
             connection_obj = await g_pool.get()
             try:
                 yield await connection_obj.conn.cursor()
+            except Exception as e:
+                if 'database is locked' in str(e):
+                    raise DatabaseLockedError from e
+                raise e
             finally:
                 await g_pool.release(connection_obj)
     else:
@@ -150,10 +155,13 @@ async def unique_cursor(is_write: bool = False):
             connection_obj = await g_pool.get(w=True)
             try:
                 yield await connection_obj.conn.cursor()
+            except Exception as e:
+                if 'database is locked' in str(e):
+                    raise DatabaseLockedError from e
+                raise e
             finally:
                 await g_pool.release(connection_obj)
 
-# todo: add exclusive transaction option
 @asynccontextmanager
 async def transaction():
     async with unique_cursor(is_write=True) as cur:

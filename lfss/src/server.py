@@ -54,6 +54,7 @@ def handle_exception(fn):
             if isinstance(e, FileNotFoundError): raise HTTPException(status_code=404, detail=str(e))
             if isinstance(e, FileExistsError): raise HTTPException(status_code=409, detail=str(e))
             if isinstance(e, TooManyItemsError): raise HTTPException(status_code=400, detail=str(e))
+            if isinstance(e, DatabaseLockedError): raise HTTPException(status_code=503, detail=str(e))
             logger.error(f"Uncaptured error in {fn.__name__}: {e}")
             raise 
     return wrapper

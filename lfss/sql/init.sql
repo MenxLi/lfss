@@ -27,6 +27,15 @@ CREATE TABLE IF NOT EXISTS usize (
     size INTEGER DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS ualias (
+    src_user_id INTEGER NOT NULL,
+    dst_user_id INTEGER NOT NULL,
+    alias_level INTEGER DEFAULT 0,
+    PRIMARY KEY(src_user_id, dst_user_id),
+    FOREIGN KEY(src_user_id) REFERENCES user(id),
+    FOREIGN KEY(dst_user_id) REFERENCES user(id)
+); 
+
 CREATE INDEX IF NOT EXISTS idx_fmeta_url ON fmeta(url);
 
 CREATE INDEX IF NOT EXISTS idx_user_username ON user(username);

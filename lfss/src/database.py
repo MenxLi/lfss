@@ -1,5 +1,6 @@
 
-from typing import Optional, Literal, AsyncIterable
+from typing import Optional, Literal, AsyncIterable, overload
+from contextlib import asynccontextmanager
 from abc import ABC
 
 import urllib.parse
@@ -12,7 +13,8 @@ import mimetypes, mimesniff
 
 from .connection_pool import execute_sql, unique_cursor, transaction
 from .datatype import (
-    UserRecord, FileReadPermission, FileRecord, DirectoryRecord, PathContents, 
+    UserRecord, AccessLevel, 
+    FileReadPermission, FileRecord, DirectoryRecord, PathContents, 
     FileSortKey, DirSortKey, isValidFileSortKey, isValidDirSortKey
     )
 from .config import LARGE_BLOB_DIR, CHUNK_SIZE, LARGE_FILE_BYTES, MAX_MEM_FILE_BYTES
@@ -57,11 +59,16 @@ class UserConn(DBObjectBase):
         if res is None: return None
         return self.parse_record(res)
     
-    async def get_user_by_id(self, user_id: int) -> Optional[UserRecord]:
+    @overload
+    async def get_user_by_id(self, user_id: int, throw: Literal[True]) -> UserRecord: ...
+    @overload
+    async def get_user_by_id(self, user_id: int, throw: Literal[False] = False) -> Optional[UserRecord]: ...
+    async def get_user_by_id(self, user_id: int, throw = False) -> Optional[UserRecord]:
         await self.cur.execute("SELECT * FROM user WHERE id = ?", (user_id, ))
         res = await self.cur.fetchone()
-        
-        if res is None: return None
+        if res is None:
+            if throw: raise ValueError(f"User {user_id} not found")
+            return None
         return self.parse_record(res)
     
     async def get_user_by_credential(self, credential: str) -> Optional[UserRecord]:
@@ -122,8 +129,58 @@ class UserConn(DBObjectBase):
         await self.cur.execute("UPDATE user SET last_active = CURRENT_TIMESTAMP WHERE username = ?", (username, ))
     
     async def delete_user(self, username: str):
+        await self.cur.execute("DELETE FROM ualias WHERE src_user_id = (SELECT id FROM user WHERE username = ?) OR dst_user_id = (SELECT id FROM user WHERE username = ?)", (username, username))
         await self.cur.execute("DELETE FROM user WHERE username = ?", (username, ))
         self.logger.info(f"Delete user {username}")
+    
+    async def set_alias_level(self, src_user: int | str, dst_user: int | str, level: AccessLevel):
+        """ src_user can do [AliasLevel] to dst_user """
+        assert int(level) >= AccessLevel.NONE, f"Cannot set alias level to {level}"
+        match (src_user, dst_user):
+            case (int(), int()):
+                await self.cur.execute("INSERT OR REPLACE INTO ualias (src_user_id, dst_user_id, alias_level) VALUES (?, ?, ?)", (src_user, dst_user, int(level)))
+            case (str(), str()):
+                await self.cur.execute("INSERT OR REPLACE INTO ualias (src_user_id, dst_user_id, alias_level) VALUES ((SELECT id FROM user WHERE username = ?), (SELECT id FROM user WHERE username = ?), ?)", (src_user, dst_user, int(level)))
+            case (str(), int()):
+                await self.cur.execute("INSERT OR REPLACE INTO ualias (src_user_id, dst_user_id, alias_level) VALUES ((SELECT id FROM user WHERE username = ?), ?, ?)", (src_user, dst_user, int(level)))
+            case (int(), str()):
+                await self.cur.execute("INSERT OR REPLACE INTO ualias (src_user_id, dst_user_id, alias_level) VALUES (?, (SELECT id FROM user WHERE username = ?), ?)", (src_user, dst_user, int(level)))
+            case (_, _):
+                raise ValueError("Invalid arguments")
+    
+    async def query_alias_level(self, src_user_id: int, dst_user_id: int) -> AccessLevel:
+        """ src_user can do [AliasLevel] to dst_user """
+        if src_user_id == dst_user_id:
+            return AccessLevel.ALL
+        await self.cur.execute("SELECT alias_level FROM ualias WHERE src_user_id = ? AND dst_user_id = ?", (src_user_id, dst_user_id))
+        res = await self.cur.fetchone()
+        if res is None:
+            return AccessLevel.NONE
+        return AccessLevel(res[0])
+    
+    async def list_alias_users(self, src_user: int | str, level: AccessLevel) -> list[UserRecord]:
+        """
+        List all users that src_user can do [AliasLevel] to, with level >= level, 
+        Note: the returned list does not include src_user and admin users
+        """
+        assert int(level) > AccessLevel.NONE, f"Invalid level, {level}"
+        match src_user:
+            case int():
+                await self.cur.execute("""
+                    SELECT * FROM user WHERE id IN (
+                        SELECT dst_user_id FROM ualias WHERE src_user_id = ? AND alias_level >= ?
+                    )
+                """, (src_user, int(level)))
+            case str():
+                await self.cur.execute("""
+                    SELECT * FROM user WHERE id IN (
+                        SELECT dst_user_id FROM ualias WHERE src_user_id = (SELECT id FROM user WHERE username = ?) AND alias_level >= ?
+                    )
+                """, (src_user, int(level)))
+            case _:
+                raise ValueError("Invalid arguments")
+        res = await self.cur.fetchall()
+        return [self.parse_record(r) for r in res]
 
 class FileConn(DBObjectBase):
 
@@ -135,10 +192,15 @@ class FileConn(DBObjectBase):
     def parse_record(record) -> FileRecord:
         return FileRecord(*record)
     
-    async def get_file_record(self, url: str) -> Optional[FileRecord]:
+    @overload
+    async def get_file_record(self, url: str, throw: Literal[True]) -> FileRecord: ...
+    @overload
+    async def get_file_record(self, url: str, throw: Literal[False] = False) -> Optional[FileRecord]: ...
+    async def get_file_record(self, url: str, throw = False):
         cursor = await self.cur.execute("SELECT * FROM fmeta WHERE url = ?", (url, ))
         res = await cursor.fetchone()
         if res is None:
+            if throw: raise FileNotFoundError(f"File {url} not found")
             return None
         return self.parse_record(res)
     
@@ -552,7 +614,7 @@ class Database:
             if r is None:
                 raise PathNotFoundError(f"File {url} not found")
             if op_user is not None:
-                if r.owner_id != op_user.id and not op_user.is_admin:
+                if await check_path_permission(url, op_user) < AccessLevel.WRITE:
                     raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot update file {url}")
             await fconn.update_file_record(url, permission=permission)
     
@@ -641,7 +703,8 @@ class Database:
             if r is None:
                 return None
             if op_user is not None:
-                if r.owner_id != op_user.id and not op_user.is_admin:
+                if  r.owner_id != op_user.id and \
+                    await check_path_permission(r.url, op_user, cursor=cur) < AccessLevel.WRITE:
                     # will rollback
                     raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot delete file {url}")
             f_id = r.file_id
@@ -661,7 +724,7 @@ class Database:
             if r is None:
                 raise FileNotFoundError(f"File {old_url} not found")
             if op_user is not None:
-                if r.owner_id != op_user.id:
+                if await check_path_permission(old_url, op_user) < AccessLevel.WRITE:
                     raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot move file {old_url}")
             await fconn.move_file(old_url, new_url)
 
@@ -681,20 +744,14 @@ class Database:
         assert old_url.endswith('/'), "Old path must end with /"
         assert new_url.endswith('/'), "New path must end with /"
 
-        async with transaction() as cur:
-            first_component = new_url.split('/')[0]
-            if not (first_component == op_user.username or op_user.is_admin):
-                raise PermissionDeniedError(f"Permission denied: path must start with {op_user.username}")
-            elif op_user.is_admin:
-                uconn = UserConn(cur)
-                _is_user = await uconn.get_user(first_component)
-                if not _is_user:
-                    raise PermissionDeniedError(f"Invalid path: {first_component} is not a valid username")
-            
-            # check if old path is under user's directory (non-admin)
-            if not old_url.startswith(op_user.username + '/') and not op_user.is_admin:
-                raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot move path {old_url}")
+        async with unique_cursor() as cur:
+            if not (
+                await check_path_permission(old_url, op_user) >= AccessLevel.WRITE and
+                await check_path_permission(new_url, op_user) >= AccessLevel.WRITE
+                ):
+                raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot move path {old_url} to {new_url}")
 
+        async with transaction() as cur:
             fconn = FileConn(cur)
             await fconn.move_path(old_url, new_url, 'overwrite', op_user.id)
 
@@ -718,7 +775,7 @@ class Database:
 
     async def delete_path(self, url: str, op_user: Optional[UserRecord] = None) -> Optional[list[FileRecord]]:
         validate_url(url, is_file=False)
-        from_owner_id = op_user.id if op_user is not None and not op_user.is_admin else None
+        from_owner_id = op_user.id if op_user is not None and not (op_user.is_admin or await check_path_permission(url, op_user) >= AccessLevel.WRITE) else None
 
         async with transaction() as cur:
             fconn = FileConn(cur)
@@ -786,7 +843,15 @@ class Database:
         buffer.seek(0)
         return buffer
 
-def check_user_permission(user: UserRecord, owner: UserRecord, file: FileRecord) -> tuple[bool, str]:
+def check_file_read_permission(user: UserRecord, owner: UserRecord, file: FileRecord) -> tuple[bool, str]:
+    """
+    This does not consider alias level permission,
+    use check_path_permission for alias level permission check first:
+    ```
+    if await check_path_permission(path, user) < AccessLevel.READ:
+        read_allowed, reason = check_file_read_permission(user, owner, file)
+    ```
+    """
     if user.is_admin:
         return True, ""
     
@@ -813,3 +878,46 @@ def check_user_permission(user: UserRecord, owner: UserRecord, file: FileRecord)
         assert owner.permission == FileReadPermission.PUBLIC or owner.permission == FileReadPermission.UNSET
 
     return True, ""
+
+async def check_path_permission(path: str, user: UserRecord, cursor: Optional[aiosqlite.Cursor] = None) -> AccessLevel:
+    """
+    Check if the user has access to the path. 
+    If the user is admin, the user will have all access.
+    If the path is a file, the user will have all access if the user is the owner.
+    Otherwise, the user will have alias level access w.r.t. the path user.
+    """
+    if user.id == 0:
+        return AccessLevel.GUEST
+    
+    @asynccontextmanager
+    async def this_cur():
+        if cursor is None:
+            async with unique_cursor() as _cur:
+                yield _cur
+        else:
+            yield cursor
+
+    # check if path user exists
+    path_username = path.split('/')[0]
+    async with this_cur() as cur:
+        uconn = UserConn(cur)
+        path_user = await uconn.get_user(path_username)
+    if path_user is None:
+        raise PathNotFoundError(f"Invalid path: {path_username} is not a valid username")
+
+    # check if user is admin
+    if user.is_admin or user.username == path_username:
+        return AccessLevel.ALL
+    
+    # if the path is a file, check if the user is the owner
+    if not path.endswith('/'):
+        async with this_cur() as cur:
+            fconn = FileConn(cur)
+            file = await fconn.get_file_record(path)
+        if file and file.owner_id == user.id:
+            return AccessLevel.ALL
+    
+    # check alias level
+    async with this_cur() as cur:
+        uconn = UserConn(cur)
+        return await uconn.query_alias_level(user.id, path_user.id)

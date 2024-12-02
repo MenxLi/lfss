@@ -16,10 +16,10 @@ from .stat import RequestDB
 from .config import MAX_BUNDLE_BYTES, CHUNK_SIZE
 from .utils import ensure_uri_compnents, format_last_modified, now_stamp, wait_for_debounce_tasks
 from .connection_pool import global_connection_init, global_connection_close, unique_cursor
-from .database import Database, DECOY_USER, check_user_permission, UserConn, FileConn
+from .database import Database, DECOY_USER, check_file_read_permission, check_path_permission, UserConn, FileConn
 from .database import delayed_log_activity, delayed_log_access
 from .datatype import (
-    FileReadPermission, FileRecord, UserRecord, PathContents, 
+    FileReadPermission, FileRecord, UserRecord, PathContents, AccessLevel, 
     FileSortKey, DirSortKey
 )
 from .thumb import get_thumb
@@ -228,39 +228,38 @@ async def get_file_impl(
     if path == "": path = "/"
     if path.endswith("/"):
         # return file under the path as json
-        async with unique_cursor() as conn:
-            fconn = FileConn(conn)
+        async with unique_cursor() as cur:
+            fconn = FileConn(cur)
             if user.id == 0:
                 raise HTTPException(status_code=401, detail="Permission denied, credential required")
             if thumb:
                 return await emit_thumbnail(path, download, create_time=None)
             
             if path == "/":
+                async with unique_cursor() as c:
+                    alias_users = await UserConn(c).list_alias_users(user.id, AccessLevel.READ)
                 return PathContents(
-                    dirs = await fconn.list_root_dirs(user.username, skim=True) \
+                    dirs = await fconn.list_root_dirs(user.username, *[x.username for x in alias_users], skim=True) \
                         if not user.is_admin else await fconn.list_root_dirs(skim=True),
                     files = []
                 )
 
-            if not path.startswith(f"{user.username}/") and not user.is_admin:
-                raise HTTPException(status_code=403, detail="Permission denied, path must start with username")
+            if not await check_path_permission(path, user, cursor=cur) >= AccessLevel.READ:
+                raise HTTPException(status_code=403, detail="Permission denied")
 
             return await fconn.list_path(path)
     
     # handle file query
-    async with unique_cursor() as conn:
-        fconn = FileConn(conn)
-        file_record = await fconn.get_file_record(path)
-        if not file_record:
-            raise HTTPException(status_code=404, detail="File not found")
+    async with unique_cursor() as cur:
+        fconn = FileConn(cur)
+        file_record = await fconn.get_file_record(path, throw=True)
+        uconn = UserConn(cur)
+        owner = await uconn.get_user_by_id(file_record.owner_id, throw=True)
 
-        uconn = UserConn(conn)
-        owner = await uconn.get_user_by_id(file_record.owner_id)
-
-    assert owner is not None, "Owner not found"
-    allow_access, reason = check_user_permission(user, owner, file_record)
-    if not allow_access:
-        raise HTTPException(status_code=403, detail=reason)
+        if not await check_path_permission(path, user, cursor=cur) >= AccessLevel.READ:
+            allow_access, reason = check_file_read_permission(user, owner, file_record)
+            if not allow_access:
+                raise HTTPException(status_code=403 if user.id != 0 else 401, detail=reason)
     
     req_range = request.headers.get("Range", None)
     if not req_range is None:
@@ -326,17 +325,11 @@ async def put_file(
     ):
     path = ensure_uri_compnents(path)
     assert not path.endswith("/"), "Path must not end with /"
-    if not path.startswith(f"{user.username}/"):
-        if not user.is_admin:
-            logger.debug(f"Reject put request from {user.username} to {path}")
-            raise HTTPException(status_code=403, detail="Permission denied")
-        else:
-            first_comp = path.split("/")[0]
-            async with unique_cursor() as c:
-                uconn = UserConn(c)
-                owner = await uconn.get_user(first_comp)
-                if not owner:
-                    raise HTTPException(status_code=404, detail="Owner not found")
+
+    access_level = await check_path_permission(path, user)
+    if access_level < AccessLevel.WRITE:
+        logger.debug(f"Reject put request from {user.username} to {path}")
+        raise HTTPException(status_code=403, detail="Permission denied")
     
     logger.info(f"PUT {path}, user: {user.username}")
     exists_flag = False
@@ -352,7 +345,7 @@ async def put_file(
                 "Content-Type": "application/json",
             }, content=json.dumps({"url": path}))
         exists_flag = True
-        if not user.is_admin and not file_record.owner_id == user.id:
+        if await check_path_permission(path, user) < AccessLevel.WRITE:
             raise HTTPException(status_code=403, detail="Permission denied, cannot overwrite other's file")
         await db.delete_file(path)
     
@@ -386,17 +379,11 @@ async def post_file(
     ):
     path = ensure_uri_compnents(path)
     assert not path.endswith("/"), "Path must not end with /"
-    if not path.startswith(f"{user.username}/"):
-        if not user.is_admin:
-            logger.debug(f"Reject put request from {user.username} to {path}")
-            raise HTTPException(status_code=403, detail="Permission denied")
-        else:
-            first_comp = path.split("/")[0]
-            async with unique_cursor() as conn:
-                uconn = UserConn(conn)
-                owner = await uconn.get_user(first_comp)
-                if not owner:
-                    raise HTTPException(status_code=404, detail="Owner not found")
+
+    access_level = await check_path_permission(path, user)
+    if access_level < AccessLevel.WRITE:
+        logger.debug(f"Reject post request from {user.username} to {path}")
+        raise HTTPException(status_code=403, detail="Permission denied")
 
     logger.info(f"POST {path}, user: {user.username}")
     exists_flag = False
@@ -412,7 +399,7 @@ async def post_file(
                 "Content-Type": "application/json",
             }, content=json.dumps({"url": path}))
         exists_flag = True
-        if not user.is_admin and not file_record.owner_id == user.id:
+        if await check_path_permission(path, user) < AccessLevel.WRITE: 
             raise HTTPException(status_code=403, detail="Permission denied, cannot overwrite other's file")
         await db.delete_file(path)
     
@@ -431,7 +418,7 @@ async def post_file(
 @handle_exception
 async def delete_file(path: str, user: UserRecord = Depends(registered_user)):
     path = ensure_uri_compnents(path)
-    if not path.startswith(f"{user.username}/") and not user.is_admin:
+    if await check_path_permission(path, user) < AccessLevel.WRITE:
         raise HTTPException(status_code=403, detail="Permission denied")
     
     logger.info(f"DELETE {path}, user: {user.username}")
@@ -458,6 +445,7 @@ async def bundle_files(path: str, user: UserRecord = Depends(registered_user)):
     if not path == "" and path[0] == "/":   # adapt to both /path and path
         path = path[1:]
     
+    # TODO: may check alias users here
     owner_records_cache: dict[int, UserRecord] = {}     # cache owner records, ID -> UserRecord
     async def is_access_granted(file_record: FileRecord):
         owner_id = file_record.owner_id
@@ -465,11 +453,10 @@ async def bundle_files(path: str, user: UserRecord = Depends(registered_user)):
         if owner is None:
             async with unique_cursor() as conn:
                 uconn = UserConn(conn)
-                owner = await uconn.get_user_by_id(owner_id)
-                assert owner is not None, "Owner not found"
+                owner = await uconn.get_user_by_id(owner_id, throw=True)
             owner_records_cache[owner_id] = owner
             
-        allow_access, _ = check_user_permission(user, owner, file_record)
+        allow_access, _ = check_file_read_permission(user, owner, file_record)
         return allow_access
     
     async with unique_cursor() as conn:
@@ -502,23 +489,20 @@ async def get_file_meta(path: str, user: UserRecord = Depends(registered_user)):
     logger.info(f"GET meta({path}), user: {user.username}")
     path = ensure_uri_compnents(path)
     is_file = not path.endswith("/")
-    async with unique_cursor() as conn:
-        fconn = FileConn(conn)
+    async with unique_cursor() as cur:
+        fconn = FileConn(cur)
         if is_file:
-            record = await fconn.get_file_record(path)
-            if not record:
-                raise HTTPException(status_code=404, detail="File not found")
-            if not path.startswith(f"{user.username}/") and not user.is_admin:
-                uconn = UserConn(conn)
-                owner = await uconn.get_user_by_id(record.owner_id)
-                assert owner is not None, "Owner not found"
-                is_allowed, reason = check_user_permission(user, owner, record)
+            record = await fconn.get_file_record(path, throw=True)
+            if await check_path_permission(path, user, cursor=cur) < AccessLevel.READ:
+                uconn = UserConn(cur)
+                owner = await uconn.get_user_by_id(record.owner_id, throw=True)
+                is_allowed, reason = check_file_read_permission(user, owner, record)
                 if not is_allowed:
                     raise HTTPException(status_code=403, detail=reason)
         else:
-            record = await fconn.get_path_record(path)
-            if not path.startswith(f"{user.username}/") and not user.is_admin:
+            if await check_path_permission(path, user, cursor=cur) < AccessLevel.READ:
                 raise HTTPException(status_code=403, detail="Permission denied")
+            record = await fconn.get_path_record(path)
     return record
 
 @router_api.post("/meta")
@@ -559,15 +543,14 @@ async def update_file_meta(
 
     return Response(status_code=200, content="OK")
 
-async def validate_path_permission(path: str, user: UserRecord):
+async def validate_path_read_permission(path: str, user: UserRecord):
     if not path.endswith("/"):
         raise HTTPException(status_code=400, detail="Path must end with /")
-    if not path.startswith(f"{user.username}/") and not user.is_admin:
+    if not await check_path_permission(path, user) >= AccessLevel.READ:
         raise HTTPException(status_code=403, detail="Permission denied")
-
 @router_api.get("/count-files")
 async def count_files(path: str, flat: bool = False, user: UserRecord = Depends(registered_user)):
-    await validate_path_permission(path, user)
+    await validate_path_read_permission(path, user)
     path = ensure_uri_compnents(path)
     async with unique_cursor() as conn:
         fconn = FileConn(conn)
@@ -578,7 +561,7 @@ async def list_files(
     order_by: FileSortKey = "", order_desc: bool = False,
     flat: bool = False, user: UserRecord = Depends(registered_user)
     ):
-    await validate_path_permission(path, user)
+    await validate_path_read_permission(path, user)
     path = ensure_uri_compnents(path)
     async with unique_cursor() as conn:
         fconn = FileConn(conn)
@@ -590,7 +573,7 @@ async def list_files(
 
 @router_api.get("/count-dirs")
 async def count_dirs(path: str, user: UserRecord = Depends(registered_user)):
-    await validate_path_permission(path, user)
+    await validate_path_read_permission(path, user)
     path = ensure_uri_compnents(path)
     async with unique_cursor() as conn:
         fconn = FileConn(conn)
@@ -601,7 +584,7 @@ async def list_dirs(
     order_by: DirSortKey = "", order_desc: bool = False,
     skim: bool = True, user: UserRecord = Depends(registered_user)
     ):
-    await validate_path_permission(path, user)
+    await validate_path_read_permission(path, user)
     path = ensure_uri_compnents(path)
     async with unique_cursor() as conn:
         fconn = FileConn(conn)

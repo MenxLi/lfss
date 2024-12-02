@@ -2,8 +2,15 @@ import argparse, asyncio, os
 from contextlib import asynccontextmanager
 from .cli import parse_permission, FileReadPermission
 from ..src.utils import parse_storage_size, fmt_storage_size
+from ..src.datatype import AccessLevel
 from ..src.database import Database, FileReadPermission, transaction, UserConn, unique_cursor, FileConn
 from ..src.connection_pool import global_entrance
+
+def parse_access_level(s: str) -> AccessLevel:
+    for p in AccessLevel:
+        if p.name.lower() == s.lower():
+            return p
+    raise ValueError(f"Invalid access level {s}")
 
 @global_entrance(1)
 async def _main():
@@ -31,10 +38,15 @@ async def _main():
     sp_set.add_argument('-a', '--admin', type=parse_bool, default=None)
     sp_set.add_argument('--permission', type=parse_permission, default=None)
     sp_set.add_argument('--max-storage', type=parse_storage_size, default=None)
-    
+
     sp_list = sp.add_parser('list')
     sp_list.add_argument("username", nargs='*', type=str, default=None)
     sp_list.add_argument("-l", "--long", action="store_true")
+    
+    sp_alias = sp.add_parser('set-alias')
+    sp_alias.add_argument('src_username', type=str)
+    sp_alias.add_argument('dst_username', type=str)
+    sp_alias.add_argument('--level', type=parse_access_level, default=AccessLevel.READ, help="Access level")
     
     args = parser.parse_args()
     db = await Database().init()
@@ -72,6 +84,16 @@ async def _main():
             assert user is not None
             print('User updated, credential:', user.credential)
     
+    if args.subparser_name == 'set-alias':
+        async with get_uconn() as uconn:
+            src_user = await uconn.get_user(args.src_username)
+            dst_user = await uconn.get_user(args.dst_username)
+            if src_user is None or dst_user is None:
+                print('User not found')
+                exit(1)
+            await uconn.set_alias_level(src_user.id, dst_user.id, args.level)
+            print(f"Alias set: [{src_user.username}] now have [{args.level.name}] access to [{dst_user.username}]")
+    
     if args.subparser_name == 'list':
         async with get_uconn() as uconn:
             term_width = os.get_terminal_size().columns
@@ -86,6 +108,11 @@ async def _main():
                         user_size_used = await fconn.user_size(user.id)
                     print('- Credential: ', user.credential)
                     print(f'- Storage: {fmt_storage_size(user_size_used)} / {fmt_storage_size(user.max_storage)}')
+                    for p in AccessLevel:
+                        if p > AccessLevel.NONE:
+                            usernames = [x.username for x in await uconn.list_alias_users(user.id, p)]
+                            if usernames:
+                                print(f'- Alias [{p.name}]: {", ".join(usernames)}')
         
 def main():
     asyncio.run(_main())

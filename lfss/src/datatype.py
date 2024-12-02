@@ -8,6 +8,13 @@ class FileReadPermission(IntEnum):
     PROTECTED = 2       # accessible by any user
     PRIVATE = 3         # accessible by owner only (including admin)
 
+class AccessLevel(IntEnum):
+    GUEST = -1          # guest, no permission
+    NONE  = 0           # no permission
+    READ  = 1           # read permission
+    WRITE = 2           # write/delete permission
+    ALL   = 10          # all permission, currently same as WRITE
+
 @dataclasses.dataclass
 class UserRecord:
     id: int

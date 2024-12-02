@@ -6,14 +6,9 @@ from lfss.src.utils import decode_uri_compnents
 from . import catch_request_error, line_sep
 
 def parse_permission(s: str) -> FileReadPermission:
-    if s.lower() == "public":
-        return FileReadPermission.PUBLIC
-    if s.lower() == "protected":
-        return FileReadPermission.PROTECTED
-    if s.lower() == "private":
-        return FileReadPermission.PRIVATE
-    if s.lower() == "unset":
-        return FileReadPermission.UNSET
+    for p in FileReadPermission:
+        if p.name.lower() == s.lower():
+            return p
     raise ValueError(f"Invalid permission {s}")
 
 def parse_arguments():

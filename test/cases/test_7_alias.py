@@ -92,5 +92,8 @@ def test_delete(server):
     c2 = get_conn('u2')
     c2.delete('u2/3.bin')
 
+    c2.put('u2/1.bin', b'hello world')
     c0.delete('u2/')
+
+    c2.put('u2/1.bin', b'hello world')
     c2.delete('u2/')

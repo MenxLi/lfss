@@ -236,8 +236,7 @@ async def get_file_impl(
                 return await emit_thumbnail(path, download, create_time=None)
             
             if path == "/":
-                async with unique_cursor() as c:
-                    alias_users = await UserConn(c).list_alias_users(user.id, AccessLevel.READ)
+                alias_users = await UserConn(cur).list_alias_users(user.id, AccessLevel.READ)
                 return PathContents(
                     dirs = await fconn.list_root_dirs(user.username, *[x.username for x in alias_users], skim=True) \
                         if not user.is_admin else await fconn.list_root_dirs(skim=True),

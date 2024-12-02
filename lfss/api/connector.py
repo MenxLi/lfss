@@ -17,14 +17,20 @@ _default_token = os.environ.get('LFSS_TOKEN', '')
 
 class Connector:
     class Session:
-        def __init__(self, connector: Connector, pool_size: int = 10):
+        def __init__(
+            self, connector: Connector, pool_size: int = 10, 
+            retry: int = 1, backoff_factor: float = 0.5, status_forcelist: list[int] = [503]
+            ):
             self.connector = connector
             self.pool_size = pool_size
+            self.retry_adapter = requests.adapters.Retry(
+                total=retry, backoff_factor=backoff_factor, status_forcelist=status_forcelist, 
+            )
         def open(self):
             self.close()
             if self.connector._session is None:
                 s = requests.Session()
-                adapter = requests.adapters.HTTPAdapter(pool_connections=self.pool_size, pool_maxsize=self.pool_size)
+                adapter = requests.adapters.HTTPAdapter(pool_connections=self.pool_size, pool_maxsize=self.pool_size, max_retries=self.retry_adapter)
                 s.mount('http://', adapter)
                 s.mount('https://', adapter)
                 self.connector._session = s
@@ -48,9 +54,9 @@ class Connector:
         }
         self._session: Optional[requests.Session] = None
     
-    def session(self, pool_size: int = 10):
+    def session( self, pool_size: int = 10, **kwargs):
         """ avoid creating a new session for each request.  """
-        return self.Session(self, pool_size)
+        return self.Session(self, pool_size, **kwargs)
     
     def _fetch_factory(
         self, method: Literal['GET', 'POST', 'PUT', 'DELETE'], 

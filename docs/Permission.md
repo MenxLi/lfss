@@ -1,9 +1,17 @@
 
 # Permission System
-There are two user roles in the system: Admin and Normal User ("users" are like "buckets" to some extent).
+There are two user roles in the system: Admin and Normal User ("users" are like "buckets" to some extent).  
+
+## Alias
+The user can have multiple alias users. The alias user can have read or write access to the user's path, depending on the permission set.  
+The alias user can list the files under the user's path.  
+If the alias user has write access, then the alias user can `GET`/`PUT`/`POST`/`DELETE` files under the user's path.  
+If the alias user has read access, then the alias user can only `GET` files under the user's path.  
 
 ## Ownership
-A file is owned by the user who created it, may not necessarily be the user under whose path the file is stored (admin can create files under any user's path).
+A file is owned by the user who created it, may not necessarily be the user under whose path the file is stored (admin/write-alias can create files under any user's path).
+
+**NOTE:** below discussion is based on the assumption that the user is not alias of the path owner.
 
 ## File access with `GET` permission
 The `GET` is used to access the file (if path is not ending with `/`), or to list the files under a path (if path is ending with `/`).  
@@ -32,11 +40,11 @@ Non-admin users can access files based on:
 - All users can list the files under their own path 
 - Admins can list the files under other users' path. 
 
-## File creation with `PUT` permission
-The `PUT` is used to create a file. 
-- Non-login user don't have `PUT` permission.  
-- Every user can have `PUT` permission of files under its own `/<user>/` path.  
-- The admin can have `PUT` permission of files of all users.
+## File creation with `PUT`/`POST` permission
+The `PUT`/`POST` is used to create a file. 
+- Non-login user don't have `PUT`/`POST` permission.  
+- Every user can have `PUT`/`POST` permission of files under its own `/<user>/` path.  
+- The admin can have `PUT`/`POST` permission of files of all users.
 
 ## `DELETE` and moving permissions
 - Non-login user don't have `DELETE`/move permission.

@@ -680,19 +680,28 @@ class Database:
         return file_size
 
     async def read_file(self, url: str, start_byte = -1, end_byte = -1) -> AsyncIterable[bytes]:
-        # end byte is exclusive: [start_byte, end_byte)
+        """
+        Read a file from the database.
+        end byte is exclusive: [start_byte, end_byte)
+        """
+        # The implementation is tricky, should not keep the cursor open for too long
         validate_url(url)
         async with unique_cursor() as cur:
             fconn = FileConn(cur)
             r = await fconn.get_file_record(url)
             if r is None:
                 raise FileNotFoundError(f"File {url} not found")
+
             if r.external:
-                ret = fconn.get_file_blob_external(r.file_id, start_byte=start_byte, end_byte=end_byte)
-            else:
+                _blob_stream = fconn.get_file_blob_external(r.file_id, start_byte=start_byte, end_byte=end_byte)
                 async def blob_stream():
-                    yield await fconn.get_file_blob(r.file_id, start_byte=start_byte, end_byte=end_byte)
-                ret = blob_stream()
+                    async for chunk in _blob_stream:
+                        yield chunk
+            else:
+                blob = await fconn.get_file_blob(r.file_id, start_byte=start_byte, end_byte=end_byte)
+                async def blob_stream():
+                    yield blob
+        ret = blob_stream()
         return ret
 
     async def delete_file(self, url: str, op_user: Optional[UserRecord] = None) -> Optional[FileRecord]:

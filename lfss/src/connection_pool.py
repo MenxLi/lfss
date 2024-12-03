@@ -47,7 +47,7 @@ class SqlConnection:
 
 class SqlConnectionPool:
     _r_sem: Semaphore
-    _w_sem: Lock | Semaphore
+    _w_sem: Lock
     def __init__(self):
         self._readers: list[SqlConnection] = []
         self._writer: None | SqlConnection = None
@@ -65,6 +65,17 @@ class SqlConnectionPool:
             conn = await get_connection(read_only=True)
             self._readers.append(SqlConnection(conn))
         self._r_sem = Semaphore(n_read)
+    
+    def status(self):   # debug
+        assert self._writer
+        assert len(self._readers) == self.n_read
+        n_free_readers = sum([1 for c in self._readers if c.is_available])
+        n_free_writers = 1 if self._writer.is_available else 0
+        n_free_r_sem = self._r_sem._value
+        n_free_w_sem = 1 - self._w_sem.locked()
+        assert n_free_readers == n_free_r_sem, f"{n_free_readers} != {n_free_r_sem}"
+        assert n_free_writers == n_free_w_sem, f"{n_free_writers} != {n_free_w_sem}"
+        return f"Readers: {n_free_readers}/{self.n_read}, Writers: {n_free_writers}/{1}"
     
     @property
     def n_read(self):

@@ -26,10 +26,10 @@ def get_fpath(charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123
             break
     return path
 
-def put_get_delete(username: str, path: str):
+def put_get_delete(username: str, path: str, byte_size):
     path = f"{username}/{path}"
     c = get_conn(username)
-    content = os.urandom(random.randint(1, 1024*1024*16))
+    content = os.urandom(byte_size)
     c.put(path, content)
     assert c.get(path) == content, "Put get failed"
     c.delete(path)
@@ -39,15 +39,24 @@ def test_fname(server):
     # use some wired characters...
     pathes = set([get_fpath(special_chars) for _ in range(3)])
     for i in pathes:
-        put_get_delete('u0', i)
+        put_get_delete('u0', i, random.randint(1, 1024*1024*16))
 
-def test_concurrent(server):
+def _test_concurrent(bsize: int = 1024*1024*16, n = 16):
     def task(username: str, path: str):
-        put_get_delete(username, path)
-    pathes = set([get_fpath() for i in range(16)])
+        put_get_delete(username, path, bsize)
+    pathes = set([get_fpath() for i in range(n)])
     with ThreadPoolExecutor(max_workers=8) as executor:
         tasks = []
         for p in pathes:
             tasks.append(executor.submit(task, 'u0', p))
         for t in tasks:
             t.result()
+
+def test_concurrent_small(server):
+    _test_concurrent(1024, 32)
+
+def test_concurrent_medium(server):
+    _test_concurrent(1024*1024, 16)
+
+def test_concurrent_large(server):
+    _test_concurrent(1024*1024*32, 8)

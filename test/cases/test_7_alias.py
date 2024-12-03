@@ -16,8 +16,8 @@ def test_user_creation(server):
     subprocess.check_output(['lfss-user', 'add', 'u1', 'test'], cwd=SANDBOX_DIR)
     subprocess.check_output(['lfss-user', 'add', 'u2', 'test'], cwd=SANDBOX_DIR)
 
-    s = subprocess.check_output(['lfss-user', 'set-alias', 'u0', 'u2', '--level', 'write'], cwd=SANDBOX_DIR)
-    s = subprocess.check_output(['lfss-user', 'set-alias', 'u1', 'u2', '--level', 'read'], cwd=SANDBOX_DIR)
+    s = subprocess.check_output(['lfss-user', 'set-peer', 'u0', 'u2', '--level', 'write'], cwd=SANDBOX_DIR)
+    s = subprocess.check_output(['lfss-user', 'set-peer', 'u1', 'u2', '--level', 'read'], cwd=SANDBOX_DIR)
 
 def test_u2_upload(server):
     c2 = get_conn('u2')

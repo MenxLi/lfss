@@ -43,10 +43,10 @@ async def _main():
     sp_list.add_argument("username", nargs='*', type=str, default=None)
     sp_list.add_argument("-l", "--long", action="store_true")
     
-    sp_alias = sp.add_parser('set-alias')
-    sp_alias.add_argument('src_username', type=str)
-    sp_alias.add_argument('dst_username', type=str)
-    sp_alias.add_argument('--level', type=parse_access_level, default=AccessLevel.READ, help="Access level")
+    sp_peer = sp.add_parser('set-peer')
+    sp_peer.add_argument('src_username', type=str)
+    sp_peer.add_argument('dst_username', type=str)
+    sp_peer.add_argument('--level', type=parse_access_level, default=AccessLevel.READ, help="Access level")
     
     args = parser.parse_args()
     db = await Database().init()
@@ -84,15 +84,15 @@ async def _main():
             assert user is not None
             print('User updated, credential:', user.credential)
     
-    if args.subparser_name == 'set-alias':
+    if args.subparser_name == 'set-peer':
         async with get_uconn() as uconn:
             src_user = await uconn.get_user(args.src_username)
             dst_user = await uconn.get_user(args.dst_username)
             if src_user is None or dst_user is None:
                 print('User not found')
                 exit(1)
-            await uconn.set_alias_level(src_user.id, dst_user.id, args.level)
-            print(f"Alias set: [{src_user.username}] now have [{args.level.name}] access to [{dst_user.username}]")
+            await uconn.set_peer_level(src_user.id, dst_user.id, args.level)
+            print(f"Peer set: [{src_user.username}] now have [{args.level.name}] access to [{dst_user.username}]")
     
     if args.subparser_name == 'list':
         async with get_uconn() as uconn:
@@ -110,9 +110,9 @@ async def _main():
                     print(f'- Storage: {fmt_storage_size(user_size_used)} / {fmt_storage_size(user.max_storage)}')
                     for p in AccessLevel:
                         if p > AccessLevel.NONE:
-                            usernames = [x.username for x in await uconn.list_alias_users(user.id, p)]
+                            usernames = [x.username for x in await uconn.list_peer_users(user.id, p)]
                             if usernames:
-                                print(f'- Alias [{p.name}]: {", ".join(usernames)}')
+                                print(f'- Peers [{p.name}]: {", ".join(usernames)}')
         
 def main():
     asyncio.run(_main())

@@ -2,16 +2,16 @@
 # Permission System
 There are two user roles in the system: Admin and Normal User ("users" are like "buckets" to some extent).  
 
-## Alias
-The user can have multiple alias users. The alias user can have read or write access to the user's path, depending on the permission set.  
-The alias user can list the files under the user's path.  
-If the alias user has write access, then the alias user can `GET`/`PUT`/`POST`/`DELETE` files under the user's path.  
-If the alias user has read access, then the alias user can only `GET` files under the user's path.  
+## Peers
+The user can have multiple peer users. The peer user can have read or write access to the user's path, depending on the permission set.  
+The peer user can list the files under the user's path.  
+If the peer user has write access, then the peer user can `GET`/`PUT`/`POST`/`DELETE` files under the user's path.  
+If the peer user has read access, then the peer user can only `GET` files under the user's path.  
 
 ## Ownership
-A file is owned by the user who created it, may not necessarily be the user under whose path the file is stored (admin/write-alias can create files under any user's path).
+A file is owned by the user who created it, may not necessarily be the user under whose path the file is stored (admin/write-peer can create files under any user's path).
 
-**NOTE:** below discussion is based on the assumption that the user is not alias of the path owner.
+**NOTE:** below discussion is based on the assumption that the user is not a peer of the path owner.
 
 ## File access with `GET` permission
 The `GET` is used to access the file (if path is not ending with `/`), or to list the files under a path (if path is ending with `/`).  

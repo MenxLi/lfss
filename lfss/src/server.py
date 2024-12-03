@@ -237,9 +237,9 @@ async def get_file_impl(
                 return await emit_thumbnail(path, download, create_time=None)
             
             if path == "/":
-                alias_users = await UserConn(cur).list_alias_users(user.id, AccessLevel.READ)
+                peer_users = await UserConn(cur).list_peer_users(user.id, AccessLevel.READ)
                 return PathContents(
-                    dirs = await fconn.list_root_dirs(user.username, *[x.username for x in alias_users], skim=True) \
+                    dirs = await fconn.list_root_dirs(user.username, *[x.username for x in peer_users], skim=True) \
                         if not user.is_admin else await fconn.list_root_dirs(skim=True),
                     files = []
                 )
@@ -445,7 +445,7 @@ async def bundle_files(path: str, user: UserRecord = Depends(registered_user)):
     if not path == "" and path[0] == "/":   # adapt to both /path and path
         path = path[1:]
     
-    # TODO: may check alias users here
+    # TODO: may check peer users here
     owner_records_cache: dict[int, UserRecord] = {}     # cache owner records, ID -> UserRecord
     async def is_access_granted(file_record: FileRecord):
         owner_id = file_record.owner_id

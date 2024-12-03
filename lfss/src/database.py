@@ -129,36 +129,36 @@ class UserConn(DBObjectBase):
         await self.cur.execute("UPDATE user SET last_active = CURRENT_TIMESTAMP WHERE username = ?", (username, ))
     
     async def delete_user(self, username: str):
-        await self.cur.execute("DELETE FROM ualias WHERE src_user_id = (SELECT id FROM user WHERE username = ?) OR dst_user_id = (SELECT id FROM user WHERE username = ?)", (username, username))
+        await self.cur.execute("DELETE FROM upeer WHERE src_user_id = (SELECT id FROM user WHERE username = ?) OR dst_user_id = (SELECT id FROM user WHERE username = ?)", (username, username))
         await self.cur.execute("DELETE FROM user WHERE username = ?", (username, ))
         self.logger.info(f"Delete user {username}")
     
-    async def set_alias_level(self, src_user: int | str, dst_user: int | str, level: AccessLevel):
-        """ src_user can do [AliasLevel] to dst_user """
+    async def set_peer_level(self, src_user: int | str, dst_user: int | str, level: AccessLevel):
+        """ src_user can do [AccessLevel] to dst_user """
         assert int(level) >= AccessLevel.NONE, f"Cannot set alias level to {level}"
         match (src_user, dst_user):
             case (int(), int()):
-                await self.cur.execute("INSERT OR REPLACE INTO ualias (src_user_id, dst_user_id, alias_level) VALUES (?, ?, ?)", (src_user, dst_user, int(level)))
+                await self.cur.execute("INSERT OR REPLACE INTO upeer (src_user_id, dst_user_id, access_level) VALUES (?, ?, ?)", (src_user, dst_user, int(level)))
             case (str(), str()):
-                await self.cur.execute("INSERT OR REPLACE INTO ualias (src_user_id, dst_user_id, alias_level) VALUES ((SELECT id FROM user WHERE username = ?), (SELECT id FROM user WHERE username = ?), ?)", (src_user, dst_user, int(level)))
+                await self.cur.execute("INSERT OR REPLACE INTO upeer (src_user_id, dst_user_id, access_level) VALUES ((SELECT id FROM user WHERE username = ?), (SELECT id FROM user WHERE username = ?), ?)", (src_user, dst_user, int(level)))
             case (str(), int()):
-                await self.cur.execute("INSERT OR REPLACE INTO ualias (src_user_id, dst_user_id, alias_level) VALUES ((SELECT id FROM user WHERE username = ?), ?, ?)", (src_user, dst_user, int(level)))
+                await self.cur.execute("INSERT OR REPLACE INTO upeer (src_user_id, dst_user_id, access_level) VALUES ((SELECT id FROM user WHERE username = ?), ?, ?)", (src_user, dst_user, int(level)))
             case (int(), str()):
-                await self.cur.execute("INSERT OR REPLACE INTO ualias (src_user_id, dst_user_id, alias_level) VALUES (?, (SELECT id FROM user WHERE username = ?), ?)", (src_user, dst_user, int(level)))
+                await self.cur.execute("INSERT OR REPLACE INTO upeer (src_user_id, dst_user_id, access_level) VALUES (?, (SELECT id FROM user WHERE username = ?), ?)", (src_user, dst_user, int(level)))
             case (_, _):
                 raise ValueError("Invalid arguments")
     
-    async def query_alias_level(self, src_user_id: int, dst_user_id: int) -> AccessLevel:
+    async def query_peer_level(self, src_user_id: int, dst_user_id: int) -> AccessLevel:
         """ src_user can do [AliasLevel] to dst_user """
         if src_user_id == dst_user_id:
             return AccessLevel.ALL
-        await self.cur.execute("SELECT alias_level FROM ualias WHERE src_user_id = ? AND dst_user_id = ?", (src_user_id, dst_user_id))
+        await self.cur.execute("SELECT access_level FROM upeer WHERE src_user_id = ? AND dst_user_id = ?", (src_user_id, dst_user_id))
         res = await self.cur.fetchone()
         if res is None:
             return AccessLevel.NONE
         return AccessLevel(res[0])
     
-    async def list_alias_users(self, src_user: int | str, level: AccessLevel) -> list[UserRecord]:
+    async def list_peer_users(self, src_user: int | str, level: AccessLevel) -> list[UserRecord]:
         """
         List all users that src_user can do [AliasLevel] to, with level >= level, 
         Note: the returned list does not include src_user and admin users
@@ -168,13 +168,13 @@ class UserConn(DBObjectBase):
             case int():
                 await self.cur.execute("""
                     SELECT * FROM user WHERE id IN (
-                        SELECT dst_user_id FROM ualias WHERE src_user_id = ? AND alias_level >= ?
+                        SELECT dst_user_id FROM upeer WHERE src_user_id = ? AND access_level >= ?
                     )
                 """, (src_user, int(level)))
             case str():
                 await self.cur.execute("""
                     SELECT * FROM user WHERE id IN (
-                        SELECT dst_user_id FROM ualias WHERE src_user_id = (SELECT id FROM user WHERE username = ?) AND alias_level >= ?
+                        SELECT dst_user_id FROM upeer WHERE src_user_id = (SELECT id FROM user WHERE username = ?) AND access_level >= ?
                     )
                 """, (src_user, int(level)))
             case _:
@@ -921,4 +921,4 @@ async def check_path_permission(path: str, user: UserRecord, cursor: Optional[ai
     # check alias level
     async with this_cur() as cur:
         uconn = UserConn(cur)
-        return await uconn.query_alias_level(user.id, path_user.id)
+        return await uconn.query_peer_level(user.id, path_user.id)

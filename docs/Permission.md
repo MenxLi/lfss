@@ -1,20 +1,25 @@
 
 # Permission System
 There are two user roles in the system: Admin and Normal User ("users" are like "buckets" to some extent).  
+A user have all permissions of the files and subpaths under its path (starting with `/<user>/`).  
+Admins have all permissions of all files and paths.
+
+> **path** ends with `/` and **file** does not end with `/`.
 
 ## Peers
-The user can have multiple peer users. The peer user can have read or write access to the user's path, depending on the permission set.  
+The user can have multiple peer users. The peer user can have read or write access to the user's path, depending on the access level set when adding the peer user.  
 The peer user can list the files under the user's path.  
-If the peer user has write access, then the peer user can `GET`/`PUT`/`POST`/`DELETE` files under the user's path.  
-If the peer user has read access, then the peer user can only `GET` files under the user's path.  
+If the peer user only has read access (peer-r), then the peer user can only `GET` files under the user's path.  
+If the peer user has write access (peer-w), then the peer user can `GET`/`PUT`/`POST`/`DELETE` files under the user's path.  
 
 ## Ownership
 A file is owned by the user who created it, may not necessarily be the user under whose path the file is stored (admin/write-peer can create files under any user's path).
 
-**NOTE:** below discussion is based on the assumption that the user is not a peer of the path owner.
+# Non-peer and public access
+
+**NOTE:** below discussion is based on the assumption that the user is not a peer of the path owner, or is guest user (public access).
 
 ## File access with `GET` permission
-The `GET` is used to access the file (if path is not ending with `/`), or to list the files under a path (if path is ending with `/`).  
 
 ### File access
 For accessing file content, the user must have `GET` permission of the file, which is determined by the `permission` field of both the owner and the file.   
@@ -28,27 +33,26 @@ Non-admin users can access files based on:
 - If the file is `unset`, then the file's permission is inherited from the owner's permission.
 - If both the owner and the file have `unset` permission, then the file is `public`.
 
-### Meta-data access
-- Non-login users can't access any file-meta.
-- All users can access the file-meta of files under their own path.
-- For files under other users' path, the file-meta is determined in a way same as file access.
-- Admins can access the path-meta of all users.
-- All users can access the path-meta of their own path.
-
-### Path-listing
-- Non-login users cannot list any files.
-- All users can list the files under their own path 
-- Admins can list the files under other users' path. 
-
 ## File creation with `PUT`/`POST` permission
-The `PUT`/`POST` is used to create a file. 
-- Non-login user don't have `PUT`/`POST` permission.  
-- Every user can have `PUT`/`POST` permission of files under its own `/<user>/` path.  
-- The admin can have `PUT`/`POST` permission of files of all users.
+`PUT`/`POST` permission is not allowed for non-peer users.
 
-## `DELETE` and moving permissions
+## File `DELETE` and moving permissions
 - Non-login user don't have `DELETE`/move permission.
-- Every user can have `DELETE`/move permission that they own.
-- The admin can have `DELETE` permission of files of all users
-(The admin can't move files of other users, because move does not change the owner of the file. 
-If move is allowed, then its equivalent to create file on behalf of other users.)
+- Every user can have `DELETE` permission that they own.
+- User can move files if they have write access to the destination path.
+
+## Path-listing
+Path-listing is not allowed for these users.
+
+# Summary
+
+| Permission | Admin | User | Peer-r | Peer-w | Owner (not the user) | Non-peer user / Guest  |
+|------------|-------|------|--------|--------|----------------------|------------------------|
+| GET        | Yes   | Yes  | Yes    | Yes    | Yes                  | Depends on file        |
+| PUT/POST   | Yes   | Yes  | No     | Yes    | Yes                  | No                     |
+| DELETE file| Yes   | Yes  | No     | Yes    | Yes                  | No                     | 
+| DELETE path| Yes   | Yes  | No     | Yes    | N/A                  | No                     | 
+| move       | Yes   | Yes  | No     | Yes    | Dep. on destination  | No                     |
+| list       | Yes   | Yes  | Yes    | Yes    | No if not peer       | No                     |
+
+> Capitilized methods are HTTP methods, N/A means not applicable.

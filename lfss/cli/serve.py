@@ -1,7 +1,8 @@
 import argparse
 from uvicorn import Config, Server
 from uvicorn.config import LOGGING_CONFIG
-from ..svc.app import *
+from ..svc.app_impl import logger
+from ..svc.app import app
 
 def main():
     parser = argparse.ArgumentParser()

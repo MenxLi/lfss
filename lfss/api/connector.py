@@ -5,12 +5,12 @@ import requests
 import requests.adapters
 import urllib.parse
 from tempfile import SpooledTemporaryFile
-from lfss.src.error import PathNotFoundError
-from lfss.src.datatype import (
+from lfss.eng.error import PathNotFoundError
+from lfss.eng.datatype import (
     FileReadPermission, FileRecord, DirectoryRecord, UserRecord, PathContents, 
     FileSortKey, DirSortKey
     )
-from lfss.src.utils import ensure_uri_compnents
+from lfss.eng.utils import ensure_uri_compnents
 
 _default_endpoint = os.environ.get('LFSS_ENDPOINT', 'http://localhost:8000')
 _default_token = os.environ.get('LFSS_TOKEN', '')

@@ -1,6 +1,6 @@
-from lfss.src.config import THUMB_DB, THUMB_SIZE
-from lfss.src.database import FileConn
-from lfss.src.connection_pool import unique_cursor
+from lfss.eng.config import THUMB_DB, THUMB_SIZE
+from lfss.eng.database import FileConn
+from lfss.eng.connection_pool import unique_cursor
 from typing import Optional
 from PIL import Image
 from io import BytesIO
@@ -69,12 +69,13 @@ async def get_thumb(path: str) -> Optional[tuple[bytes, str]]:
     async with unique_cursor() as main_c:
         fconn = FileConn(main_c)
         r = await fconn.get_file_record(path)
-        if r is None:
-            async with cache_cursor() as cur:
-                await _delete_cache_thumb(cur, path)
-            raise FileNotFoundError(f'File not found: {path}')
-        if not r.mime_type.startswith('image/'):
-            return None
+
+    if r is None:
+        async with cache_cursor() as cur:
+            await _delete_cache_thumb(cur, path)
+        raise FileNotFoundError(f'File not found: {path}')
+    if not r.mime_type.startswith('image/'):
+        return None
 
     async with cache_cursor() as cur:
         c_time = r.create_time

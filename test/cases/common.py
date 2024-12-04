@@ -1,4 +1,4 @@
-from lfss.src.utils import hash_credential
+from lfss.eng.utils import hash_credential
 from lfss.api import Connector
 from ..config import SERVER_PORT, SANDBOX_DIR, clear_sandbox
 from ..start_server import Server

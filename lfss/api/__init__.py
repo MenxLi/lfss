@@ -1,9 +1,9 @@
 import os, time, pathlib
 from threading import Lock
 from .connector import Connector
-from ..src.datatype import FileRecord
-from ..src.utils import decode_uri_compnents
-from ..src.bounded_pool import BoundedThreadPoolExecutor
+from ..eng.datatype import FileRecord
+from ..eng.utils import decode_uri_compnents
+from ..eng.bounded_pool import BoundedThreadPoolExecutor
 
 def upload_file(
     connector: Connector, 

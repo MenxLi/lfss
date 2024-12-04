@@ -2,14 +2,14 @@
 Balance the storage by ensuring that large file thresholds are met.
 """
 
-from lfss.src.config import LARGE_BLOB_DIR, LARGE_FILE_BYTES
+from lfss.eng.config import LARGE_BLOB_DIR, LARGE_FILE_BYTES
 import argparse, time, itertools
 from functools import wraps
 from asyncio import Semaphore
 import aiofiles, asyncio
 import aiofiles.os
-from lfss.src.database import transaction, unique_cursor
-from lfss.src.connection_pool import global_entrance
+from lfss.eng.database import transaction, unique_cursor
+from lfss.eng.connection_pool import global_entrance
 
 sem: Semaphore
 

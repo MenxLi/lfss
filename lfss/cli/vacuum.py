@@ -2,17 +2,17 @@
 Vacuum the database and external storage to ensure that the storage is consistent and minimal.
 """
 
-from lfss.src.config import LARGE_BLOB_DIR
+from lfss.eng.config import LARGE_BLOB_DIR
 import argparse, time
 from functools import wraps
 from asyncio import Semaphore
 import aiofiles, asyncio
 import aiofiles.os
 from contextlib import contextmanager
-from lfss.src.database import transaction, unique_cursor
-from lfss.src.stat import RequestDB
-from lfss.src.utils import now_stamp
-from lfss.src.connection_pool import global_entrance
+from lfss.eng.database import transaction, unique_cursor
+from lfss.eng.stat import RequestDB
+from lfss.eng.utils import now_stamp
+from lfss.eng.connection_pool import global_entrance
 
 sem: Semaphore
 

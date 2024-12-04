@@ -1,8 +1,8 @@
 from pathlib import Path
 import argparse, typing
 from lfss.api import Connector, upload_directory, upload_file, download_file, download_directory
-from lfss.src.datatype import FileReadPermission, FileSortKey, DirSortKey
-from lfss.src.utils import decode_uri_compnents
+from lfss.eng.datatype import FileReadPermission, FileSortKey, DirSortKey
+from lfss.eng.utils import decode_uri_compnents
 from . import catch_request_error, line_sep
 
 def parse_permission(s: str) -> FileReadPermission:

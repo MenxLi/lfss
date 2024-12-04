@@ -1,7 +1,7 @@
 import subprocess
 import os
 from ..config import SANDBOX_DIR
-from lfss.src.config import LARGE_FILE_BYTES
+from lfss.eng.config import LARGE_FILE_BYTES
 from .common import get_conn, create_server_context
 import pytest
 

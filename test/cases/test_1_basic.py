@@ -2,8 +2,8 @@ import pytest
 import subprocess, os
 from tempfile import NamedTemporaryFile
 from .common import get_conn, create_server_context
-from lfss.src.datatype import FileReadPermission
-from lfss.src.config import MAX_MEM_FILE_BYTES
+from lfss.eng.datatype import FileReadPermission
+from lfss.eng.config import MAX_MEM_FILE_BYTES
 from ..config import SANDBOX_DIR
 
 server = create_server_context()

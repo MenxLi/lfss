@@ -2,7 +2,7 @@
 name = "lfss"
 version = "0.9.0"
 description = "Lightweight file storage service"
-authors = ["li, mengxun <limengxun45@outlook.com>"]
+authors = [{ name = "Li, Mengxun", email = "limengxun45@outlook.com" }]
 readme = "Readme.md"
 homepage = "https://github.com/MenxLi/lfss"
 repository = "https://github.com/MenxLi/lfss"

@@ -1,6 +1,6 @@
 import pytest
 import subprocess
-from lfss.src.bounded_pool import BoundedThreadPoolExecutor
+from lfss.eng.bounded_pool import BoundedThreadPoolExecutor
 from .common import get_conn, create_server_context
 from ..config import SANDBOX_DIR
 

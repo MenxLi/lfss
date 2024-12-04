@@ -1,8 +1,8 @@
 from typing import Optional, Any
 import aiosqlite
 from contextlib import asynccontextmanager
-from .config import DATA_HOME
-from .utils import debounce_async
+from ..eng.config import DATA_HOME
+from ..eng.utils import debounce_async
 
 class RequestDB:
     conn: aiosqlite.Connection

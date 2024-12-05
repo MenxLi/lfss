@@ -10,7 +10,7 @@ import aiofiles, asyncio
 import aiofiles.os
 from contextlib import contextmanager
 from lfss.eng.database import transaction, unique_cursor
-from lfss.eng.stat import RequestDB
+from lfss.svc.request_log import RequestDB
 from lfss.eng.utils import now_stamp
 from lfss.eng.connection_pool import global_entrance
 

@@ -1,8 +1,10 @@
 import datetime, time
 import urllib.parse
-import asyncio
+import pathlib
 import functools
 import hashlib
+import aiofiles
+import asyncio
 from asyncio import Lock
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
@@ -10,6 +12,12 @@ from typing import TypeVar, Callable, Awaitable
 from functools import wraps, partial
 from uuid import uuid4
 import os
+
+async def copy_file(source: str|pathlib.Path, destination: str|pathlib.Path):
+    async with aiofiles.open(source, mode='rb') as src:
+        async with aiofiles.open(destination, mode='wb') as dest:
+            while chunk := await src.read(1024):
+                await dest.write(chunk)
 
 def hash_credential(username: str, password: str):
     return hashlib.sha256((username + password).encode()).hexdigest()

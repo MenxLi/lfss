@@ -19,7 +19,7 @@ from .datatype import (
     )
 from .config import LARGE_BLOB_DIR, CHUNK_SIZE, LARGE_FILE_BYTES, MAX_MEM_FILE_BYTES
 from .log import get_logger
-from .utils import decode_uri_compnents, hash_credential, concurrent_wrap, debounce_async
+from .utils import decode_uri_compnents, hash_credential, concurrent_wrap, debounce_async, copy_file
 from .error import *
 
 class DBObjectBase(ABC):
@@ -405,6 +405,57 @@ class FileConn(DBObjectBase):
             )
         await self._user_size_inc(owner_id, file_size)
         self.logger.info(f"File {url} created")
+
+    # not tested
+    async def copy_file(self, old_url: str, new_url: str, user_id: Optional[int] = None):
+        old = await self.get_file_record(old_url)
+        if old is None:
+            raise FileNotFoundError(f"File {old_url} not found")
+        new_exists = await self.get_file_record(new_url)
+        if new_exists is not None:
+            raise FileExistsError(f"File {new_url} already exists")
+        new_fid = str(uuid.uuid4())
+        user_id = old.owner_id if user_id is None else user_id
+        await self.cur.execute(
+            "INSERT INTO fmeta (url, owner_id, file_id, file_size, permission, external, mime_type) VALUES (?, ?, ?, ?, ?, ?, ?)", 
+            (new_url, user_id, new_fid, old.file_size, old.permission, old.external, old.mime_type)
+            )
+        if not old.external:
+            await self.set_file_blob(new_fid, await self.get_file_blob(old.file_id))
+        else:
+            await copy_file(LARGE_BLOB_DIR / old.file_id, LARGE_BLOB_DIR / new_fid)
+        await self._user_size_inc(user_id, old.file_size)
+        self.logger.info(f"Copied file {old_url} to {new_url}")
+    
+    # not tested
+    async def copy_path(self, old_url: str, new_url: str, conflict_handler: Literal['skip', 'overwrite'] = 'overwrite', user_id: Optional[int] = None):
+        assert old_url.endswith('/'), "Old path must end with /"
+        assert new_url.endswith('/'), "New path must end with /"
+        if user_id is None:
+            cursor = await self.cur.execute("SELECT * FROM fmeta WHERE url LIKE ?", (old_url + '%', ))
+            res = await cursor.fetchall()
+        else:
+            cursor = await self.cur.execute("SELECT * FROM fmeta WHERE url LIKE ? AND owner_id = ?", (old_url + '%', user_id))
+            res = await cursor.fetchall()
+        for r in res:
+            old_record = FileRecord(*r)
+            new_r = new_url + old_record.url[len(old_url):]
+            if conflict_handler == 'overwrite':
+                await self.cur.execute("DELETE FROM fmeta WHERE url = ?", (new_r, ))
+            elif conflict_handler == 'skip':
+                if (await self.cur.execute("SELECT url FROM fmeta WHERE url = ?", (new_r, ))) is not None:
+                    continue
+            new_fid = str(uuid.uuid4())
+            user_id = old_record.owner_id if user_id is None else user_id
+            await self.cur.execute(
+                "INSERT INTO fmeta (url, owner_id, file_id, file_size, permission, external, mime_type) VALUES (?, ?, ?, ?, ?, ?, ?)", 
+                (new_r, user_id, new_fid, old_record.file_size, old_record.permission, old_record.external, old_record.mime_type)
+                )
+            if not old_record.external:
+                await self.set_file_blob(new_fid, await self.get_file_blob(old_record.file_id))
+            else:
+                await copy_file(LARGE_BLOB_DIR / old_record.file_id, LARGE_BLOB_DIR / new_fid)
+            await self._user_size_inc(user_id, old_record.file_size)
     
     async def move_file(self, old_url: str, new_url: str):
         old = await self.get_file_record(old_url)
@@ -633,6 +684,9 @@ class Database:
         async with unique_cursor() as cur:
             user = await get_user(cur, u)
             assert user is not None, f"User {u} not found"
+
+            if await check_path_permission(url, user, cursor=cur) < AccessLevel.WRITE:
+                raise PermissionDeniedError(f"Permission denied: {user.username} cannot write to {url}")
             
             fconn_r = FileConn(cur)
             user_size_used = await fconn_r.user_size(user.id)
@@ -734,13 +788,30 @@ class Database:
             if r is None:
                 raise FileNotFoundError(f"File {old_url} not found")
             if op_user is not None:
-                if await check_path_permission(old_url, op_user) < AccessLevel.WRITE:
+                if await check_path_permission(old_url, op_user, cursor=cur) < AccessLevel.WRITE:
                     raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot move file {old_url}")
             await fconn.move_file(old_url, new_url)
 
             new_mime, _ = mimetypes.guess_type(new_url)
             if not new_mime is None:
                 await fconn.update_file_record(new_url, mime_type=new_mime)
+    
+    # not tested
+    async def copy_file(self, old_url: str, new_url: str, op_user: Optional[UserRecord] = None):
+        validate_url(old_url)
+        validate_url(new_url)
+
+        async with transaction() as cur:
+            fconn = FileConn(cur)
+            r = await fconn.get_file_record(old_url)
+            if r is None:
+                raise FileNotFoundError(f"File {old_url} not found")
+            if op_user is not None:
+                if await check_path_permission(old_url, op_user, cursor=cur) < AccessLevel.READ:
+                    raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot copy file {old_url}")
+                if await check_path_permission(new_url, op_user, cursor=cur) < AccessLevel.WRITE:
+                    raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot copy file to {new_url}")
+            await fconn.copy_file(old_url, new_url, user_id=op_user.id if op_user is not None else None)
     
     async def move_path(self, old_url: str, new_url: str, op_user: UserRecord):
         validate_url(old_url, is_file=False)
@@ -756,14 +827,38 @@ class Database:
 
         async with unique_cursor() as cur:
             if not (
-                await check_path_permission(old_url, op_user) >= AccessLevel.WRITE and
-                await check_path_permission(new_url, op_user) >= AccessLevel.WRITE
+                await check_path_permission(old_url, op_user, cursor=cur) >= AccessLevel.WRITE and
+                await check_path_permission(new_url, op_user, cursor=cur) >= AccessLevel.WRITE
                 ):
                 raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot move path {old_url} to {new_url}")
 
         async with transaction() as cur:
             fconn = FileConn(cur)
             await fconn.move_path(old_url, new_url, 'overwrite', op_user.id)
+    
+    # not tested
+    async def copy_path(self, old_url: str, new_url: str, op_user: UserRecord):
+        validate_url(old_url, is_file=False)
+        validate_url(new_url, is_file=False)
+        
+        if new_url.startswith('/'):
+            new_url = new_url[1:]
+        if old_url.startswith('/'):
+            old_url = old_url[1:]
+        assert old_url != new_url, "Old and new path must be different"
+        assert old_url.endswith('/'), "Old path must end with /"
+        assert new_url.endswith('/'), "New path must end with /"
+
+        async with unique_cursor() as cur:
+            if not (
+                await check_path_permission(old_url, op_user, cursor=cur) >= AccessLevel.READ and
+                await check_path_permission(new_url, op_user, cursor=cur) >= AccessLevel.WRITE
+                ):
+                raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot copy path {old_url} to {new_url}")
+        
+        async with transaction() as cur:
+            fconn = FileConn(cur)
+            await fconn.copy_path(old_url, new_url, 'overwrite', op_user.id)
 
     async def __batch_delete_file_blobs(self, fconn: FileConn, file_records: list[FileRecord], batch_size: int = 512):
         # https://github.com/langchain-ai/langchain/issues/10321

@@ -35,6 +35,8 @@ def handle_exception(fn):
         try:
             return await fn(*args, **kwargs)
         except Exception as e:
+            if isinstance(e, HTTPException): 
+                print(f"HTTPException: {e}, detail: {e.detail}")
             if isinstance(e, HTTPException): raise e
             if isinstance(e, StorageExceededError): raise HTTPException(status_code=413, detail=str(e))
             if isinstance(e, PermissionError): raise HTTPException(status_code=403, detail=str(e))
@@ -71,6 +73,8 @@ async def log_requests(request: Request, call_next):
 
     if response.status_code >= 400:
         logger_failed_request.error(f"{request.method} {request.url.path} {response.status_code}")
+    print(f"{request.method} {request.url.path} {response.status_code} {response_time:.3f}s")
+    print(f"Request headers: {dict(request.headers)}")
     await req_conn.log_request(
         request_time_stamp, 
         request.method, request.url.path, response.status_code, response_time,
@@ -93,10 +97,11 @@ def skip_request_log(fn):
     return wrapper
 
 router_api = APIRouter(prefix="/_api")
+router_dav = APIRouter(prefix="")
 router_fs = APIRouter(prefix="")
 
 __all__ = [
     "app", "db", "logger", 
     "handle_exception", "skip_request_log", 
-    "router_api", "router_fs"
+    "router_api", "router_fs", "router_dav"
     ]

@@ -5,6 +5,5 @@ import os
 # order matters
 if os.environ.get("LFSS_DAV", "0") == "1":
     app.include_router(router_dav)
-else:
-    app.include_router(router_api)
-    app.include_router(router_fs)
+app.include_router(router_api)
+app.include_router(router_fs)

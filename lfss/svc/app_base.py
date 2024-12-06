@@ -9,7 +9,7 @@ from ..eng.log import get_logger
 from ..eng.database import Database
 from ..eng.connection_pool import global_connection_init, global_connection_close
 from ..eng.utils import wait_for_debounce_tasks, now_stamp
-from ..eng.error import StorageExceededError, InvalidPathError, TooManyItemsError, DatabaseLockedError
+from ..eng.error import *
 from .request_log import RequestDB
 
 logger = get_logger("server", term_level="DEBUG")
@@ -45,6 +45,8 @@ def handle_exception(fn):
             if isinstance(e, FileExistsError): raise HTTPException(status_code=409, detail=str(e))
             if isinstance(e, TooManyItemsError): raise HTTPException(status_code=400, detail=str(e))
             if isinstance(e, DatabaseLockedError): raise HTTPException(status_code=503, detail=str(e))
+            if isinstance(e, FileLockedError): raise HTTPException(status_code=423, detail=str(e))
+            if isinstance(e, InvalidOptionsError): raise HTTPException(status_code=400, detail=str(e))
             logger.error(f"Uncaptured error in {fn.__name__}: {e}")
             raise 
     return wrapper
@@ -97,7 +99,7 @@ def skip_request_log(fn):
     return wrapper
 
 router_api = APIRouter(prefix="/_api")
-router_dav = APIRouter(prefix="")
+router_dav = APIRouter(prefix="/_dav")
 router_fs = APIRouter(prefix="")
 
 __all__ = [

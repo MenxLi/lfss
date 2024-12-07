@@ -223,7 +223,7 @@ async def dav_propfind(request: Request, path: str, user: UserRecord = Depends(r
     # Generate XML response
     multistatus = ET.Element(f"{{{DAV_NS}}}multistatus")
     path_type, lfss_path, record = await eval_path(path)
-    print(f"PROPFIND {path} (depth: {depth}), type: {path_type}, lfss_path: {lfss_path}, dav_path: {record}")
+    logger.info(f"PROPFIND {lfss_path} (depth: {depth})")
     return_status = 200
     if path_type == "dir" and depth == "0":
         # query the directory itself
@@ -266,6 +266,7 @@ async def dav_mkcol(path: str, user: UserRecord = Depends(registered_user)):
     ptype, lfss_path, _ = await eval_path(path)
     if not ptype is None:
         raise HTTPException(status_code=409, detail="Conflict")
+    logger.info(f"MKCOL {path}")
     fpath = lfss_path + "/" + MKDIR_PLACEHOLDER
     async def _ustream():
         yield b""
@@ -279,7 +280,6 @@ async def dav_move(request: Request, path: str, user: UserRecord = Depends(regis
     if not destination:
         raise HTTPException(status_code=400, detail="Destination header is required")
 
-    print(f"MOVE {path} -> {destination}")
     ptype, lfss_path, _ = await eval_path(path)
     if ptype is None:
         raise PathNotFoundError(path)
@@ -287,6 +287,7 @@ async def dav_move(request: Request, path: str, user: UserRecord = Depends(regis
     if dptype is not None:
         raise HTTPException(status_code=409, detail="Conflict")
 
+    logger.info(f"MOVE {path} -> {destination}")
     if ptype == "file":
         assert not lfss_path.endswith("/"), "File path should not end with /"
         assert not dlfss_path.endswith("/"), "File path should not end with /"
@@ -305,7 +306,6 @@ async def dav_copy(request: Request, path: str, user: UserRecord = Depends(regis
     if not destination:
         raise HTTPException(status_code=400, detail="Destination header is required")
 
-    print(f"COPY {path} -> {destination}")
     ptype, lfss_path, _ = await eval_path(path)
     if ptype is None:
         raise PathNotFoundError(path)
@@ -313,6 +313,7 @@ async def dav_copy(request: Request, path: str, user: UserRecord = Depends(regis
     if dptype is not None:
         raise HTTPException(status_code=409, detail="Conflict")
     
+    logger.info(f"COPY {path} -> {destination}")
     if ptype == "file":
         assert not lfss_path.endswith("/"), "File path should not end with /"
         assert not dlfss_path.endswith("/"), "File path should not end with /"
@@ -337,6 +338,7 @@ async def dav_lock(request: Request, path: str, user: UserRecord = Depends(regis
 
     _, path, _ = await eval_path(path)
     lock_token = f"opaquelocktoken:{uuid.uuid4().hex}"
+    logger.info(f"LOCK {path} (timeout: {timeout}), token: {lock_token}")
     await lock_path(user, path, lock_token, timeout=timeout)
     lock_el = await query_lock_el(path, top_el_name="lockinfo")
     assert lock_el is not None, "Lock info should not be None"
@@ -349,6 +351,7 @@ async def dav_unlock(request: Request, path: str, user: UserRecord = Depends(reg
     lock_token = request.headers.get("Lock-Token")
     if not lock_token:
         raise HTTPException(status_code=400, detail="Lock-Token header is required")
+    logger.info(f"UNLOCK {path}, token: {lock_token}")
     _, path, _ = await eval_path(path)
     await unlock_path(user, path, lock_token)
     return Response(status_code=204)

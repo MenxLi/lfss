@@ -21,6 +21,7 @@ else:
 MAX_MEM_FILE_BYTES = 128 * 1024 * 1024   # 128MB
 MAX_BUNDLE_BYTES = 512 * 1024 * 1024   # 512MB
 CHUNK_SIZE = 1024 * 1024   # 1MB chunks for streaming (on large files)
+DEBUG_MODE = os.environ.get('LFSS_DEBUG', '0') == '1'
 
 THUMB_DB = DATA_HOME / 'thumbs.db'
 THUMB_SIZE = (48, 48)

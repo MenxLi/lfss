@@ -14,6 +14,7 @@ from ..eng.database import Database, UserConn, delayed_log_activity, DECOY_USER
 from ..eng.connection_pool import global_connection_init, global_connection_close
 from ..eng.utils import wait_for_debounce_tasks, now_stamp, hash_credential
 from ..eng.error import *
+from ..eng.config import DEBUG_MODE
 from .request_log import RequestDB
 
 logger = get_logger("server", term_level="DEBUG")
@@ -78,9 +79,10 @@ async def log_requests(request: Request, call_next):
         return response
 
     if response.status_code >= 400:
-        logger_failed_request.error(f"{request.method} {request.url.path} {response.status_code}")
-    print(f"{request.method} {request.url.path} {response.status_code} {response_time:.3f}s")
-    print(f"Request headers: {dict(request.headers)}")
+        logger_failed_request.error(f"{request.method} {request.url.path} \033[91m{response.status_code}\033[0m")
+    if DEBUG_MODE:
+        print(f"{request.method} {request.url.path} {response.status_code} {response_time:.3f}s")
+        print(f"Request headers: {dict(request.headers)}")
     await req_conn.log_request(
         request_time_stamp, 
         request.method, request.url.path, response.status_code, response_time,

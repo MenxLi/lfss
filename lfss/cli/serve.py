@@ -1,7 +1,8 @@
 import argparse
 from uvicorn import Config, Server
 from uvicorn.config import LOGGING_CONFIG
-from ..svc.app_native import logger
+from ..eng.config import DEBUG_MODE
+from ..svc.app_base import logger
 from ..svc.app import app
 
 def main():
@@ -20,7 +21,7 @@ def main():
         app=app,
         host=args.host,
         port=args.port,
-        access_log=True,
+        access_log=True if DEBUG_MODE else False,
         workers=args.workers,
         log_config=default_logging_config
     )

@@ -119,13 +119,13 @@ async def get_current_user(
         uconn = UserConn(conn)
         if h_token:
             user = await uconn.get_user_by_credential(h_token.credentials)
-            if not user: raise HTTPException(status_code=403, detail="Invalid token")
+            if not user: raise HTTPException(status_code=401, detail="Invalid token")
         elif b_token:
             user = await uconn.get_user_by_credential(hash_credential(b_token.username, b_token.password))
-            if not user: raise HTTPException(status_code=403, detail="Invalid token")
+            if not user: raise HTTPException(status_code=401, detail="Invalid token")
         elif q_token:
             user = await uconn.get_user_by_credential(q_token)
-            if not user: raise HTTPException(status_code=403, detail="Invalid token")
+            if not user: raise HTTPException(status_code=401, detail="Invalid token")
         else:
             return DECOY_USER
 

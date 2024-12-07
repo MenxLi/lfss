@@ -103,7 +103,6 @@ async def unlock_path(user: UserRecord, p: str, token: str):
             if not row: return
             user_, token_ = row
             if user_ != user.username or token_ != token:
-                print("Unlock faile ", user_, token_, user.username, token)
                 raise FileLockedError(f"Failed to unlock file [{p}] with token {token}")
             await cur.execute("DELETE FROM locks WHERE path=?", (p,))
             await conn.commit()
@@ -337,13 +336,19 @@ async def dav_lock(request: Request, path: str, user: UserRecord = Depends(regis
         timeout = int(timeout_str)
 
     _, path, _ = await eval_path(path)
-    lock_token = f"opaquelocktoken:{uuid.uuid4().hex}"
+    # lock_token = f"opaquelocktoken:{uuid.uuid4().hex}"
+    lock_token = f"urn:uuid:{uuid.uuid4()}"
     logger.info(f"LOCK {path} (timeout: {timeout}), token: {lock_token}")
     await lock_path(user, path, lock_token, timeout=timeout)
-    lock_el = await query_lock_el(path, top_el_name="lockinfo")
-    assert lock_el is not None, "Lock info should not be None"
-    lock_response = ET.tostring(lock_el, encoding="utf-8", method="xml")
-    return Response(content=lock_response, media_type="application/xml", status_code=201)
+    response_elem = ET.Element(f"{{{DAV_NS}}}prop")
+    lockdiscovery = ET.SubElement(response_elem, f"{{{DAV_NS}}}lockdiscovery")
+    activelock = await query_lock_el(path, top_el_name=f"{{{DAV_NS}}}activelock")
+    assert activelock is not None, "Lock info should not be None"
+    lockdiscovery.append(activelock)
+    lock_response = ET.tostring(response_elem, encoding="utf-8", method="xml")
+    return Response(content=lock_response, media_type="application/xml", status_code=201, headers={
+        "Lock-Token": f"<{lock_token}>"
+    })
 
 @router_dav.api_route("/{path:path}", methods=["UNLOCK"])
 @handle_exception
@@ -351,6 +356,8 @@ async def dav_unlock(request: Request, path: str, user: UserRecord = Depends(reg
     lock_token = request.headers.get("Lock-Token")
     if not lock_token:
         raise HTTPException(status_code=400, detail="Lock-Token header is required")
+    if lock_token.startswith("<") and lock_token.endswith(">"):
+        lock_token = lock_token[1:-1]
     logger.info(f"UNLOCK {path}, token: {lock_token}")
     _, path, _ = await eval_path(path)
     await unlock_path(user, path, lock_token)

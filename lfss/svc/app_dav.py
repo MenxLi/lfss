@@ -362,6 +362,13 @@ async def dav_unlock(request: Request, path: str, user: UserRecord = Depends(reg
     _, path, _ = await eval_path(path)
     await unlock_path(user, path, lock_token)
     return Response(status_code=204)
-    
+
+@router_dav.api_route("/{path:path}", methods=["PROPPATCH"])
+@handle_exception
+async def dav_proppatch(request: Request, path: str, user: UserRecord = Depends(registered_user), body: ET.Element = Depends(xml_request_body)):
+    # TODO: implement PROPPATCH
+    print("PROPPATCH", path, body)
+    multistatus = ET.Element(f"{{{DAV_NS}}}multistatus")
+    return Response(content=ET.tostring(multistatus, encoding="utf-8", method="xml"), media_type="application/xml", status_code=207)
 
 __all__ = ["router_dav"]

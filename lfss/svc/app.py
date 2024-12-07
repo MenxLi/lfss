@@ -3,7 +3,8 @@ from .app_dav import *
 import os
 
 # order matters
-if os.environ.get("LFSS_DAV", "0") == "1":
+if os.environ.get("LFSS_WEBDAV", "0") == "1":
     app.include_router(router_dav)
-app.include_router(router_api)
-app.include_router(router_fs)
+else:
+    app.include_router(router_api)
+    app.include_router(router_fs)

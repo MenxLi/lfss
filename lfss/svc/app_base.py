@@ -99,7 +99,7 @@ def skip_request_log(fn):
     return wrapper
 
 router_api = APIRouter(prefix="/_api")
-router_dav = APIRouter(prefix="/_dav")
+router_dav = APIRouter(prefix="")
 router_fs = APIRouter(prefix="")
 
 __all__ = [

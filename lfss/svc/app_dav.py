@@ -1,7 +1,8 @@
 """ WebDAV service """
 
 from fastapi import Request, Response, Depends, HTTPException
-import time, uuid, os, base64
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import time, uuid, os
 import aiosqlite
 from typing import Literal, Optional
 import xml.etree.ElementTree as ET
@@ -34,9 +35,6 @@ async def eval_path(path: str) -> tuple[ptype, str, Optional[FileRecord | Direct
     lfss_path is the path recorded in the database, 
         it should not start with /, 
         and should end with / if it is a directory, otherwise it is a file
-    dav_path 
-        starts with /, 
-        and end with / if it is a directory, otherwise it is a file
     """
     path = decode_uri_compnents(path)
     if "://" in path:
@@ -170,15 +168,8 @@ async def create_dir_xml_element(drecord: DirectoryRecord) -> ET.Element:
         lock_discovery.append(lock_el)
     return dir_el
 
-async def user_auth(request: Request):
-    if "Authorization" not in request.headers:
-        raise HTTPException(status_code=401, detail="Authorization header is required")
-    auth = request.headers["Authorization"]
-    if not auth.startswith("Basic "):
-        raise HTTPException(status_code=401, detail="Basic Authorization is required")
-    auth = auth[6:]
-    username, password = base64.b64decode(auth).decode().split(":", 1)
-    credential = hash_credential(username, password)
+async def user_auth(basic_user: HTTPBasicCredentials = Depends(HTTPBasic())) -> UserRecord:
+    credential = hash_credential(basic_user.username, basic_user.password)
     async with unique_cursor() as c:
         user = await UserConn(c).get_user_by_credential(credential)
         if not user:
@@ -269,6 +260,7 @@ async def dav_propfind(request: Request, path: str, user: UserRecord = Depends(u
     elif path_type == "file": 
         assert isinstance(record, FileRecord)
         file_el = await create_file_xml_element(record)
+        multistatus.append(file_el)
     
     else:
         raise PathNotFoundError(path)

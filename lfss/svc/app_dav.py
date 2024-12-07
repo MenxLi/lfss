@@ -1,7 +1,6 @@
 """ WebDAV service """
 
 from fastapi import Request, Response, Depends, HTTPException
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import time, uuid, os
 import aiosqlite
 from typing import Literal, Optional
@@ -10,11 +9,10 @@ from ..eng.connection_pool import unique_cursor
 from ..eng.error import *
 from ..eng.config import DATA_HOME
 from ..eng.datatype import UserRecord, FileRecord, DirectoryRecord
-from ..eng.database import UserConn, FileConn
-from ..eng.utils import ensure_uri_compnents, decode_uri_compnents, format_last_modified, hash_credential
+from ..eng.database import FileConn
+from ..eng.utils import ensure_uri_compnents, decode_uri_compnents, format_last_modified
 from .app_base import *
 from .common_impl import get_file_impl, put_file_impl, delete_file_impl
-
 
 LOCK_DB_PATH = DATA_HOME / "lock.db"
 MKDIR_PLACEHOLDER = ".lfss_keep"
@@ -30,11 +28,12 @@ async def eval_path(path: str) -> tuple[ptype, str, Optional[FileRecord | Direct
     """
     Evaluate the type of the path, 
     the return value is a uri-safe string,
-    return (ptype, lfss_path, dav_path)
+    return (ptype, lfss_path, record)
 
     lfss_path is the path recorded in the database, 
         it should not start with /, 
         and should end with / if it is a directory, otherwise it is a file
+    record is the FileRecord or DirectoryRecord object, it is None if the path does not exist
     """
     path = decode_uri_compnents(path)
     if "://" in path:
@@ -168,15 +167,6 @@ async def create_dir_xml_element(drecord: DirectoryRecord) -> ET.Element:
         lock_discovery.append(lock_el)
     return dir_el
 
-async def user_auth(basic_user: HTTPBasicCredentials = Depends(HTTPBasic())) -> UserRecord:
-    credential = hash_credential(basic_user.username, basic_user.password)
-    async with unique_cursor() as c:
-        user = await UserConn(c).get_user_by_credential(credential)
-        if not user:
-            raise HTTPException(status_code=401, detail="Invalid username or password")
-    return user
-
-
 async def xml_request_body(request: Request) -> Optional[ET.Element]:
     try:
         assert request.headers.get("Content-Type") == "application/xml"
@@ -196,7 +186,7 @@ async def dav_options(request: Request, path: str):
 
 @router_dav.get("/{path:path}")
 @handle_exception
-async def dav_get(request: Request, path: str, user: UserRecord = Depends(user_auth)):
+async def dav_get(request: Request, path: str, user: UserRecord = Depends(registered_user)):
     ptype, path, _ = await eval_path(path)
     if ptype is None: raise PathNotFoundError(path)
     elif ptype == "dir": raise InvalidOptionsError("Directory should not be fetched")
@@ -204,7 +194,7 @@ async def dav_get(request: Request, path: str, user: UserRecord = Depends(user_a
 
 @router_dav.head("/{path:path}")
 @handle_exception
-async def dav_head(request: Request, path: str, user: UserRecord = Depends(user_auth)):
+async def dav_head(request: Request, path: str, user: UserRecord = Depends(registered_user)):
     ptype, path, _ = await eval_path(path)
     # some clients may send HEAD request to check if the file exists
     if ptype is None: raise PathNotFoundError(path)
@@ -213,19 +203,19 @@ async def dav_head(request: Request, path: str, user: UserRecord = Depends(user_
 
 @router_dav.put("/{path:path}")
 @handle_exception
-async def dav_put(request: Request, path: str, user: UserRecord = Depends(user_auth)):
+async def dav_put(request: Request, path: str, user: UserRecord = Depends(registered_user)):
     _, path, _ = await eval_path(path)
     return await put_file_impl(request, user=user, path=path, conflict='overwrite')
 
 @router_dav.delete("/{path:path}")
 @handle_exception
-async def dav_delete(path: str, user: UserRecord = Depends(user_auth)):
+async def dav_delete(path: str, user: UserRecord = Depends(registered_user)):
     _, path, _ = await eval_path(path)
     return await delete_file_impl(user=user, path=path)
 
 @router_dav.api_route("/{path:path}", methods=["PROPFIND"])
 @handle_exception
-async def dav_propfind(request: Request, path: str, user: UserRecord = Depends(user_auth)):
+async def dav_propfind(request: Request, path: str, user: UserRecord = Depends(registered_user)):
     if path.startswith("/"): path = path[1:]
     path = ensure_uri_compnents(path)
 
@@ -270,7 +260,7 @@ async def dav_propfind(request: Request, path: str, user: UserRecord = Depends(u
 
 @router_dav.api_route("/{path:path}", methods=["MKCOL"])
 @handle_exception
-async def dav_mkcol(path: str, user: UserRecord = Depends(user_auth)):
+async def dav_mkcol(path: str, user: UserRecord = Depends(registered_user)):
     # TODO: implement MKCOL more elegantly
     if path.endswith("/"): path = path[:-1]     # make sure returned path is a file
     ptype, lfss_path, _ = await eval_path(path)
@@ -284,7 +274,7 @@ async def dav_mkcol(path: str, user: UserRecord = Depends(user_auth)):
 
 @router_dav.api_route("/{path:path}", methods=["MOVE"])
 @handle_exception
-async def dav_move(request: Request, path: str, user: UserRecord = Depends(user_auth)):
+async def dav_move(request: Request, path: str, user: UserRecord = Depends(registered_user)):
     destination = request.headers.get("Destination")
     if not destination:
         raise HTTPException(status_code=400, detail="Destination header is required")
@@ -310,7 +300,7 @@ async def dav_move(request: Request, path: str, user: UserRecord = Depends(user_
 
 @router_dav.api_route("/{path:path}", methods=["COPY"])
 @handle_exception
-async def dav_copy(request: Request, path: str, user: UserRecord = Depends(user_auth)):
+async def dav_copy(request: Request, path: str, user: UserRecord = Depends(registered_user)):
     destination = request.headers.get("Destination")
     if not destination:
         raise HTTPException(status_code=400, detail="Destination header is required")
@@ -336,7 +326,7 @@ async def dav_copy(request: Request, path: str, user: UserRecord = Depends(user_
 
 @router_dav.api_route("/{path:path}", methods=["LOCK"])
 @handle_exception
-async def dav_lock(request: Request, path: str, user: UserRecord = Depends(user_auth)):
+async def dav_lock(request: Request, path: str, user: UserRecord = Depends(registered_user)):
     raw_timeout = request.headers.get("Timeout", "Second-3600")
     if raw_timeout == "Infinite": timeout = -1
     else:
@@ -355,7 +345,7 @@ async def dav_lock(request: Request, path: str, user: UserRecord = Depends(user_
 
 @router_dav.api_route("/{path:path}", methods=["UNLOCK"])
 @handle_exception
-async def dav_unlock(request: Request, path: str, user: UserRecord = Depends(user_auth)):
+async def dav_unlock(request: Request, path: str, user: UserRecord = Depends(registered_user)):
     lock_token = request.headers.get("Lock-Token")
     if not lock_token:
         raise HTTPException(status_code=400, detail="Lock-Token header is required")

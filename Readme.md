@@ -9,6 +9,7 @@ My experiment on a lightweight and high-performance file/object storage service.
 - Pagination and sorted file listing for vast number of files.  
 - High performance: high concurrency, near-native speed on stress tests.
 - Support range requests, so you can stream large files / resume download.
+- WebDAV compatible ([NOTE](./docs/Webdav.md)).
 
 It stores small files and metadata in sqlite, large files in the filesystem.  
 Tested on 2 million files, and it is still fast.
@@ -30,7 +31,11 @@ lfss-panel --open
 Or, you can start a web server at `/frontend` and open `index.html` in your browser. 
 
 The API usage is simple, just `GET`, `PUT`, `DELETE` to the `/<username>/file/url` path.  
-Authentication via `Authorization` header with the value `Bearer <token>`, or through the `token` query parameter.  
+The authentication can be acheived through one of the following methods:
+1. `Authorization` header with the value `Bearer sha256(<username><password>)`.
+2. `token` query parameter with the value `sha256(<username><password>)`.
+3. HTTP Basic Authentication with the username and password. 
+
 You can refer to `frontend` as an application example, `lfss/api/connector.py` for more APIs. 
 
 By default, the service exposes all files to the public for `GET` requests, 

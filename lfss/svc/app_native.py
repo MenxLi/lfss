@@ -2,13 +2,11 @@ from typing import Optional, Literal
 
 from fastapi import Depends, Request, Response, UploadFile
 from fastapi.exceptions import HTTPException 
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from ..eng.config import MAX_BUNDLE_BYTES
 from ..eng.utils import ensure_uri_compnents
 from ..eng.connection_pool import unique_cursor
-from ..eng.database import DECOY_USER, check_file_read_permission, check_path_permission, UserConn, FileConn
-from ..eng.database import delayed_log_activity
+from ..eng.database import check_file_read_permission, check_path_permission, UserConn, FileConn
 from ..eng.datatype import (
     FileReadPermission, FileRecord, UserRecord, AccessLevel, 
     FileSortKey, DirSortKey
@@ -16,39 +14,6 @@ from ..eng.datatype import (
 
 from .app_base import *
 from .common_impl import get_file_impl, put_file_impl, post_file_impl, delete_file_impl
-
-async def get_credential_from_params(request: Request):
-    return request.query_params.get("token")
-async def get_current_user(
-    token: HTTPAuthorizationCredentials = Depends(HTTPBearer(auto_error=False)), 
-    q_token: Optional[str] = Depends(get_credential_from_params)
-    ):
-    """
-    First try to get the user from the bearer token, 
-    if not found, try to get the user from the query parameter
-    """
-    async with unique_cursor() as conn:
-        uconn = UserConn(conn)
-        if token:
-            user = await uconn.get_user_by_credential(token.credentials)
-        else:
-            if not q_token:
-                return DECOY_USER
-            else:
-                user = await uconn.get_user_by_credential(q_token)
-
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    
-    if not user.id == 0:
-        await delayed_log_activity(user.username)
-
-    return user
-
-async def registered_user(user: UserRecord = Depends(get_current_user)):
-    if user.id == 0:
-        raise HTTPException(status_code=401, detail="Permission denied")
-    return user
 
 @router_fs.get("/{path:path}")
 @handle_exception

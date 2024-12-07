@@ -1,14 +1,18 @@
 import asyncio, time
 from contextlib import asynccontextmanager
+from typing import Optional
 from functools import wraps
 
-from fastapi import FastAPI, HTTPException, Request, Response, APIRouter
+from fastapi import FastAPI, HTTPException, Request, Response, APIRouter, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, HTTPBasic, HTTPBasicCredentials
 
 from ..eng.log import get_logger
-from ..eng.database import Database
+from ..eng.datatype import UserRecord
+from ..eng.connection_pool import unique_cursor
+from ..eng.database import Database, UserConn, delayed_log_activity, DECOY_USER
 from ..eng.connection_pool import global_connection_init, global_connection_close
-from ..eng.utils import wait_for_debounce_tasks, now_stamp
+from ..eng.utils import wait_for_debounce_tasks, now_stamp, hash_credential
 from ..eng.error import *
 from .request_log import RequestDB
 
@@ -98,6 +102,42 @@ def skip_request_log(fn):
         return response
     return wrapper
 
+async def get_credential_from_params(request: Request):
+    return request.query_params.get("token")
+async def get_current_user(
+    h_token: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)), 
+    b_token: Optional[HTTPBasicCredentials] = Depends(HTTPBasic(auto_error=False)),
+    q_token: Optional[str] = Depends(get_credential_from_params)
+    ):
+    """
+    First try to get the user from the bearer token, 
+    if not found, try to get the user from the query parameter
+    """
+    async with unique_cursor() as conn:
+        uconn = UserConn(conn)
+        if h_token:
+            user = await uconn.get_user_by_credential(h_token.credentials)
+            if not user: raise HTTPException(status_code=403, detail="Invalid token")
+        elif b_token:
+            user = await uconn.get_user_by_credential(hash_credential(b_token.username, b_token.password))
+            if not user: raise HTTPException(status_code=403, detail="Invalid token")
+        elif q_token:
+            user = await uconn.get_user_by_credential(q_token)
+            if not user: raise HTTPException(status_code=403, detail="Invalid token")
+        else:
+            return DECOY_USER
+
+    if not user.id == 0:
+        await delayed_log_activity(user.username)
+
+    return user
+
+async def registered_user(user: UserRecord = Depends(get_current_user)):
+    if user.id == 0:
+        raise HTTPException(status_code=401, detail="Permission denied")
+    return user
+
+
 router_api = APIRouter(prefix="/_api")
 router_dav = APIRouter(prefix="")
 router_fs = APIRouter(prefix="")
@@ -105,5 +145,6 @@ router_fs = APIRouter(prefix="")
 __all__ = [
     "app", "db", "logger", 
     "handle_exception", "skip_request_log", 
-    "router_api", "router_fs", "router_dav"
+    "router_api", "router_fs", "router_dav", 
+    "get_current_user", "registered_user"
     ]

@@ -2,6 +2,7 @@
 import uvicorn
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 import argparse
 from contextlib import asynccontextmanager
@@ -27,6 +28,13 @@ assert (__frontend_dir / "index.html").exists(), "Frontend panel not found"
 
 app = FastAPI(lifespan=app_lifespan)
 app.mount("/", StaticFiles(directory=__frontend_dir, html=True), name="static")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def main():
     parser = argparse.ArgumentParser(description="Serve frontend panel")

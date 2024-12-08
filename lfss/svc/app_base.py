@@ -1,4 +1,4 @@
-import asyncio, time
+import asyncio, time, os
 from contextlib import asynccontextmanager
 from typing import Optional
 from functools import wraps
@@ -17,6 +17,7 @@ from ..eng.error import *
 from ..eng.config import DEBUG_MODE
 from .request_log import RequestDB
 
+ENABLE_WEBDAV = os.environ.get("LFSS_WEBDAV", "0") == "1"
 logger = get_logger("server", term_level="DEBUG")
 logger_failed_request = get_logger("failed_requests", term_level="INFO")
 db = Database()
@@ -119,13 +120,13 @@ async def get_current_user(
         uconn = UserConn(conn)
         if h_token:
             user = await uconn.get_user_by_credential(h_token.credentials)
-            if not user: raise HTTPException(status_code=401, detail="Invalid token", headers={"WWW-Authenticate": "Basic"})
-        elif b_token:
+            if not user: raise HTTPException(status_code=401, detail="Invalid token", headers={"WWW-Authenticate": "Basic" if ENABLE_WEBDAV else "Bearer"})
+        elif ENABLE_WEBDAV and b_token:
             user = await uconn.get_user_by_credential(hash_credential(b_token.username, b_token.password))
-            if not user: raise HTTPException(status_code=401, detail="Invalid token", headers={"WWW-Authenticate": "Basic"})
+            if not user: raise HTTPException(status_code=401, detail="Invalid token", headers={"WWW-Authenticate": "Basic" if ENABLE_WEBDAV else "Bearer"})
         elif q_token:
             user = await uconn.get_user_by_credential(q_token)
-            if not user: raise HTTPException(status_code=401, detail="Invalid token", headers={"WWW-Authenticate": "Basic"})
+            if not user: raise HTTPException(status_code=401, detail="Invalid token", headers={"WWW-Authenticate": "Basic" if ENABLE_WEBDAV else "Bearer"})
         else:
             return DECOY_USER
 
@@ -136,9 +137,8 @@ async def get_current_user(
 
 async def registered_user(user: UserRecord = Depends(get_current_user)):
     if user.id == 0:
-        raise HTTPException(status_code=401, detail="Permission denied", headers={"WWW-Authenticate": "Basic"})
+        raise HTTPException(status_code=401, detail="Permission denied", headers={"WWW-Authenticate": "Basic" if ENABLE_WEBDAV else "Bearer"})
     return user
-
 
 router_api = APIRouter(prefix="/_api")
 router_dav = APIRouter(prefix="")

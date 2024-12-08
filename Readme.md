@@ -34,10 +34,12 @@ The API usage is simple, just `GET`, `PUT`, `DELETE` to the `/<username>/file/ur
 The authentication can be acheived through one of the following methods:
 1. `Authorization` header with the value `Bearer sha256(<username><password>)`.
 2. `token` query parameter with the value `sha256(<username><password>)`.
-3. HTTP Basic Authentication with the username and password. 
+3. HTTP Basic Authentication with the username and password (If WebDAV is enabled).
 
 You can refer to `frontend` as an application example, `lfss/api/connector.py` for more APIs. 
 
 By default, the service exposes all files to the public for `GET` requests, 
 but file-listing is restricted to the user's own files.  
-Please refer to [docs/Permission.md](./docs/Permission.md) for more details on the permission system.
+Please refer to [docs/Permission.md](./docs/Permission.md) for more details on the permission system. 
+
+More can be found in the [docs](./docs) directory.

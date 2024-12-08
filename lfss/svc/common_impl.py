@@ -275,7 +275,7 @@ async def copy_impl(
     src_path = ensure_uri_compnents(src_path)
     dst_path = ensure_uri_compnents(dst_path)
     copy_type = "file" if not src_path[-1] == "/" else "directory"
-    if not src_path[-1] == dst_path[-1]:
+    if src_path[-1] != dst_path[-1]:
         raise HTTPException(status_code=400, detail="Source and destination must be same type")
 
     if src_path == dst_path:

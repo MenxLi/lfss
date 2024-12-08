@@ -48,6 +48,7 @@ def handle_exception(fn):
             if isinstance(e, PermissionError): raise HTTPException(status_code=403, detail=str(e))
             if isinstance(e, InvalidPathError): raise HTTPException(status_code=400, detail=str(e))
             if isinstance(e, FileNotFoundError): raise HTTPException(status_code=404, detail=str(e))
+            if isinstance(e, FileDuplicateError): raise HTTPException(status_code=409, detail=str(e))
             if isinstance(e, FileExistsError): raise HTTPException(status_code=409, detail=str(e))
             if isinstance(e, TooManyItemsError): raise HTTPException(status_code=400, detail=str(e))
             if isinstance(e, DatabaseLockedError): raise HTTPException(status_code=503, detail=str(e))

@@ -467,7 +467,7 @@ class FileConn(DBObjectBase):
         await self.cur.execute("UPDATE fmeta SET url = ?, create_time = CURRENT_TIMESTAMP WHERE url = ?", (new_url, old_url))
         self.logger.info(f"Moved file {old_url} to {new_url}")
     
-    async def move_path(self, old_url: str, new_url: str, conflict_handler: Literal['skip', 'overwrite'] = 'overwrite', user_id: Optional[int] = None):
+    async def move_path(self, old_url: str, new_url: str, user_id: Optional[int] = None):
         assert old_url.endswith('/'), "Old path must end with /"
         assert new_url.endswith('/'), "New path must end with /"
         if user_id is None:
@@ -478,11 +478,9 @@ class FileConn(DBObjectBase):
             res = await cursor.fetchall()
         for r in res:
             new_r = new_url + r[0][len(old_url):]
-            if conflict_handler == 'overwrite':
-                await self.cur.execute("DELETE FROM fmeta WHERE url = ?", (new_r, ))
-            elif conflict_handler == 'skip':
-                if (await self.cur.execute("SELECT url FROM fmeta WHERE url = ?", (new_r, ))) is not None:
-                    continue
+            if await (await self.cur.execute("SELECT url FROM fmeta WHERE url = ?", (new_r, ))).fetchone():
+                self.logger.error(f"File {new_r} already exists on move path: {old_url} -> {new_url}")
+                raise FileDuplicateError(f"File {new_r} already exists")
             await self.cur.execute("UPDATE fmeta SET url = ?, create_time = CURRENT_TIMESTAMP WHERE url = ?", (new_r, r[0]))
     
     async def log_access(self, url: str):
@@ -790,6 +788,8 @@ class Database:
             if op_user is not None:
                 if await check_path_permission(old_url, op_user, cursor=cur) < AccessLevel.WRITE:
                     raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot move file {old_url}")
+                if await check_path_permission(new_url, op_user, cursor=cur) < AccessLevel.WRITE:
+                    raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot move file to {new_url}")
             await fconn.move_file(old_url, new_url)
 
             new_mime, _ = mimetypes.guess_type(new_url)
@@ -834,7 +834,7 @@ class Database:
 
         async with transaction() as cur:
             fconn = FileConn(cur)
-            await fconn.move_path(old_url, new_url, 'overwrite', op_user.id)
+            await fconn.move_path(old_url, new_url, op_user.id)
     
     # not tested
     async def copy_path(self, old_url: str, new_url: str, op_user: UserRecord):

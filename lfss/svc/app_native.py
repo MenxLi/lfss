@@ -181,7 +181,7 @@ async def update_file_meta(
         if new_path is not None:
             new_path = ensure_uri_compnents(new_path)
             logger.info(f"Update path of {path} to {new_path}")
-            # currently only move own file, with overwrite
+            # will raise duplicate path error if same name path exists in the new path
             await db.move_path(path, new_path, user)
 
     return Response(status_code=200, content="OK")

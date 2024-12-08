@@ -270,6 +270,12 @@ class Connector:
         self._fetch_factory('POST', '_api/meta', {'path': path, 'new_path': new_path})(
             headers = {'Content-Type': 'application/www-form-urlencoded'}
         )
+    
+    def copy(self, src: str, dst: str):
+        """Copy file from src to dst."""
+        self._fetch_factory('POST', '_api/copy', {'src': src, 'dst': dst})(
+            headers = {'Content-Type': 'application/www-form-urlencoded'}
+        )
         
     def whoami(self) -> UserRecord:
         """Gets information about the current user."""

@@ -13,7 +13,7 @@ from ..eng.datatype import UserRecord, FileRecord, DirectoryRecord
 from ..eng.database import FileConn
 from ..eng.utils import ensure_uri_compnents, decode_uri_compnents, format_last_modified, static_vars
 from .app_base import *
-from .common_impl import get_file_impl, put_file_impl, delete_file_impl
+from .common_impl import get_file_impl, put_file_impl, delete_impl, copy_impl
 
 LOCK_DB_PATH = DATA_HOME / "lock.db"
 MKDIR_PLACEHOLDER = ".lfss_keep"
@@ -217,7 +217,7 @@ async def dav_put(request: Request, path: str, user: UserRecord = Depends(regist
 @handle_exception
 async def dav_delete(path: str, user: UserRecord = Depends(registered_user)):
     _, path, _ = await eval_path(path)
-    return await delete_file_impl(user=user, path=path)
+    return await delete_impl(user=user, path=path)
 
 @router_dav.api_route("/{path:path}", methods=["PROPFIND"])
 @handle_exception
@@ -315,21 +315,12 @@ async def dav_copy(request: Request, path: str, user: UserRecord = Depends(regis
     ptype, lfss_path, _ = await eval_path(path)
     if ptype is None:
         raise PathNotFoundError(path)
-    dptype, dlfss_path, ddav_path = await eval_path(destination)
+    dptype, dlfss_path, _ = await eval_path(destination)
     if dptype is not None:
         raise HTTPException(status_code=409, detail="Conflict")
     
     logger.info(f"COPY {path} -> {destination}")
-    if ptype == "file":
-        assert not lfss_path.endswith("/"), "File path should not end with /"
-        assert not dlfss_path.endswith("/"), "File path should not end with /"
-        await db.copy_file(lfss_path, dlfss_path, user)
-    else:
-        assert ptype == "dir", "Directory path should end with /"
-        assert lfss_path.endswith("/"), "Directory path should end with /"
-        assert dlfss_path.endswith("/"), "Directory path should end with /"
-        await db.copy_path(lfss_path, dlfss_path, user)
-    return Response(status_code=201)
+    return await copy_impl(op_user=user, src_path=lfss_path, dst_path=dlfss_path)
 
 @router_dav.api_route("/{path:path}", methods=["LOCK"])
 @handle_exception

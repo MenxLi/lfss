@@ -13,7 +13,7 @@ from ..eng.datatype import (
 )
 
 from .app_base import *
-from .common_impl import get_file_impl, put_file_impl, post_file_impl, delete_file_impl
+from .common_impl import get_file_impl, put_file_impl, post_file_impl, delete_impl, copy_impl
 
 @router_fs.get("/{path:path}")
 @handle_exception
@@ -75,7 +75,7 @@ async def post_file(
 @router_fs.delete("/{path:path}")
 @handle_exception
 async def delete_file(path: str, user: UserRecord = Depends(registered_user)):
-    return await delete_file_impl(path, user)
+    return await delete_impl(path, user)
 
 
 @router_api.get("/bundle")
@@ -185,6 +185,14 @@ async def update_file_meta(
             await db.move_path(path, new_path, user)
 
     return Response(status_code=200, content="OK")
+
+@router_api.post("/copy")
+@handle_exception
+async def copy_file(
+    src: str, dst: str, 
+    user: UserRecord = Depends(registered_user)
+    ):
+    return await copy_impl(src_path = src, dst_path = dst, op_user = user)
 
 async def validate_path_read_permission(path: str, user: UserRecord):
     if not path.endswith("/"):

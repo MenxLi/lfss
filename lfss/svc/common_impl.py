@@ -252,7 +252,7 @@ async def post_file_impl(
         "Content-Type": "application/json",
     }, content=json.dumps({"url": path}))
 
-async def delete_file_impl(path: str, user: UserRecord):
+async def delete_impl(path: str, user: UserRecord):
     path = ensure_uri_compnents(path)
     if await check_path_permission(path, user) < AccessLevel.WRITE:
         raise HTTPException(status_code=403, detail="Permission denied")
@@ -268,3 +268,32 @@ async def delete_file_impl(path: str, user: UserRecord):
         return Response(status_code=200, content="Deleted")
     else:
         return Response(status_code=404, content="Not found")
+
+async def copy_impl(
+    op_user: UserRecord, src_path: str, dst_path: str,
+):
+    src_path = ensure_uri_compnents(src_path)
+    dst_path = ensure_uri_compnents(dst_path)
+    copy_type = "file" if not src_path[-1] == "/" else "directory"
+    if not src_path[-1] == dst_path[-1]:
+        raise HTTPException(status_code=400, detail="Source and destination must be same type")
+
+    if src_path == dst_path:
+        raise HTTPException(status_code=400, detail="Source and destination are the same")
+    
+    logger.info(f"Copy {src_path} to {dst_path}, user: {op_user.username}")
+    if copy_type == "file":
+        async with unique_cursor() as cur:
+            fconn = FileConn(cur)
+            dst_record = fconn.get_file_record(dst_path)
+        if dst_record:
+            raise HTTPException(status_code=409, detail="Destination exists")
+        await db.copy_file(src_path, dst_path, op_user)
+    else:
+        async with unique_cursor() as cur:
+            fconn = FileConn(cur)
+            dst_fcount = await fconn.count_path_files(dst_path, flat=True)
+        if dst_fcount > 0:
+            raise HTTPException(status_code=409, detail="Destination exists")
+        await db.copy_path(src_path, dst_path, op_user)
+    return Response(status_code=201, content="OK")

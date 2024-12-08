@@ -275,7 +275,7 @@ async def copy_impl(
     src_path = ensure_uri_compnents(src_path)
     dst_path = ensure_uri_compnents(dst_path)
     copy_type = "file" if not src_path[-1] == "/" else "directory"
-    if src_path[-1] != dst_path[-1]:
+    if (src_path[-1] == "/") != (dst_path[-1] == "/"):
         raise HTTPException(status_code=400, detail="Source and destination must be same type")
 
     if src_path == dst_path:
@@ -285,7 +285,7 @@ async def copy_impl(
     if copy_type == "file":
         async with unique_cursor() as cur:
             fconn = FileConn(cur)
-            dst_record = fconn.get_file_record(dst_path)
+            dst_record = await fconn.get_file_record(dst_path)
         if dst_record:
             raise HTTPException(status_code=409, detail="Destination exists")
         await db.copy_file(src_path, dst_path, op_user)

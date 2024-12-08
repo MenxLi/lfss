@@ -3,14 +3,15 @@
 from fastapi import Request, Response, Depends, HTTPException
 import time, uuid, os
 import aiosqlite
+import asyncio
 from typing import Literal, Optional
 import xml.etree.ElementTree as ET
 from ..eng.connection_pool import unique_cursor
 from ..eng.error import *
-from ..eng.config import DATA_HOME
+from ..eng.config import DATA_HOME, DEBUG_MODE
 from ..eng.datatype import UserRecord, FileRecord, DirectoryRecord
 from ..eng.database import FileConn
-from ..eng.utils import ensure_uri_compnents, decode_uri_compnents, format_last_modified
+from ..eng.utils import ensure_uri_compnents, decode_uri_compnents, format_last_modified, static_vars
 from .app_base import *
 from .common_impl import get_file_impl, put_file_impl, delete_file_impl
 
@@ -79,12 +80,14 @@ CREATE TABLE IF NOT EXISTS locks (
     path TEXT PRIMARY KEY,
     user TEXT,
     token TEXT,
+    depth TEXT,
     timeout float,
     lock_time float
 );
 """
-async def lock_path(user: UserRecord, p: str, token: str, timeout: int = 600):
+async def lock_path(user: UserRecord, p: str, token: str, depth: str, timeout: int = 1800):
     async with aiosqlite.connect(LOCK_DB_PATH) as conn:
+        await conn.execute("BEGIN EXCLUSIVE")
         await conn.execute(lock_table_create_sql)
         async with conn.execute("SELECT user, timeout, lock_time FROM locks WHERE path=?", (p,)) as cur:
             row = await cur.fetchone()
@@ -93,10 +96,11 @@ async def lock_path(user: UserRecord, p: str, token: str, timeout: int = 600):
                 curr_time = time.time()
                 if timeout > 0 and curr_time - lock_time_ < timeout_:
                     raise FileLockedError(f"File is locked (by {user_}) [{p}]")
-            await cur.execute("INSERT OR REPLACE INTO locks VALUES (?, ?, ?, ?, ?)", (p, user.username, token, timeout, time.time()))
+            await cur.execute("INSERT OR REPLACE INTO locks VALUES (?, ?, ?, ?, ?, ?)", (p, user.username, token, depth, timeout, time.time()))
             await conn.commit()
 async def unlock_path(user: UserRecord, p: str, token: str):
     async with aiosqlite.connect(LOCK_DB_PATH) as conn:
+        await conn.execute("BEGIN EXCLUSIVE")
         await conn.execute(lock_table_create_sql)
         async with conn.execute("SELECT user, token FROM locks WHERE path=?", (p,)) as cur:
             row = await cur.fetchone()
@@ -108,29 +112,32 @@ async def unlock_path(user: UserRecord, p: str, token: str):
             await conn.commit()
 async def query_lock_el(p: str, top_el_name: str = f"{{{DAV_NS}}}lockinfo") -> Optional[ET.Element]:
     async with aiosqlite.connect(LOCK_DB_PATH) as conn:
+        await conn.execute("BEGIN EXCLUSIVE")
         await conn.execute(lock_table_create_sql)
-        async with conn.execute("SELECT user, token, timeout, lock_time FROM locks WHERE path=?", (p,)) as cur:
+        async with conn.execute("SELECT user, token, depth, timeout, lock_time FROM locks WHERE path=?", (p,)) as cur:
             row = await cur.fetchone()
             if not row: return None
             curr_time = time.time()
-            user_, token, timeout, lock_time = row
+            username, token, depth, timeout, lock_time = row
             if timeout > 0 and curr_time - lock_time > timeout:
                 await cur.execute("DELETE FROM locks WHERE path=?", (p,))
                 await conn.commit()
                 return None
-            lock_info = ET.Element(top_el_name)
-            locktype = ET.SubElement(lock_info, f"{{{DAV_NS}}}locktype")
-            ET.SubElement(locktype, f"{{{DAV_NS}}}write")
-            lockscope = ET.SubElement(lock_info, f"{{{DAV_NS}}}lockscope")
-            ET.SubElement(lockscope, f"{{{DAV_NS}}}exclusive")
-            owner = ET.SubElement(lock_info, f"{{{DAV_NS}}}owner")
-            owner.text = user_
-            timeout = ET.SubElement(lock_info, f"{{{DAV_NS}}}timeout")
-            timeout.text = f"Second-{timeout}"
-            locktoken = ET.SubElement(lock_info, f"{{{DAV_NS}}}locktoken")
-            href = ET.SubElement(locktoken, f"{{{DAV_NS}}}href")
-            href.text = f"{token}"
-            return lock_info
+        lock_info = ET.Element(top_el_name)
+        locktype = ET.SubElement(lock_info, f"{{{DAV_NS}}}locktype")
+        ET.SubElement(locktype, f"{{{DAV_NS}}}write")
+        lockscope = ET.SubElement(lock_info, f"{{{DAV_NS}}}lockscope")
+        ET.SubElement(lockscope, f"{{{DAV_NS}}}exclusive")
+        owner = ET.SubElement(lock_info, f"{{{DAV_NS}}}owner")
+        owner.text = username
+        depth_el = ET.SubElement(lock_info, f"{{{DAV_NS}}}depth")
+        depth_el.text = depth
+        timeout = ET.SubElement(lock_info, f"{{{DAV_NS}}}timeout")
+        timeout.text = f"Second-{timeout}"
+        locktoken = ET.SubElement(lock_info, f"{{{DAV_NS}}}locktoken")
+        href = ET.SubElement(locktoken, f"{{{DAV_NS}}}href")
+        href.text = f"{token}"
+        return lock_info
 
 async def create_file_xml_element(frecord: FileRecord) -> ET.Element:
     file_el = ET.Element(f"{{{DAV_NS}}}response")
@@ -143,9 +150,9 @@ async def create_file_xml_element(frecord: FileRecord) -> ET.Element:
     ET.SubElement(prop, f"{{{DAV_NS}}}getcontentlength").text = str(frecord.file_size)
     ET.SubElement(prop, f"{{{DAV_NS}}}getlastmodified").text = format_last_modified(frecord.create_time)
     ET.SubElement(prop, f"{{{DAV_NS}}}getcontenttype").text = frecord.mime_type
-    lock_discovery = ET.SubElement(prop, f"{{{DAV_NS}}}lockdiscovery")
     lock_el = await query_lock_el(frecord.url, top_el_name=f"{{{DAV_NS}}}activelock")
     if lock_el is not None:
+        lock_discovery = ET.SubElement(prop, f"{{{DAV_NS}}}lockdiscovery")
         lock_discovery.append(lock_el)
     return file_el
 
@@ -160,9 +167,9 @@ async def create_dir_xml_element(drecord: DirectoryRecord) -> ET.Element:
     if drecord.size >= 0:
         ET.SubElement(prop, f"{{{DAV_NS}}}getlastmodified").text = format_last_modified(drecord.create_time)
         ET.SubElement(prop, f"{{{DAV_NS}}}getcontentlength").text = str(drecord.size)
-    lock_discovery = ET.SubElement(prop, f"{{{DAV_NS}}}lockdiscovery")
     lock_el = await query_lock_el(drecord.url, top_el_name=f"{{{DAV_NS}}}activelock")
     if lock_el is not None:
+        lock_discovery = ET.SubElement(prop, f"{{{DAV_NS}}}lockdiscovery")
         lock_discovery.append(lock_el)
     return dir_el
 
@@ -326,7 +333,8 @@ async def dav_copy(request: Request, path: str, user: UserRecord = Depends(regis
 
 @router_dav.api_route("/{path:path}", methods=["LOCK"])
 @handle_exception
-async def dav_lock(request: Request, path: str, user: UserRecord = Depends(registered_user)):
+@static_vars(lock = asyncio.Lock())
+async def dav_lock(request: Request, path: str, user: UserRecord = Depends(registered_user), body: ET.Element = Depends(xml_request_body)):
     raw_timeout = request.headers.get("Timeout", "Second-3600")
     if raw_timeout == "Infinite": timeout = -1
     else:
@@ -334,16 +342,20 @@ async def dav_lock(request: Request, path: str, user: UserRecord = Depends(regis
             raise HTTPException(status_code=400, detail="Bad Request, invalid timeout: " + raw_timeout + ", expected Second-<seconds> or Infinite")
         _, timeout_str = raw_timeout.split("-")
         timeout = int(timeout_str)
-
+    
+    lock_depth = request.headers.get("Depth", "0")
     _, path, _ = await eval_path(path)
     # lock_token = f"opaquelocktoken:{uuid.uuid4().hex}"
     lock_token = f"urn:uuid:{uuid.uuid4()}"
-    logger.info(f"LOCK {path} (timeout: {timeout}), token: {lock_token}")
-    await lock_path(user, path, lock_token, timeout=timeout)
-    response_elem = ET.Element(f"{{{DAV_NS}}}prop")
-    lockdiscovery = ET.SubElement(response_elem, f"{{{DAV_NS}}}lockdiscovery")
-    activelock = await query_lock_el(path, top_el_name=f"{{{DAV_NS}}}activelock")
-    assert activelock is not None, "Lock info should not be None"
+    logger.info(f"LOCK {path} (timeout: {timeout}), token: {lock_token}, depth: {lock_depth}")
+    if DEBUG_MODE:
+        print("Lock-body:", ET.tostring(body, encoding="utf-8", method="xml"))
+    async with dav_lock.lock:
+        await lock_path(user, path, lock_token, lock_depth, timeout=timeout)
+        response_elem = ET.Element(f"{{{DAV_NS}}}prop")
+        lockdiscovery = ET.SubElement(response_elem, f"{{{DAV_NS}}}lockdiscovery")
+        activelock = await query_lock_el(path, top_el_name=f"{{{DAV_NS}}}activelock")
+        assert activelock is not None
     lockdiscovery.append(activelock)
     lock_response = ET.tostring(response_elem, encoding="utf-8", method="xml")
     return Response(content=lock_response, media_type="application/xml", status_code=201, headers={
@@ -352,13 +364,15 @@ async def dav_lock(request: Request, path: str, user: UserRecord = Depends(regis
 
 @router_dav.api_route("/{path:path}", methods=["UNLOCK"])
 @handle_exception
-async def dav_unlock(request: Request, path: str, user: UserRecord = Depends(registered_user)):
+async def dav_unlock(request: Request, path: str, user: UserRecord = Depends(registered_user), body: ET.Element = Depends(xml_request_body)):
     lock_token = request.headers.get("Lock-Token")
     if not lock_token:
         raise HTTPException(status_code=400, detail="Lock-Token header is required")
     if lock_token.startswith("<") and lock_token.endswith(">"):
         lock_token = lock_token[1:-1]
     logger.info(f"UNLOCK {path}, token: {lock_token}")
+    if DEBUG_MODE:
+        print("Unlock-body:", ET.tostring(body, encoding="utf-8", method="xml"))
     _, path, _ = await eval_path(path)
     await unlock_path(user, path, lock_token)
     return Response(status_code=204)

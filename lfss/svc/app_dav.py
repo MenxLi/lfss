@@ -195,7 +195,7 @@ async def dav_options(request: Request, path: str):
 async def dav_get(request: Request, path: str, user: UserRecord = Depends(get_current_user)):
     ptype, path, _ = await eval_path(path)
     if ptype is None: raise PathNotFoundError(path)
-    elif ptype == "dir": raise InvalidOptionsError("Directory should not be fetched")
+    # elif ptype == "dir": raise InvalidOptionsError("Directory should not be fetched")
     else: return await get_file_impl(request, user=user, path=path)
 
 @router_dav.head("/{path:path}")

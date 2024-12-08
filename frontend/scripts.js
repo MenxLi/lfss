@@ -347,13 +347,37 @@ async function refreshFileList(){
                                 }
                             );
                         }, {
-                            text: 'Enter the destination path: ',
+                            text: 'Enter the destination path (Move): ',
                             placeholder: 'Destination path',
                             value: decodePathURI(dirurl), 
                             select: "last-pathname"
                         });
                     });
                     actContainer.appendChild(moveButton);
+
+                    const copyButton = document.createElement('a');
+                    copyButton.textContent = 'Copy';
+                    copyButton.style.cursor = 'pointer';
+                    copyButton.addEventListener('click', () => {
+                        showFloatingWindowLineInput((dstPath) => {
+                            dstPath = encodePathURI(dstPath);
+                            console.log("Copying", dirurl, "to", dstPath);
+                            conn.copy(dirurl, dstPath)
+                                .then(() => {
+                                    refreshFileList();
+                                }, 
+                                (err) => {
+                                    showPopup('Failed to copy path: ' + err, {level: 'error'});
+                                }
+                            );
+                        }, {
+                            text: 'Enter the destination path (Copy): ',
+                            placeholder: 'Destination path',
+                            value: decodePathURI(dirurl), 
+                            select: "last-pathname"
+                        });
+                    });
+                    actContainer.appendChild(copyButton);
 
                     const downloadButton = document.createElement('a');
                     downloadButton.textContent = 'Download';
@@ -478,13 +502,36 @@ async function refreshFileList(){
                                 }
                             );
                         }, {
-                            text: 'Enter the destination path: ',
+                            text: 'Enter the destination path (Move): ',
                             placeholder: 'Destination path',
                             value: decodePathURI(file.url), 
                             select: "last-filename"
                         });
                     });
                     actContainer.appendChild(moveButton);
+
+                    const copyButton = document.createElement('a');
+                    copyButton.textContent = 'Copy';
+                    copyButton.style.cursor = 'pointer';
+                    copyButton.addEventListener('click', () => {
+                        showFloatingWindowLineInput((dstPath) => {
+                            dstPath = encodePathURI(dstPath);
+                            conn.copy(file.url, dstPath)
+                                .then(() => {
+                                    refreshFileList();
+                                }, 
+                                (err) => {
+                                    showPopup('Failed to copy file: ' + err, {level: 'error'});
+                                }
+                            );
+                        }, {
+                            text: 'Enter the destination path (Copy): ',
+                            placeholder: 'Destination path',
+                            value: decodePathURI(file.url), 
+                            select: "last-filename"
+                        });
+                    });
+                    actContainer.appendChild(copyButton);
 
                     const downloadBtn = document.createElement('a');
                     downloadBtn.textContent = 'Download';

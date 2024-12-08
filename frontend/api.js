@@ -384,6 +384,27 @@ export default class Connector {
         }
     }
 
+    /**
+     * @param {string} srcPath - file path(url)
+     * @param {string} dstPath - new file path(url)
+     */
+    async copy(srcPath, dstPath){
+        if (srcPath.startsWith('/')){ srcPath = srcPath.slice(1); }
+        if (dstPath.startsWith('/')){ dstPath = dstPath.slice(1); }
+        const dst = new URL(this.config.endpoint + '/_api/copy');
+        dst.searchParams.append('src', srcPath);
+        dst.searchParams.append('dst', dstPath);
+        const res = await fetch(dst.toString(), {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer ' + this.config.token,
+                'Content-Type': 'application/www-form-urlencoded'
+            },
+        });
+        if (!(res.status == 200 || res.status == 201)){
+            throw new Error(`Failed to copy file, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
+        }
+    }
 }
 
 /**

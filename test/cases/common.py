@@ -11,6 +11,7 @@ def create_server_context():
     # clear environment variables
     os.environ.pop('LFSS_DATA', None)
     os.environ.pop('LFSS_LARGE_FILE', None)
+    os.environ['LFSS_WEBDAV'] = '1'
 
     @pytest.fixture(scope='module')
     def server():

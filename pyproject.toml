@@ -22,6 +22,7 @@ pillow = "*"
 [tool.poetry.dev-dependencies]
 pytest = "*"
 pytest-html = "*"
+webdavclient3 = "*"
 
 [tool.poetry.scripts]
 lfss-serve = "lfss.cli.serve:main"

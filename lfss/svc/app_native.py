@@ -38,8 +38,6 @@ async def head_file(
     ):
     if path.startswith("_api/"):
         raise HTTPException(status_code=405, detail="HEAD not supported for API")
-    if path.endswith("/"):
-        raise HTTPException(status_code=405, detail="HEAD not supported for directory")
     return await get_file_impl(
         request = request,
         user = user, path = path, download = download, thumb = thumb, is_head = True

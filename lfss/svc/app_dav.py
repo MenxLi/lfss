@@ -9,11 +9,11 @@ import xml.etree.ElementTree as ET
 from ..eng.connection_pool import unique_cursor
 from ..eng.error import *
 from ..eng.config import DATA_HOME, DEBUG_MODE
-from ..eng.datatype import UserRecord, FileRecord, DirectoryRecord
-from ..eng.database import FileConn
+from ..eng.datatype import UserRecord, FileRecord, DirectoryRecord, AccessLevel
+from ..eng.database import FileConn, UserConn, check_path_permission
 from ..eng.utils import ensure_uri_compnents, decode_uri_compnents, format_last_modified, static_vars
 from .app_base import *
-from .common_impl import get_file_impl, put_file_impl, delete_impl, copy_impl
+from .common_impl import copy_impl
 
 LOCK_DB_PATH = DATA_HOME / "lock.db"
 MKDIR_PLACEHOLDER = ".lfss_keep"
@@ -53,11 +53,23 @@ async def eval_path(path: str) -> tuple[ptype, str, Optional[FileRecord | Direct
     # path now is url-safe and without leading slash
     if path.endswith("/"):
         lfss_path = path
-        async with unique_cursor() as c:
-            fconn = FileConn(c)
-            if await fconn.count_path_files(path, flat=True) == 0:
-                return None, lfss_path, None
-            return "dir", lfss_path, await fconn.get_path_record(path)
+        dir_path_sp = path.split("/")
+        if len(dir_path_sp) > 2:
+            async with unique_cursor() as c:
+                fconn = FileConn(c)
+                if await fconn.count_path_files(path, flat=True) == 0:
+                    return None, lfss_path, None
+                return "dir", lfss_path, await fconn.get_path_record(path)
+        else:
+            # test if its a user's root directory
+            assert len(dir_path_sp) == 2
+            username = path.split("/")[0]
+            async with unique_cursor() as c:
+                uconn = UserConn(c)
+                u = await uconn.get_user(username)
+                if u is None: 
+                    return None, lfss_path, None
+                return "dir", lfss_path, DirectoryRecord(lfss_path)
 
     # not end with /, check if it is a file
     async with unique_cursor() as c:
@@ -68,9 +80,9 @@ async def eval_path(path: str) -> tuple[ptype, str, Optional[FileRecord | Direct
     
     if path == "": return "dir", "", DirectoryRecord("")
     async with unique_cursor() as c:
+        lfss_path = path + "/"
         fconn = FileConn(c)
-        if await fconn.count_path_files(path + "/") > 0:
-            lfss_path = path + "/"
+        if await fconn.count_path_files(lfss_path) > 0:
             return "dir", lfss_path, await fconn.get_path_record(lfss_path)
     
     return None, path, None
@@ -190,35 +202,6 @@ async def dav_options(request: Request, path: str):
         "Content-Length": "0"
     })
 
-@router_dav.get("/{path:path}")
-@handle_exception
-async def dav_get(request: Request, path: str, user: UserRecord = Depends(get_current_user)):
-    ptype, path, _ = await eval_path(path)
-    if ptype is None: raise PathNotFoundError(path)
-    # elif ptype == "dir": raise InvalidOptionsError("Directory should not be fetched")
-    else: return await get_file_impl(request, user=user, path=path)
-
-@router_dav.head("/{path:path}")
-@handle_exception
-async def dav_head(request: Request, path: str, user: UserRecord = Depends(registered_user)):
-    ptype, path, _ = await eval_path(path)
-    # some clients may send HEAD request to check if the file exists
-    if ptype is None: raise PathNotFoundError(path)
-    elif ptype == "dir": return Response(status_code=200)
-    else: return await get_file_impl(request, user=user, path=path, is_head=True)
-
-@router_dav.put("/{path:path}")
-@handle_exception
-async def dav_put(request: Request, path: str, user: UserRecord = Depends(registered_user)):
-    _, path, _ = await eval_path(path)
-    return await put_file_impl(request, user=user, path=path, conflict='overwrite')
-
-@router_dav.delete("/{path:path}")
-@handle_exception
-async def dav_delete(path: str, user: UserRecord = Depends(registered_user)):
-    _, path, _ = await eval_path(path)
-    return await delete_impl(user=user, path=path)
-
 @router_dav.api_route("/{path:path}", methods=["PROPFIND"])
 @handle_exception
 async def dav_propfind(request: Request, path: str, user: UserRecord = Depends(registered_user)):
@@ -231,6 +214,10 @@ async def dav_propfind(request: Request, path: str, user: UserRecord = Depends(r
     path_type, lfss_path, record = await eval_path(path)
     logger.info(f"PROPFIND {lfss_path} (depth: {depth})")
     return_status = 200
+
+    if await check_path_permission(lfss_path, user) < AccessLevel.READ:
+        raise PermissionDeniedError(lfss_path)
+
     if path_type == "dir" and depth == "0":
         # query the directory itself
         return_status = 200
@@ -339,7 +326,7 @@ async def dav_lock(request: Request, path: str, user: UserRecord = Depends(regis
     # lock_token = f"opaquelocktoken:{uuid.uuid4().hex}"
     lock_token = f"urn:uuid:{uuid.uuid4()}"
     logger.info(f"LOCK {path} (timeout: {timeout}), token: {lock_token}, depth: {lock_depth}")
-    if DEBUG_MODE:
+    if DEBUG_MODE and body:
         print("Lock-body:", ET.tostring(body, encoding="utf-8", method="xml"))
     async with dav_lock.lock:
         await lock_path(user, path, lock_token, lock_depth, timeout=timeout)

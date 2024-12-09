@@ -96,6 +96,7 @@ async def get_file_impl(
     is_head = False,
     ):
     path = ensure_uri_compnents(path)
+    if path.startswith("/"): path = path[1:]
 
     # handle directory query
     if path == "": path = "/"
@@ -109,6 +110,7 @@ async def get_file_impl(
                 return await emit_thumbnail(path, download, create_time=None)
             
             if path == "/":
+                if is_head: return Response(status_code=200)
                 peer_users = await UserConn(cur).list_peer_users(user.id, AccessLevel.READ)
                 return PathContents(
                     dirs = await fconn.list_root_dirs(user.username, *[x.username for x in peer_users], skim=True) \
@@ -118,6 +120,20 @@ async def get_file_impl(
 
             if not await check_path_permission(path, user, cursor=cur) >= AccessLevel.READ:
                 raise HTTPException(status_code=403, detail="Permission denied")
+            
+            path_sp = path.split("/")
+            if is_head:
+                if len(path_sp) == 2:
+                    assert path_sp[1] == ""
+                    if await UserConn(cur).get_user(path_sp[0]):
+                        return Response(status_code=200)
+                    else:
+                        raise HTTPException(status_code=404, detail="User not found")
+                else:
+                    if await FileConn(cur).count_path_files(path, flat=True) > 0:
+                        return Response(status_code=200)
+                    else:
+                        raise HTTPException(status_code=404, detail="Path not found")
 
             return await fconn.list_path(path)
     

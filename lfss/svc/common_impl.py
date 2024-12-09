@@ -7,7 +7,7 @@ from ..eng.datatype import UserRecord, FileRecord, PathContents, AccessLevel, Fi
 from ..eng.database import FileConn, UserConn, delayed_log_access, check_file_read_permission, check_path_permission
 from ..eng.thumb import get_thumb
 from ..eng.utils import format_last_modified, ensure_uri_compnents
-from ..eng.config import CHUNK_SIZE
+from ..eng.config import CHUNK_SIZE, DEBUG_MODE
 
 from .app_base import skip_request_log, db, logger
 
@@ -60,10 +60,15 @@ async def emit_file(
     else:
         arng_e = range_end
     
-    if arng_s >= file_record.file_size or arng_e >= file_record.file_size:
-        raise HTTPException(status_code=416, detail="Range not satisfiable")
-    if arng_s > arng_e:
-        raise HTTPException(status_code=416, detail="Invalid range")
+    if file_record.file_size > 0:
+        if arng_s >= file_record.file_size or arng_e >= file_record.file_size:
+            if DEBUG_MODE: print(f"[Invalid range] Actual range: {arng_s}-{arng_e} (size: {file_record.file_size})")
+            raise HTTPException(status_code=416, detail="Range not satisfiable")
+        if arng_s > arng_e:
+            raise HTTPException(status_code=416, detail="Invalid range")
+    else:
+        if not (arng_s == 0 and arng_e == -1):
+            raise HTTPException(status_code=416, detail="Invalid range (file size is 0)")
 
     headers = {
         "Content-Disposition": f"{disposition}; filename={fname}", 
@@ -129,6 +134,9 @@ async def get_impl(
     else:
         range_start, range_end = -1, -1
     
+    if DEBUG_MODE:
+        print(f"Get range: {range_start}-{range_end}")
+    
     if thumb:
         if (range_start != -1 or range_end != -1): logger.warning("Range request for thumbnail")
         return await emit_thumbnail(path, download, create_time=file_record.create_time, is_head=is_head)
@@ -186,7 +194,7 @@ async def put_file_impl(
     request: Request, 
     user: UserRecord, 
     path: str, 
-    conflict: Literal["overwrite", "skip", "abort"] = "abort",
+    conflict: Literal["overwrite", "skip", "abort"] = "overwrite",
     permission: int = 0,
     ):
     path = ensure_uri_compnents(path)
@@ -241,7 +249,7 @@ async def post_file_impl(
     path: str, 
     user: UserRecord, 
     file: UploadFile,
-    conflict: Literal["overwrite", "skip", "abort"] = "abort",
+    conflict: Literal["overwrite", "skip", "abort"] = "overwrite",
     permission: int = 0,
 ):
     path = ensure_uri_compnents(path)

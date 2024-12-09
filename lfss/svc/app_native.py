@@ -48,7 +48,7 @@ async def head_file(
 async def put_file(
     request: Request, 
     path: str, 
-    conflict: Literal["overwrite", "skip", "abort"] = "abort",
+    conflict: Literal["overwrite", "skip", "abort"] = "overwrite",
     permission: int = 0,
     user: UserRecord = Depends(registered_user)
     ):
@@ -62,7 +62,7 @@ async def put_file(
 async def post_file(
     path: str, 
     file: UploadFile,
-    conflict: Literal["overwrite", "skip", "abort"] = "abort",
+    conflict: Literal["overwrite", "skip", "abort"] = "overwrite",
     permission: int = 0,
     user: UserRecord = Depends(registered_user)
     ):

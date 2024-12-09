@@ -2,6 +2,7 @@ import subprocess
 from ..config import SANDBOX_DIR, SERVER_PORT
 from .common import get_conn, create_server_context
 import pytest
+import tempfile
 import webdav3.client as wc
 
 server = create_server_context()
@@ -29,3 +30,21 @@ def test_user_creation(server):
 def test_root_list(server, client: wc.Client):
     items = client.list('/u0')
     assert len(items) == 0
+
+def test_upload_file(server, client: wc.Client):
+    with tempfile.NamedTemporaryFile(delete=False) as f:
+        f.write(b'hello')
+        client.upload_sync(remote_path='/u0/test.txt', local_path=f.name)
+    items = client.list('/u0')
+    assert len(items) == 1
+    assert items[0] == 'test.txt'
+    assert client.check('/u0/test.txt')
+    client.clean('/u0/test.txt')
+
+def test_mkdir(server, client: wc.Client):
+    client.mkdir('/u0/dir/')
+    items = client.list('/u0/')
+    assert len(items) == 1
+    assert 'dir/' in items
+    assert len(client.list('/u0/dir/')) == 0
+    client.clean('/u0/dir/')

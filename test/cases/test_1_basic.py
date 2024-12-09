@@ -48,6 +48,12 @@ def test_delete(server):
     p_list = c.list_path('u0/')
     assert len(p_list.files) == 0, "File deletion failed"
 
+def test_empty_file(server):
+    c = get_conn('u0')
+    c.put('u0/empty.txt', b'')
+    assert c.get('u0/empty.txt') == b'', "Empty file failed"
+    c.delete('u0/empty.txt')
+
 def test_move(server):
     c = get_conn('u0')
     c.move('u0/a/test2.txt', 'u0/test2.json')

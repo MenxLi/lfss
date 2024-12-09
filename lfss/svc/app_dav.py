@@ -349,7 +349,7 @@ async def dav_unlock(request: Request, path: str, user: UserRecord = Depends(reg
     if lock_token.startswith("<") and lock_token.endswith(">"):
         lock_token = lock_token[1:-1]
     logger.info(f"UNLOCK {path}, token: {lock_token}")
-    if DEBUG_MODE:
+    if DEBUG_MODE and body:
         print("Unlock-body:", ET.tostring(body, encoding="utf-8", method="xml"))
     _, path, _ = await eval_path(path)
     await unlock_path(user, path, lock_token)

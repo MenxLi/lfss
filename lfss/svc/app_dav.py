@@ -157,7 +157,7 @@ async def create_file_xml_element(frecord: FileRecord) -> ET.Element:
     href.text = f"/{frecord.url}"
     propstat = ET.SubElement(file_el, f"{{{DAV_NS}}}propstat")
     prop = ET.SubElement(propstat, f"{{{DAV_NS}}}prop")
-    ET.SubElement(prop, f"{{{DAV_NS}}}displayname").text = frecord.url.split("/")[-1]
+    ET.SubElement(prop, f"{{{DAV_NS}}}displayname").text = decode_uri_compnents(frecord.url.split("/")[-1])
     ET.SubElement(prop, f"{{{DAV_NS}}}resourcetype")
     ET.SubElement(prop, f"{{{DAV_NS}}}getcontentlength").text = str(frecord.file_size)
     ET.SubElement(prop, f"{{{DAV_NS}}}getlastmodified").text = format_last_modified(frecord.create_time)
@@ -174,7 +174,7 @@ async def create_dir_xml_element(drecord: DirectoryRecord) -> ET.Element:
     href.text = f"/{drecord.url}"
     propstat = ET.SubElement(dir_el, f"{{{DAV_NS}}}propstat")
     prop = ET.SubElement(propstat, f"{{{DAV_NS}}}prop")
-    ET.SubElement(prop, f"{{{DAV_NS}}}displayname").text = drecord.url.split("/")[-2]
+    ET.SubElement(prop, f"{{{DAV_NS}}}displayname").text = decode_uri_compnents(drecord.url.split("/")[-2])
     ET.SubElement(prop, f"{{{DAV_NS}}}resourcetype").append(ET.Element(f"{{{DAV_NS}}}collection"))
     if drecord.size >= 0:
         ET.SubElement(prop, f"{{{DAV_NS}}}getlastmodified").text = format_last_modified(drecord.create_time)
@@ -230,7 +230,7 @@ async def dav_propfind(request: Request, path: str, user: UserRecord = Depends(r
         async with unique_cursor() as c:
             flist = await FileConn(c).list_path_files(lfss_path, flat = True if depth == "infinity" else False)
         for frecord in flist:
-            if frecord.url.split("/")[-1] == MKDIR_PLACEHOLDER: continue
+            if frecord.url.endswith(f"/{MKDIR_PLACEHOLDER}"): continue
             file_el = await create_file_xml_element(frecord)
             multistatus.append(file_el)
 
@@ -276,7 +276,7 @@ async def dav_move(request: Request, path: str, user: UserRecord = Depends(regis
     ptype, lfss_path, _ = await eval_path(path)
     if ptype is None:
         raise PathNotFoundError(path)
-    dptype, dlfss_path, ddav_path = await eval_path(destination)
+    dptype, dlfss_path, _ = await eval_path(destination)
     if dptype is not None:
         raise HTTPException(status_code=409, detail="Conflict")
 

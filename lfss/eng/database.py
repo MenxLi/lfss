@@ -427,8 +427,7 @@ class FileConn(DBObjectBase):
         await self._user_size_inc(user_id, old.file_size)
         self.logger.info(f"Copied file {old_url} to {new_url}")
     
-    # not tested
-    async def copy_path(self, old_url: str, new_url: str, conflict_handler: Literal['skip', 'overwrite'] = 'overwrite', user_id: Optional[int] = None):
+    async def copy_path(self, old_url: str, new_url: str, user_id: Optional[int] = None):
         assert old_url.endswith('/'), "Old path must end with /"
         assert new_url.endswith('/'), "New path must end with /"
         if user_id is None:
@@ -440,11 +439,8 @@ class FileConn(DBObjectBase):
         for r in res:
             old_record = FileRecord(*r)
             new_r = new_url + old_record.url[len(old_url):]
-            if conflict_handler == 'overwrite':
-                await self.cur.execute("DELETE FROM fmeta WHERE url = ?", (new_r, ))
-            elif conflict_handler == 'skip':
-                if (await self.cur.execute("SELECT url FROM fmeta WHERE url = ?", (new_r, ))) is not None:
-                    continue
+            if await (await self.cur.execute("SELECT url FROM fmeta WHERE url = ?", (new_r, ))).fetchone() is not None:
+                raise FileExistsError(f"File {new_r} already exists")
             new_fid = str(uuid.uuid4())
             user_id = old_record.owner_id if user_id is None else user_id
             await self.cur.execute(
@@ -456,6 +452,7 @@ class FileConn(DBObjectBase):
             else:
                 await copy_file(LARGE_BLOB_DIR / old_record.file_id, LARGE_BLOB_DIR / new_fid)
             await self._user_size_inc(user_id, old_record.file_size)
+        self.logger.info(f"Copied path {old_url} to {new_url}")
     
     async def move_file(self, old_url: str, new_url: str):
         old = await self.get_file_record(old_url)
@@ -858,7 +855,7 @@ class Database:
         
         async with transaction() as cur:
             fconn = FileConn(cur)
-            await fconn.copy_path(old_url, new_url, 'overwrite', op_user.id)
+            await fconn.copy_path(old_url, new_url, op_user.id)
 
     async def __batch_delete_file_blobs(self, fconn: FileConn, file_records: list[FileRecord], batch_size: int = 512):
         # https://github.com/langchain-ai/langchain/issues/10321

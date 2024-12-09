@@ -32,7 +32,10 @@ async def _get_cache_thumb(c: aiosqlite.Cursor, path: str, ctime: str) -> Option
     return blob
     
 async def _save_cache_thumb(c: aiosqlite.Cursor, path: str, ctime: str, raw_bytes: bytes) -> bytes:
-    raw_img = Image.open(BytesIO(raw_bytes))
+    try:
+        raw_img = Image.open(BytesIO(raw_bytes))
+    except Exception:
+        raise ValueError('Invalid image data for thumbnail: ' + path)
     raw_img.thumbnail(THUMB_SIZE)
     img = raw_img.convert('RGB')
     bio = BytesIO()

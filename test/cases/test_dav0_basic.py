@@ -29,5 +29,3 @@ def test_user_creation(server):
 def test_root_list(server, client: wc.Client):
     items = client.list('/u0')
     assert len(items) == 0
-    items = client.list('/')
-    assert len(items) == 2

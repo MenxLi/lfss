@@ -203,7 +203,9 @@ async def put_file_impl(
         exists_flag = True
         if await check_path_permission(path, user) < AccessLevel.WRITE:
             raise HTTPException(status_code=403, detail="Permission denied, cannot overwrite other's file")
-        await db.delete_file(path)
+        old_record = await db.delete_file(path)
+        if old_record and permission == FileReadPermission.UNSET.value:
+            permission = old_record.permission.value    # inherit permission
     
     # check content-type
     content_type = request.headers.get("Content-Type", "application/octet-stream")
@@ -256,7 +258,9 @@ async def post_file_impl(
         exists_flag = True
         if await check_path_permission(path, user) < AccessLevel.WRITE: 
             raise HTTPException(status_code=403, detail="Permission denied, cannot overwrite other's file")
-        await db.delete_file(path)
+        old_record = await db.delete_file(path)
+        if old_record and permission == FileReadPermission.UNSET.value:
+            permission = old_record.permission.value    # inherit permission
     
     async def blob_reader():
         nonlocal file

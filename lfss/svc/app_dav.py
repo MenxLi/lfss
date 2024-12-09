@@ -169,6 +169,7 @@ async def create_file_xml_element(frecord: FileRecord) -> ET.Element:
     if lock_el is not None:
         lock_discovery = ET.SubElement(prop, f"{{{DAV_NS}}}lockdiscovery")
         lock_discovery.append(lock_el)
+    ET.SubElement(propstat, f"{{{DAV_NS}}}status").text = "HTTP/1.1 200 OK"
     return file_el
 
 async def create_dir_xml_element(drecord: DirectoryRecord) -> ET.Element:
@@ -186,6 +187,7 @@ async def create_dir_xml_element(drecord: DirectoryRecord) -> ET.Element:
     if lock_el is not None:
         lock_discovery = ET.SubElement(prop, f"{{{DAV_NS}}}lockdiscovery")
         lock_discovery.append(lock_el)
+    ET.SubElement(propstat, f"{{{DAV_NS}}}status").text = "HTTP/1.1 200 OK"
     return dir_el
 
 async def xml_request_body(request: Request) -> Optional[ET.Element]:
@@ -201,7 +203,7 @@ async def dav_options(request: Request, path: str):
     return Response(headers={
         "DAV": "1,2",
         "MS-Author-Via": "DAV",
-        "Allow": "OPTIONS, GET, HEAD, POST, DELETE, TRACE, PROPFIND, PROPPATCH, COPY, MOVE, LOCK, UNLOCK",
+        "Allow": "OPTIONS, GET, HEAD, POST, DELETE, TRACE, PROPFIND, PROPPATCH, COPY, MOVE, LOCK, UNLOCK, MKCOL",
         "Content-Length": "0"
     })
 
@@ -214,26 +216,23 @@ async def dav_propfind(request: Request, path: str, user: UserRecord = Depends(r
     if body and DEBUG_MODE:
         print("Propfind-body:", ET.tostring(body, encoding="utf-8", method="xml"))
 
-    depth = request.headers.get("Depth", "1")
+    depth = request.headers.get("Depth", "0")
     # Generate XML response
     multistatus = ET.Element(f"{{{DAV_NS}}}multistatus")
     path_type, lfss_path, record = await eval_path(path)
     logger.info(f"PROPFIND {lfss_path} (depth: {depth}), type: {path_type}, record: {record}")
-    return_status = 200
 
     if lfss_path and await check_path_permission(lfss_path, user) < AccessLevel.READ:
         raise PermissionDeniedError(lfss_path)
 
     if path_type == "dir" and depth == "0":
         # query the directory itself
-        return_status = 200
         assert isinstance(record, DirectoryRecord)
         dir_el = await create_dir_xml_element(record)
         multistatus.append(dir_el)
 
     elif path_type == "dir" and lfss_path == "":
         # query root directory content
-        return_status = 200
         async def user_path_record(user_name: str, cur) -> DirectoryRecord:
             try:
                 return await FileConn(cur).get_path_record(user_name + "/")
@@ -253,7 +252,6 @@ async def dav_propfind(request: Request, path: str, user: UserRecord = Depends(r
 
     elif path_type == "dir":
         # query directory content
-        return_status = 207
         async with unique_cursor() as c:
             flist = await FileConn(c).list_path_files(lfss_path, flat = True if depth == "infinity" else False)
         for frecord in flist:
@@ -277,7 +275,7 @@ async def dav_propfind(request: Request, path: str, user: UserRecord = Depends(r
         raise PathNotFoundError(path)
 
     xml_response = ET.tostring(multistatus, encoding="utf-8", method="xml")
-    return Response(content=xml_response, media_type="application/xml", status_code=return_status)
+    return Response(content=xml_response, media_type="application/xml", status_code=207)
 
 @router_dav.api_route("/{path:path}", methods=["MKCOL"])
 @handle_exception

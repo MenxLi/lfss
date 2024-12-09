@@ -1,5 +1,6 @@
 from lfss.eng.config import THUMB_DB, THUMB_SIZE
 from lfss.eng.database import FileConn
+from lfss.eng.error import *
 from lfss.eng.connection_pool import unique_cursor
 from typing import Optional
 from PIL import Image
@@ -35,7 +36,7 @@ async def _save_cache_thumb(c: aiosqlite.Cursor, path: str, ctime: str, raw_byte
     try:
         raw_img = Image.open(BytesIO(raw_bytes))
     except Exception:
-        raise ValueError('Invalid image data for thumbnail: ' + path)
+        raise InvalidDataError('Invalid image data for thumbnail: ' + path)
     raw_img.thumbnail(THUMB_SIZE)
     img = raw_img.convert('RGB')
     bio = BytesIO()

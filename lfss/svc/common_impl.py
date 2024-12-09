@@ -87,7 +87,7 @@ async def emit_file(
         status_code=206 if range_start != -1 or range_end != -1 else 200
     )
 
-async def get_file_impl(
+async def get_impl(
     request: Request,
     user: UserRecord, 
     path: str, 
@@ -101,41 +101,7 @@ async def get_file_impl(
     # handle directory query
     if path == "": path = "/"
     if path.endswith("/"):
-        # return file under the path as json
-        async with unique_cursor() as cur:
-            fconn = FileConn(cur)
-            if user.id == 0:
-                raise HTTPException(status_code=401, detail="Permission denied, credential required")
-            if thumb:
-                return await emit_thumbnail(path, download, create_time=None)
-            
-            if path == "/":
-                if is_head: return Response(status_code=200)
-                peer_users = await UserConn(cur).list_peer_users(user.id, AccessLevel.READ)
-                return PathContents(
-                    dirs = await fconn.list_root_dirs(user.username, *[x.username for x in peer_users], skim=True) \
-                        if not user.is_admin else await fconn.list_root_dirs(skim=True),
-                    files = []
-                )
-
-            if not await check_path_permission(path, user, cursor=cur) >= AccessLevel.READ:
-                raise HTTPException(status_code=403, detail="Permission denied")
-            
-            path_sp = path.split("/")
-            if is_head:
-                if len(path_sp) == 2:
-                    assert path_sp[1] == ""
-                    if await UserConn(cur).get_user(path_sp[0]):
-                        return Response(status_code=200)
-                    else:
-                        raise HTTPException(status_code=404, detail="User not found")
-                else:
-                    if await FileConn(cur).count_path_files(path, flat=True) > 0:
-                        return Response(status_code=200)
-                    else:
-                        raise HTTPException(status_code=404, detail="Path not found")
-
-            return await fconn.list_path(path)
+        return await _get_dir_impl(user=user, path=path, download=download, thumb=thumb, is_head=is_head)
     
     # handle file query
     async with unique_cursor() as cur:
@@ -172,6 +138,50 @@ async def get_file_impl(
         else:
             return await emit_file(file_record, None, "inline", is_head = is_head, range_start=range_start, range_end=range_end)
 
+async def _get_dir_impl(
+    user: UserRecord, 
+    path: str, 
+    download: bool = False, 
+    thumb: bool = False,
+    is_head = False,
+    ):
+    """ handle directory query, return file under the path as json """
+    assert path.endswith("/")
+    async with unique_cursor() as cur:
+        fconn = FileConn(cur)
+        if user.id == 0:
+            raise HTTPException(status_code=401, detail="Permission denied, credential required")
+        if thumb:
+            return await emit_thumbnail(path, download, create_time=None)
+        
+        if path == "/":
+            if is_head: return Response(status_code=200)
+            peer_users = await UserConn(cur).list_peer_users(user.id, AccessLevel.READ)
+            return PathContents(
+                dirs = await fconn.list_root_dirs(user.username, *[x.username for x in peer_users], skim=True) \
+                    if not user.is_admin else await fconn.list_root_dirs(skim=True),
+                files = []
+            )
+
+        if not await check_path_permission(path, user, cursor=cur) >= AccessLevel.READ:
+            raise HTTPException(status_code=403, detail="Permission denied")
+        
+        path_sp = path.split("/")
+        if is_head:
+            if len(path_sp) == 2:
+                assert path_sp[1] == ""
+                if await UserConn(cur).get_user(path_sp[0]):
+                    return Response(status_code=200)
+                else:
+                    raise HTTPException(status_code=404, detail="User not found")
+            else:
+                if await FileConn(cur).count_path_files(path, flat=True) > 0:
+                    return Response(status_code=200)
+                else:
+                    raise HTTPException(status_code=404, detail="Path not found")
+
+        return await fconn.list_path(path)
+    
 async def put_file_impl(
     request: Request, 
     user: UserRecord, 

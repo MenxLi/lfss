@@ -122,7 +122,7 @@ async def unlock_path(user: UserRecord, p: str, token: str):
                 raise FileLockedError(f"Failed to unlock file [{p}] with token {token}")
             await cur.execute("DELETE FROM locks WHERE path=?", (p,))
             await conn.commit()
-async def query_lock_el(p: str, top_el_name: str = f"{{{DAV_NS}}}lockinfo") -> Optional[ET.Element]:
+async def query_lock_element(p: str, top_el_name: str = f"{{{DAV_NS}}}lockinfo") -> Optional[ET.Element]:
     async with aiosqlite.connect(LOCK_DB_PATH) as conn:
         await conn.execute("BEGIN EXCLUSIVE")
         await conn.execute(lock_table_create_sql)
@@ -162,7 +162,7 @@ async def create_file_xml_element(frecord: FileRecord) -> ET.Element:
     ET.SubElement(prop, f"{{{DAV_NS}}}getcontentlength").text = str(frecord.file_size)
     ET.SubElement(prop, f"{{{DAV_NS}}}getlastmodified").text = format_last_modified(frecord.create_time)
     ET.SubElement(prop, f"{{{DAV_NS}}}getcontenttype").text = frecord.mime_type
-    lock_el = await query_lock_el(frecord.url, top_el_name=f"{{{DAV_NS}}}activelock")
+    lock_el = await query_lock_element(frecord.url, top_el_name=f"{{{DAV_NS}}}activelock")
     if lock_el is not None:
         lock_discovery = ET.SubElement(prop, f"{{{DAV_NS}}}lockdiscovery")
         lock_discovery.append(lock_el)
@@ -179,7 +179,7 @@ async def create_dir_xml_element(drecord: DirectoryRecord) -> ET.Element:
     if drecord.size >= 0:
         ET.SubElement(prop, f"{{{DAV_NS}}}getlastmodified").text = format_last_modified(drecord.create_time)
         ET.SubElement(prop, f"{{{DAV_NS}}}getcontentlength").text = str(drecord.size)
-    lock_el = await query_lock_el(drecord.url, top_el_name=f"{{{DAV_NS}}}activelock")
+    lock_el = await query_lock_element(drecord.url, top_el_name=f"{{{DAV_NS}}}activelock")
     if lock_el is not None:
         lock_discovery = ET.SubElement(prop, f"{{{DAV_NS}}}lockdiscovery")
         lock_discovery.append(lock_el)
@@ -332,7 +332,7 @@ async def dav_lock(request: Request, path: str, user: UserRecord = Depends(regis
         await lock_path(user, path, lock_token, lock_depth, timeout=timeout)
         response_elem = ET.Element(f"{{{DAV_NS}}}prop")
         lockdiscovery = ET.SubElement(response_elem, f"{{{DAV_NS}}}lockdiscovery")
-        activelock = await query_lock_el(path, top_el_name=f"{{{DAV_NS}}}activelock")
+        activelock = await query_lock_element(path, top_el_name=f"{{{DAV_NS}}}activelock")
         assert activelock is not None
     lockdiscovery.append(activelock)
     lock_response = ET.tostring(response_elem, encoding="utf-8", method="xml")

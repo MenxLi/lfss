@@ -13,7 +13,7 @@ from ..eng.datatype import (
 )
 
 from .app_base import *
-from .common_impl import get_file_impl, put_file_impl, post_file_impl, delete_impl, copy_impl
+from .common_impl import get_impl, put_file_impl, post_file_impl, delete_impl, copy_impl
 
 @router_fs.get("/{path:path}")
 @handle_exception
@@ -23,7 +23,7 @@ async def get_file(
     download: bool = False, thumb: bool = False,
     user: UserRecord = Depends(get_current_user)
     ):
-    return await get_file_impl(
+    return await get_impl(
         request = request,
         user = user, path = path, download = download, thumb = thumb
         )
@@ -38,7 +38,7 @@ async def head_file(
     ):
     if path.startswith("_api/"):
         raise HTTPException(status_code=405, detail="HEAD not supported for API")
-    return await get_file_impl(
+    return await get_impl(
         request = request,
         user = user, path = path, download = download, thumb = thumb, is_head = True
         )

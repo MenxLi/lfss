@@ -161,7 +161,7 @@ class UserConn(DBObjectBase):
     async def list_peer_users(self, src_user: int | str, level: AccessLevel) -> list[UserRecord]:
         """
         List all users that src_user can do [AliasLevel] to, with level >= level, 
-        Note: the returned list does not include src_user and admin users
+        Note: the returned list does not include src_user and is not apporiate for admin (who has all permissions for all users)
         """
         assert int(level) > AccessLevel.NONE, f"Invalid level, {level}"
         match src_user:

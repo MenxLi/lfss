@@ -40,13 +40,17 @@ g_debounce_tasks: OrderedDict[str, asyncio.Task] = OrderedDict()
 lock_debounce_task_queue = Lock()
 async def wait_for_debounce_tasks():
     async def stop_task(task: asyncio.Task):
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+        if not task.done(): await task
     await asyncio.gather(*map(stop_task, g_debounce_tasks.values()))
     g_debounce_tasks.clear()
+
+async def truncate_debounce_tasks():
+    global g_debounce_tasks
+    new_debounce_tasks = OrderedDict()
+    for tid, task in g_debounce_tasks.items():
+        if not task.done(): 
+            new_debounce_tasks[tid] = task
+    g_debounce_tasks = new_debounce_tasks
 
 def debounce_async(delay: float = 0.1, max_wait: float = 1.):
     """ 
@@ -85,10 +89,11 @@ def debounce_async(delay: float = 0.1, max_wait: float = 1.):
             task_record = (task_uid, task)
             async with lock_debounce_task_queue:
                 g_debounce_tasks[task_uid] = task
-                if len(g_debounce_tasks) > 2048:
+                if len(g_debounce_tasks) > 1024:
                     # finished tasks are not removed from the dict
                     # so we need to clear it periodically
-                    await wait_for_debounce_tasks()
+                    await truncate_debounce_tasks()
+
         return wrapper
     return debounce_wrap
 

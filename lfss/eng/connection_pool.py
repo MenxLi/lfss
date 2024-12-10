@@ -29,7 +29,7 @@ async def get_connection(read_only: bool = False) -> aiosqlite.Connection:
 
     conn = await aiosqlite.connect(
         get_db_uri(DATA_HOME / 'index.db', read_only=read_only), 
-        timeout = 20, uri = True
+        timeout = 10, uri = True
         )
     async with conn.cursor() as c:
         await c.execute(

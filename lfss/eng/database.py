@@ -1,10 +1,11 @@
 
-from typing import Optional, Literal, AsyncIterable, overload
+from typing import Optional, Literal, overload
+from collections.abc import AsyncIterable
 from contextlib import asynccontextmanager
 from abc import ABC
 
+import uuid, datetime
 import urllib.parse
-import uuid
 import zipfile, io, asyncio
 
 import aiosqlite, aiofiles
@@ -926,14 +927,45 @@ class Database:
                 else:
                     blob = await fconn.get_file_blob(f_id)
                 yield r, blob
+    
+    async def zip_path_stream(self, top_url: str, op_user: Optional[UserRecord] = None) -> AsyncIterable[bytes]:
+        from stat import S_IFREG
+        from stream_zip import async_stream_zip, ZIP_64
+        if top_url.startswith('/'):
+            top_url = top_url[1:]
+        
+        if op_user:
+            if await check_path_permission(top_url, op_user) < AccessLevel.READ:
+                raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot zip path {top_url}")
+        
+        # https://stream-zip.docs.trade.gov.uk/async-interface/
+        async def data_iter():
+            async for (r, blob) in self.iter_path(top_url, None):
+                rel_path = r.url[len(top_url):]
+                rel_path = decode_uri_compnents(rel_path)
+                b_iter: AsyncIterable[bytes]
+                if isinstance(blob, bytes):
+                    async def blob_iter(): yield blob
+                    b_iter = blob_iter()    # type: ignore
+                else:
+                    assert isinstance(blob, AsyncIterable)
+                    b_iter = blob
+                yield (
+                    rel_path, 
+                    datetime.datetime.now(), 
+                    S_IFREG | 0o600,
+                    ZIP_64, 
+                    b_iter
+                )
+        return async_stream_zip(data_iter())
 
     @concurrent_wrap()
-    async def zip_path(self, top_url: str, urls: Optional[list[str]]) -> io.BytesIO:
+    async def zip_path(self, top_url: str, op_user: Optional[UserRecord]) -> io.BytesIO:
         if top_url.startswith('/'):
             top_url = top_url[1:]
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, 'w') as zf:
-            async for (r, blob) in self.iter_path(top_url, urls):
+            async for (r, blob) in self.iter_path(top_url, None):
                 rel_path = r.url[len(top_url):]
                 rel_path = decode_uri_compnents(rel_path)
                 if r.external:

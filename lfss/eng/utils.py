@@ -155,7 +155,7 @@ def fmt_storage_size(size: int) -> str:
     return f"{size/1024**4:.2f}T"
 
 _FnReturnT = TypeVar('_FnReturnT')
-_AsyncReturnT = Awaitable[_FnReturnT]
+_AsyncReturnT = TypeVar('_AsyncReturnT', bound=Awaitable)
 _g_executor = None
 def get_global_executor():
     global _g_executor
@@ -179,7 +179,7 @@ def concurrent_wrap(executor=None):
         def sync_fn(*args, **kwargs):
             loop = asyncio.new_event_loop()
             return loop.run_until_complete(func(*args, **kwargs))
-        return sync_fn
+        return sync_fn          # type: ignore
     return _concurrent_wrap
 
 # https://stackoverflow.com/a/279586/6775765

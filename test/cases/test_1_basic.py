@@ -157,6 +157,16 @@ def test_set_perm(server):
     with pytest.raises(Exception, match='403'):
         c1.get('u0/test1_set_perm.txt')
 
+def test_bundle(server):
+    import zipfile
+    c = get_conn('u0')
+    with NamedTemporaryFile() as f:
+        for b in c.bundle('u0/'):
+            f.write(b)
+        f.flush()
+        with zipfile.ZipFile(f.name, 'r') as z:
+            assert 'test1_set_perm.txt' in z.namelist(), "Bundle failed"
+
 def test_path_deletion(server):
     c = get_conn('u0')
     c.delete('u0/')

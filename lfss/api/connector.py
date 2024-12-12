@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import Optional, Literal, Iterator
+from typing import Optional, Literal
+from collections.abc import Iterator
 import os
 import requests
 import requests.adapters
@@ -276,6 +277,14 @@ class Connector:
         self._fetch_factory('POST', '_api/copy', {'src': src, 'dst': dst})(
             headers = {'Content-Type': 'application/www-form-urlencoded'}
         )
+    
+    def bundle(self, path: str) -> Iterator[bytes]:
+        """Bundle a path into a zip file."""
+        response = self._fetch_factory('GET', '_api/bundle', {'path': path})(
+            headers = {'Content-Type': 'application/www-form-urlencoded'}, 
+            stream = True
+        )
+        return response.iter_content(chunk_size=1024)
         
     def whoami(self) -> UserRecord:
         """Gets information about the current user."""

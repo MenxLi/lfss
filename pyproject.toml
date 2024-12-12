@@ -16,6 +16,7 @@ aiofiles = "23.*"
 mimesniff = "1.*"
 fastapi = "0.*"
 uvicorn = "0.*"
+stream-zip = "0.*"
 python-multipart = "*"
 pillow = "*"
 

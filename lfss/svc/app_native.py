@@ -1,14 +1,14 @@
 from typing import Optional, Literal
 
 from fastapi import Depends, Request, Response, UploadFile
+from fastapi.responses import StreamingResponse
 from fastapi.exceptions import HTTPException 
 
-from ..eng.config import MAX_BUNDLE_BYTES
 from ..eng.utils import ensure_uri_compnents
 from ..eng.connection_pool import unique_cursor
 from ..eng.database import check_file_read_permission, check_path_permission, UserConn, FileConn
 from ..eng.datatype import (
-    FileReadPermission, FileRecord, UserRecord, AccessLevel, 
+    FileReadPermission, UserRecord, AccessLevel, 
     FileSortKey, DirSortKey
 )
 
@@ -81,46 +81,20 @@ async def delete_file(path: str, user: UserRecord = Depends(registered_user)):
 async def bundle_files(path: str, user: UserRecord = Depends(registered_user)):
     logger.info(f"GET bundle({path}), user: {user.username}")
     path = ensure_uri_compnents(path)
-    assert path.endswith("/") or path == ""
-
+    if not path.endswith("/") and path != "":
+        raise HTTPException(status_code=400, detail="Path must end with /")
     if not path == "" and path[0] == "/":   # adapt to both /path and path
         path = path[1:]
     
-    # TODO: may check peer users here
-    owner_records_cache: dict[int, UserRecord] = {}     # cache owner records, ID -> UserRecord
-    async def is_access_granted(file_record: FileRecord):
-        owner_id = file_record.owner_id
-        owner = owner_records_cache.get(owner_id, None)
-        if owner is None:
-            async with unique_cursor() as conn:
-                uconn = UserConn(conn)
-                owner = await uconn.get_user_by_id(owner_id, throw=True)
-            owner_records_cache[owner_id] = owner
-            
-        allow_access, _ = check_file_read_permission(user, owner, file_record)
-        return allow_access
-    
-    async with unique_cursor() as conn:
-        fconn = FileConn(conn)
-        files = await fconn.list_path_files(
-            url = path, flat = True, 
-            limit=(await fconn.count_path_files(url = path, flat = True))
-            )
-    files = [f for f in files if await is_access_granted(f)]
-    if len(files) == 0:
-        raise HTTPException(status_code=404, detail="No files found")
+    async with unique_cursor() as cur:
+        dir_record = await FileConn(cur).get_path_record(path)
 
-    # return bundle of files
-    total_size = sum([f.file_size for f in files])
-    if total_size > MAX_BUNDLE_BYTES:
-        raise HTTPException(status_code=400, detail="Too large to zip")
-
-    file_paths = [f.url for f in files]
-    zip_buffer = await db.zip_path(path, file_paths)
-    return Response(
-        content=zip_buffer.getvalue(), media_type="application/zip", headers={
+    return StreamingResponse(
+        content = await db.zip_path_stream(path, op_user=user),
+        media_type = "application/zip",
+        headers = {
             "Content-Disposition": f"attachment; filename=bundle.zip", 
-            "Content-Length": str(zip_buffer.getbuffer().nbytes)
+            "X-Content-Bytes": str(dir_record.size),
         }
     )
 

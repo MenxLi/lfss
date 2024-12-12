@@ -1,6 +1,12 @@
 
 ## 0.9
 
+### 0.9.4
+- Decode WebDAV file name. 
+- Allow root-listing for WebDAV.
+- Always return 207 status code for propfind.
+- Refactor debounce utility. 
+
 ### 0.9.3
 - Fix empty file getting.
 - HTTP `PUT/POST` default to overwrite the file.

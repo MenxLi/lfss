@@ -36,21 +36,41 @@ def ensure_uri_compnents(path: str):
     """ Ensure the path components are safe to use """
     return encode_uri_compnents(decode_uri_compnents(path))
 
-g_debounce_tasks: OrderedDict[str, asyncio.Task] = OrderedDict()
-lock_debounce_task_queue = Lock()
-async def wait_for_debounce_tasks():
-    async def stop_task(task: asyncio.Task):
-        if not task.done(): await task
-    await asyncio.gather(*map(stop_task, g_debounce_tasks.values()))
-    g_debounce_tasks.clear()
+class TaskManager:
+    def __init__(self):
+        self._tasks: OrderedDict[str, asyncio.Task] = OrderedDict()
+    
+    def push(self, task: asyncio.Task) -> str:
+        tid = uuid4().hex
+        if tid in self._tasks:
+            raise ValueError("Task ID collision")
+        self._tasks[tid] = task
+        return tid
+    
+    def cancel(self, task_id: str):
+        task = self._tasks.pop(task_id, None)
+        if task is not None:
+            task.cancel()
+    
+    def truncate(self):
+        new_tasks = OrderedDict()
+        for tid, task in self._tasks.items():
+            if not task.done():
+                new_tasks[tid] = task
+        self._tasks = new_tasks
+    
+    async def wait_all(self):
+        async def stop_task(task: asyncio.Task):
+            if not task.done():
+                await task
+        await asyncio.gather(*map(stop_task, self._tasks.values()))
+        self._tasks.clear()
+    
+    def __len__(self): return len(self._tasks)
 
-async def truncate_debounce_tasks():
-    global g_debounce_tasks
-    new_debounce_tasks = OrderedDict()
-    for tid, task in g_debounce_tasks.items():
-        if not task.done(): 
-            new_debounce_tasks[tid] = task
-    g_debounce_tasks = new_debounce_tasks
+g_debounce_tasks: TaskManager = TaskManager()
+async def wait_for_debounce_tasks():
+    await g_debounce_tasks.wait_all()
 
 def debounce_async(delay: float = 0.1, max_wait: float = 1.):
     """ 
@@ -58,7 +78,8 @@ def debounce_async(delay: float = 0.1, max_wait: float = 1.):
     ensuring execution at least once every `max_wait` seconds. 
     """
     def debounce_wrap(func):
-        task_record: tuple[str, asyncio.Task] | None = None
+        # task_record: tuple[str, asyncio.Task] | None = None
+        prev_task_id = None
         fn_execution_lock = Lock()
         last_execution_time = 0
 
@@ -71,12 +92,11 @@ def debounce_async(delay: float = 0.1, max_wait: float = 1.):
 
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
-            nonlocal task_record, last_execution_time
+            nonlocal prev_task_id, last_execution_time
 
-            async with lock_debounce_task_queue:
-                if task_record is not None:
-                    task_record[1].cancel()
-                    g_debounce_tasks.pop(task_record[0], None)
+            if prev_task_id is not None:
+                g_debounce_tasks.cancel(prev_task_id)
+                prev_task_id = None
             
             async with fn_execution_lock:
                 if time.monotonic() - last_execution_time > max_wait:
@@ -85,14 +105,11 @@ def debounce_async(delay: float = 0.1, max_wait: float = 1.):
                     return
 
             task = asyncio.create_task(delayed_func(*args, **kwargs))
-            task_uid = uuid4().hex
-            task_record = (task_uid, task)
-            async with lock_debounce_task_queue:
-                g_debounce_tasks[task_uid] = task
-                if len(g_debounce_tasks) > 1024:
-                    # finished tasks are not removed from the dict
-                    # so we need to clear it periodically
-                    await truncate_debounce_tasks()
+            prev_task_id = g_debounce_tasks.push(task)
+            if len(g_debounce_tasks) > 1024:
+                # finished tasks are not removed from the dict
+                # so we need to clear it periodically
+                g_debounce_tasks.truncate()
 
         return wrapper
     return debounce_wrap

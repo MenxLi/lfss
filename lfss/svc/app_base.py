@@ -27,7 +27,7 @@ req_conn = RequestDB()
 async def lifespan(app: FastAPI):
     global db
     try:
-        await global_connection_init(n_read = 2)
+        await global_connection_init(n_read = 8 if not DEBUG_MODE else 1)
         await asyncio.gather(db.init(), req_conn.init())
         yield
         await req_conn.commit()

@@ -81,19 +81,22 @@ async def delete_file(path: str, user: UserRecord = Depends(registered_user)):
 async def bundle_files(path: str, user: UserRecord = Depends(registered_user)):
     logger.info(f"GET bundle({path}), user: {user.username}")
     path = ensure_uri_compnents(path)
-    if not path.endswith("/") and path != "":
+    if not path.endswith("/"):
         raise HTTPException(status_code=400, detail="Path must end with /")
-    if not path == "" and path[0] == "/":   # adapt to both /path and path
+    if path[0] == "/":      # adapt to both /path and path
         path = path[1:]
+    if path == "":
+        raise HTTPException(status_code=400, detail="Cannot bundle root")
     
     async with unique_cursor() as cur:
         dir_record = await FileConn(cur).get_path_record(path)
 
+    pathname = f"{path.split('/')[-2]}"
     return StreamingResponse(
         content = await db.zip_path_stream(path, op_user=user),
         media_type = "application/zip",
         headers = {
-            "Content-Disposition": f"attachment; filename=bundle.zip", 
+            f"Content-Disposition": f"attachment; filename=bundle-{pathname}.zip",
             "X-Content-Bytes": str(dir_record.size),
         }
     )

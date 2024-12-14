@@ -83,9 +83,11 @@ class UserConn(DBObjectBase):
         self, username: str, password: str, is_admin: bool = False, 
         max_storage: int = 1073741824, permission: FileReadPermission = FileReadPermission.UNSET
         ) -> int:
-        assert not username.startswith('_'), "Error: reserved username"
-        assert not ('/' in username or len(username) > 255), "Invalid username"
-        assert urllib.parse.quote(username) == username, "Invalid username, must be URL safe"
+        def validate_username(username: str):
+            assert not username.startswith('_'), "Error: reserved username"
+            assert not ('/' in username or ':' in username or len(username) > 255), "Invalid username"
+            assert urllib.parse.quote(username) == username, "Invalid username, must be URL safe"
+        validate_username(username)
         self.logger.debug(f"Creating user {username}")
         credential = hash_credential(username, password)
         assert await self.get_user(username) is None, "Duplicate username"

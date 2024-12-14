@@ -20,7 +20,7 @@ async def copy_file(source: str|pathlib.Path, destination: str|pathlib.Path):
                 await dest.write(chunk)
 
 def hash_credential(username: str, password: str):
-    return hashlib.sha256((username + password).encode()).hexdigest()
+    return hashlib.sha256(f"{username}:{password}".encode()).hexdigest()
 
 def encode_uri_compnents(path: str):
     path_sp = path.split("/")

@@ -9,4 +9,4 @@
 
 **Client**
 - `LFSS_ENDPOINT`: The fallback server endpoint. Default is `http://localhost:8000`.
-- `LFSS_TOKEN`: The fallback token to authenticate. Should be `sha256(<username><password>)`.
+- `LFSS_TOKEN`: The fallback token to authenticate. Should be `sha256(<username>:<password>)`.

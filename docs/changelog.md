@@ -1,6 +1,10 @@
 
 ## 0.9
 
+### 0.9.5
+- Stream bundle path as zip file.
+- Update authentication token hash format (need to reset password).
+
 ### 0.9.4
 - Decode WebDAV file name. 
 - Allow root-listing for WebDAV.

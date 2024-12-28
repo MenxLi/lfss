@@ -5,6 +5,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.exceptions import HTTPException 
 
 from ..eng.utils import ensure_uri_compnents
+from ..eng.config import MAX_MEM_FILE_BYTES
 from ..eng.connection_pool import unique_cursor
 from ..eng.database import check_file_read_permission, check_path_permission, UserConn, FileConn
 from ..eng.datatype import (
@@ -92,14 +93,28 @@ async def bundle_files(path: str, user: UserRecord = Depends(registered_user)):
         dir_record = await FileConn(cur).get_path_record(path)
 
     pathname = f"{path.split('/')[-2]}"
-    return StreamingResponse(
-        content = await db.zip_path_stream(path, op_user=user),
-        media_type = "application/zip",
-        headers = {
-            f"Content-Disposition": f"attachment; filename=bundle-{pathname}.zip",
-            "X-Content-Bytes": str(dir_record.size),
-        }
-    )
+
+    if dir_record.size < MAX_MEM_FILE_BYTES:
+        logger.debug(f"Bundle {path} in memory")
+        b_io = await db.zip_path(path, op_user=user)
+        return Response(
+            content = b_io.getvalue(),
+            media_type = "application/zip",
+            headers = {
+                f"Content-Disposition": f"attachment; filename=bundle-{pathname}.zip",
+                "X-Content-Bytes": str(dir_record.size),
+            }
+        )
+    else:
+        logger.debug(f"Bundle {path} in stream")
+        return StreamingResponse(
+            content = await db.zip_path_stream(path, op_user=user),
+            media_type = "application/zip",
+            headers = {
+                f"Content-Disposition": f"attachment; filename=bundle-{pathname}.zip",
+                "X-Content-Bytes": str(dir_record.size),
+            }
+        )
 
 @router_api.get("/meta")
 @handle_exception

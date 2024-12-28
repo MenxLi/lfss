@@ -965,6 +965,11 @@ class Database:
     async def zip_path(self, top_url: str, op_user: Optional[UserRecord]) -> io.BytesIO:
         if top_url.startswith('/'):
             top_url = top_url[1:]
+        
+        if op_user:
+            if await check_path_permission(top_url, op_user) < AccessLevel.READ:
+                raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot zip path {top_url}")
+        
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, 'w') as zf:
             async for (r, blob) in self.iter_path(top_url, None):

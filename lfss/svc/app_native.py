@@ -96,12 +96,13 @@ async def bundle_files(path: str, user: UserRecord = Depends(registered_user)):
 
     if dir_record.size < MAX_MEM_FILE_BYTES:
         logger.debug(f"Bundle {path} in memory")
-        b_io = await db.zip_path(path, op_user=user)
+        dir_bytes = (await db.zip_path(path, op_user=user)).getvalue()
         return Response(
-            content = b_io.getvalue(),
+            content = dir_bytes,
             media_type = "application/zip",
             headers = {
                 f"Content-Disposition": f"attachment; filename=bundle-{pathname}.zip",
+                "Content-Length": str(len(dir_bytes)),
                 "X-Content-Bytes": str(dir_record.size),
             }
         )

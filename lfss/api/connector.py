@@ -15,12 +15,13 @@ from lfss.eng.utils import ensure_uri_compnents
 
 _default_endpoint = os.environ.get('LFSS_ENDPOINT', 'http://localhost:8000')
 _default_token = os.environ.get('LFSS_TOKEN', '')
+num_t = float | int
 
 class Connector:
     class Session:
         def __init__(
             self, connector: Connector, pool_size: int = 10, 
-            retry: int = 1, backoff_factor: float = 0.5, status_forcelist: list[int] = [503]
+            retry: int = 1, backoff_factor: num_t = 0.5, status_forcelist: list[int] = [503]
             ):
             self.connector = connector
             self.pool_size = pool_size
@@ -47,13 +48,19 @@ class Connector:
         def __exit__(self, exc_type, exc_value, traceback):
             self.close()
 
-    def __init__(self, endpoint=_default_endpoint, token=_default_token):
+    def __init__(self, endpoint=_default_endpoint, token=_default_token, timeout: Optional[num_t | tuple[num_t, num_t]]=None):
+        """
+        - endpoint: the URL of the LFSS server. Default to $LFSS_ENDPOINT or http://localhost:8000.
+        - token: the access token. Default to $LFSS_TOKEN.
+        - timeout: the timeout for each request, can be either a single value or a tuple of two values (connect, read), refer to requests.Session.request.
+        """
         assert token, "No token provided. Please set LFSS_TOKEN environment variable."
         self.config = {
             "endpoint": endpoint,
             "token": token
         }
         self._session: Optional[requests.Session] = None
+        self.timeout = timeout
     
     def session( self, pool_size: int = 10, **kwargs):
         """ avoid creating a new session for each request.  """
@@ -74,11 +81,11 @@ class Connector:
             })
             headers.update(extra_headers)
             if self._session is not None:
-                response = self._session.request(method, url, headers=headers, **kwargs)
+                response = self._session.request(method, url, headers=headers, timeout=self.timeout, **kwargs)
                 response.raise_for_status()
             else:
                 with requests.Session() as s:
-                    response = s.request(method, url, headers=headers, **kwargs)
+                    response = s.request(method, url, headers=headers, timeout=self.timeout, **kwargs)
                     response.raise_for_status()
             return response
         return f

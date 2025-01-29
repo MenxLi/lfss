@@ -1000,21 +1000,8 @@ async def check_file_read_permission(user: UserRecord, file: FileRecord, cursor:
     if await check_path_permission(path, user) < AccessLevel.READ:
         read_allowed, reason = check_file_read_permission(user, file)
     ```
+    The implementation assumes the user is not admin and is not the owner of the file/path
     """
-    if user.is_admin or user.id == file.owner_id:
-        return True, ""
-    
-    # check permission of the file
-    if file.permission == FileReadPermission.PRIVATE:
-        return False, "Permission denied, private file"
-    elif file.permission == FileReadPermission.PROTECTED:
-        if user.id == 0:
-            return False, "Permission denied, protected file"
-    elif file.permission == FileReadPermission.PUBLIC:
-        return True, ""
-    else:
-        assert file.permission == FileReadPermission.UNSET
-    
     @asynccontextmanager
     async def this_cur():
         if cursor is None:
@@ -1023,17 +1010,24 @@ async def check_file_read_permission(user: UserRecord, file: FileRecord, cursor:
         else:
             yield cursor
     
+    f_perm = file.permission
+
     # if file permission unset, use path owner's permission as fallback
-    async with this_cur() as cur:
-        path_owner = await _get_path_owner(cur, file.url)
-    if path_owner.permission == FileReadPermission.PRIVATE:
-        if user.id != path_owner.id:
-            return False, "Permission denied, private path"
-    elif path_owner.permission == FileReadPermission.PROTECTED:
+    if f_perm == FileReadPermission.UNSET:
+        async with this_cur() as cur:
+            path_owner = await _get_path_owner(cur, file.url)
+        f_perm = path_owner.permission
+    
+    # check permission of the file
+    if f_perm == FileReadPermission.PRIVATE:
+        return False, "Permission denied, private file"
+    elif f_perm == FileReadPermission.PROTECTED:
         if user.id == 0:
-            return False, "Permission denied, protected path"
+            return False, "Permission denied, protected file"
+    elif f_perm == FileReadPermission.PUBLIC:
+        return True, ""
     else:
-        assert path_owner.permission == FileReadPermission.PUBLIC or path_owner.permission == FileReadPermission.UNSET
+        assert f_perm == FileReadPermission.UNSET
 
     return True, ""
 

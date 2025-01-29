@@ -112,11 +112,8 @@ async def get_impl(
     async with unique_cursor() as cur:
         fconn = FileConn(cur)
         file_record = await fconn.get_file_record(path, throw=True)
-        uconn = UserConn(cur)
-        owner = await uconn.get_user_by_id(file_record.owner_id, throw=True)
-
         if not await check_path_permission(path, user, cursor=cur) >= AccessLevel.READ:
-            allow_access, reason = check_file_read_permission(user, owner, file_record)
+            allow_access, reason = await check_file_read_permission(user, file_record, cursor=cur)
             if not allow_access:
                 raise HTTPException(status_code=403 if user.id != 0 else 401, detail=reason)
     

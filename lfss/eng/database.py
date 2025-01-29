@@ -984,22 +984,29 @@ class Database:
         buffer.seek(0)
         return buffer
 
-def check_file_read_permission(user: UserRecord, owner: UserRecord, file: FileRecord) -> tuple[bool, str]:
+async def _get_path_owner(cur: aiosqlite.Cursor, path: str) -> UserRecord:
+    path_username = path.split('/')[0]
+    uconn = UserConn(cur)
+    path_user = await uconn.get_user(path_username)
+    if path_user is None:
+        raise PathNotFoundError(f"Invalid path: {path_username} is not a valid username")
+    return path_user
+
+async def check_file_read_permission(user: UserRecord, file: FileRecord, cursor: Optional[aiosqlite.Cursor] = None) -> tuple[bool, str]:
     """
     This does not consider alias level permission,
     use check_path_permission for alias level permission check first:
     ```
     if await check_path_permission(path, user) < AccessLevel.READ:
-        read_allowed, reason = check_file_read_permission(user, owner, file)
+        read_allowed, reason = check_file_read_permission(user, file)
     ```
     """
-    if user.is_admin:
+    if user.is_admin or user.id == file.owner_id:
         return True, ""
     
     # check permission of the file
     if file.permission == FileReadPermission.PRIVATE:
-        if user.id != owner.id:
-            return False, "Permission denied, private file"
+        return False, "Permission denied, private file"
     elif file.permission == FileReadPermission.PROTECTED:
         if user.id == 0:
             return False, "Permission denied, protected file"
@@ -1007,16 +1014,26 @@ def check_file_read_permission(user: UserRecord, owner: UserRecord, file: FileRe
         return True, ""
     else:
         assert file.permission == FileReadPermission.UNSET
-
-    # use owner's permission as fallback
-    if owner.permission == FileReadPermission.PRIVATE:
-        if user.id != owner.id:
-            return False, "Permission denied, private user file"
-    elif owner.permission == FileReadPermission.PROTECTED:
+    
+    @asynccontextmanager
+    async def this_cur():
+        if cursor is None:
+            async with unique_cursor() as _cur:
+                yield _cur
+        else:
+            yield cursor
+    
+    # if file permission unset, use path owner's permission as fallback
+    async with this_cur() as cur:
+        path_owner = await _get_path_owner(cur, file.url)
+    if path_owner.permission == FileReadPermission.PRIVATE:
+        if user.id != path_owner.id:
+            return False, "Permission denied, private path"
+    elif path_owner.permission == FileReadPermission.PROTECTED:
         if user.id == 0:
-            return False, "Permission denied, protected user file"
+            return False, "Permission denied, protected path"
     else:
-        assert owner.permission == FileReadPermission.PUBLIC or owner.permission == FileReadPermission.UNSET
+        assert path_owner.permission == FileReadPermission.PUBLIC or path_owner.permission == FileReadPermission.UNSET
 
     return True, ""
 
@@ -1039,15 +1056,11 @@ async def check_path_permission(path: str, user: UserRecord, cursor: Optional[ai
             yield cursor
 
     # check if path user exists
-    path_username = path.split('/')[0]
     async with this_cur() as cur:
-        uconn = UserConn(cur)
-        path_user = await uconn.get_user(path_username)
-    if path_user is None:
-        raise PathNotFoundError(f"Invalid path: {path_username} is not a valid username")
+        path_owner = await _get_path_owner(cur, path)
 
-    # check if user is admin
-    if user.is_admin or user.username == path_username:
+    # check if user is admin or the owner of the path
+    if user.is_admin or user.id == path_owner.id:
         return AccessLevel.ALL
     
     # if the path is a file, check if the user is the owner
@@ -1061,4 +1074,4 @@ async def check_path_permission(path: str, user: UserRecord, cursor: Optional[ai
     # check alias level
     async with this_cur() as cur:
         uconn = UserConn(cur)
-        return await uconn.query_peer_level(user.id, path_user.id)
+        return await uconn.query_peer_level(user.id, path_owner.id)

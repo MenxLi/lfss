@@ -22,16 +22,16 @@ A file is owned by the user who created it, may not necessarily be the user unde
 ## File access with `GET` permission
 
 ### File access
-For accessing file content, the user must have `GET` permission of the file, which is determined by the `permission` field of both the owner and the file.   
+For accessing file content, the user must have `GET` permission of the file, which is determined by the `permission` field of both the path-owner and the file.   
 
 There are four types of permissions: `unset`, `public`, `protected`, `private`.
 Non-admin users can access files based on:   
 
 - If the file is `public`, then all users can access it.
 - If the file is `protected`, then only the logged-in user can access it.  
-- If the file is `private`, then only the owner can access it.
-- If the file is `unset`, then the file's permission is inherited from the owner's permission.
-- If both the owner and the file have `unset` permission, then the file is `public`.
+- If the file is `private`, then only the owner/path-owner can access it.
+- If the file is `unset`, then the file's permission is inherited from the path-owner's permission.
+- If both the path-owner and the file have `unset` permission, then the file is `public`.
 
 ## File creation with `PUT`/`POST` permission
 `PUT`/`POST` permission is not allowed for non-peer users.

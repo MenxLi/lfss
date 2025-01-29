@@ -128,9 +128,7 @@ async def get_file_meta(path: str, user: UserRecord = Depends(registered_user)):
         if is_file:
             record = await fconn.get_file_record(path, throw=True)
             if await check_path_permission(path, user, cursor=cur) < AccessLevel.READ:
-                uconn = UserConn(cur)
-                owner = await uconn.get_user_by_id(record.owner_id, throw=True)
-                is_allowed, reason = check_file_read_permission(user, owner, record)
+                is_allowed, reason = await check_file_read_permission(user, record, cursor=cur)
                 if not is_allowed:
                     raise HTTPException(status_code=403, detail=reason)
         else:

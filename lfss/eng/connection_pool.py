@@ -8,7 +8,7 @@ from functools import wraps
 from typing import Callable, Awaitable
 
 from .log import get_logger
-from .error import DatabaseLockedError
+from .error import DatabaseLockedError, DatabaseTransactionError
 from .config import DATA_HOME
 
 async def execute_sql(conn: aiosqlite.Connection | aiosqlite.Cursor, name: str):
@@ -147,6 +147,14 @@ def global_entrance(n_read: int = 1):
         return wrapper
     return decorator
 
+def handle_sqlite_error(e: Exception):
+    if 'database is locked' in str(e):
+        raise DatabaseLockedError from e
+    if 'cannot start a transaction within a transaction' in str(e):
+        get_logger('database', global_instance=True).error(f"Unexpected error: {e}")
+        raise DatabaseTransactionError from e
+    raise e
+
 @asynccontextmanager
 async def unique_cursor(is_write: bool = False):
     if not is_write:
@@ -155,9 +163,7 @@ async def unique_cursor(is_write: bool = False):
             try:
                 yield await connection_obj.conn.cursor()
             except Exception as e:
-                if 'database is locked' in str(e):
-                    raise DatabaseLockedError from e
-                raise e
+                handle_sqlite_error(e)
             finally:
                 await g_pool.release(connection_obj)
     else:
@@ -166,9 +172,7 @@ async def unique_cursor(is_write: bool = False):
             try:
                 yield await connection_obj.conn.cursor()
             except Exception as e:
-                if 'database is locked' in str(e):
-                    raise DatabaseLockedError from e
-                raise e
+                handle_sqlite_error(e)
             finally:
                 await g_pool.release(connection_obj)
 

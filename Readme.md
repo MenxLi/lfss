@@ -1,5 +1,5 @@
 # Lite File Storage Service (LFSS)
-[![PyPI](https://img.shields.io/pypi/v/lfss)](https://pypi.org/project/lfss/)
+[![PyPI](https://img.shields.io/pypi/v/lfss)](https://pypi.org/project/lfss/) [![PyPI - Downloads](https://img.shields.io/pypi/dm/lfss)](https://pypi.org/project/lfss/)
 
 My experiment on a lightweight and high-performance file/object storage service...  
 

@@ -3,6 +3,7 @@ from typing import Optional, Literal, overload
 from collections.abc import AsyncIterable
 from contextlib import asynccontextmanager
 from abc import ABC
+import re
 
 import uuid, datetime
 import urllib.parse
@@ -20,7 +21,7 @@ from .datatype import (
     )
 from .config import LARGE_BLOB_DIR, CHUNK_SIZE, LARGE_FILE_BYTES, MAX_MEM_FILE_BYTES
 from .log import get_logger
-from .utils import decode_uri_compnents, hash_credential, concurrent_wrap, debounce_async, copy_file
+from .utils import decode_uri_compnents, hash_credential, concurrent_wrap, debounce_async, copy_file, static_vars
 from .error import *
 
 class DBObjectBase(ABC):
@@ -84,8 +85,9 @@ class UserConn(DBObjectBase):
         max_storage: int = 1073741824, permission: FileReadPermission = FileReadPermission.UNSET
         ) -> int:
         def validate_username(username: str):
+            assert not set(username) & {'/', ':'}, "Invalid username"
             assert not username.startswith('_'), "Error: reserved username"
-            assert not ('/' in username or ':' in username or len(username) > 255), "Invalid username"
+            assert not (len(username) > 255), "Username too long"
             assert urllib.parse.quote(username) == username, "Invalid username, must be URL safe"
         validate_username(username)
         self.logger.debug(f"Creating user {username}")
@@ -621,20 +623,32 @@ async def delayed_log_access(url: str):
         _log_access_queue.append(url)
     await _log_all_access()
 
+@static_vars(
+    prohibited_regex = re.compile(
+            r"^[/_.]",              # start with / or _ or .
+        ),
+    prohibited_part_regex = re.compile(
+        "|".join([
+            r"^\s*\.+\s*$",       # dot path
+            "[{}]".format("".join(re.escape(c) for c in ('/', "\\", "'", '"', "*", "%"))), # prohibited characters
+        ])
+    ),
+)
 def validate_url(url: str, is_file = True):
-    prohibited_chars = ['..', ';', "'", '"', '\\', '\0', '\n', '\r', '\t', '\x0b', '\x0c']
-    ret = not url.startswith('/') and not url.startswith('_') and not url.startswith('.')
-    ret = ret and not any([c in url for c in prohibited_chars])
+    """ Check if a path is valid. The input path is considered url safe """
+    if len(url) > 1024: 
+        raise InvalidPathError(f"URL too long: {url}")
 
-    if not ret:
-        raise InvalidPathError(f"Invalid URL: {url}")
-    
-    if is_file:
-        ret = ret and not url.endswith('/')
-    else:
-        ret = ret and url.endswith('/')
+    is_valid = validate_url.prohibited_regex.search(url) is None
+    for part in url.split('/'):
+        if validate_url.prohibited_part_regex.search(urllib.parse.unquote(part)):
+            is_valid = False
+            break
 
-    if not ret:
+    if is_file: is_valid = is_valid and not url.endswith('/')
+    else: is_valid = is_valid and url.endswith('/')
+
+    if not is_valid: 
         raise InvalidPathError(f"Invalid URL: {url}")
 
 async def get_user(cur: aiosqlite.Cursor, user: int | str) -> Optional[UserRecord]:

@@ -15,7 +15,7 @@ def test_user_creation(server):
     assert c.whoami().username == 'u0', "Username is not correct"
     assert c.whoami().max_storage == 1024**3, "Max storage is not correct"
 
-special_chars = '!@#$%^&*()_+-:.,<>? 你好あア'
+special_chars = '!@#$^&()_+-:.,<>? 你好あア'
 def get_fpath(charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890' + special_chars)->str:
     def random_string(k = 10) -> str:
         return ''.join(random.choices(charset, k=k))
@@ -37,9 +37,9 @@ def put_get_delete(username: str, path: str, byte_size):
 
 def test_fname(server):
     # use some wired characters...
-    pathes = set([get_fpath(special_chars) for _ in range(3)])
+    pathes = set([get_fpath(special_chars) for _ in range(32)])
     for i in pathes:
-        put_get_delete('u0', i, random.randint(1, 1024*1024*16))
+        put_get_delete('u0', i, random.randint(1, 1024*1024))
 
 def _test_concurrent(bsize: int = 1024*1024*16, n = 16):
     def task(username: str, path: str):
@@ -53,7 +53,7 @@ def _test_concurrent(bsize: int = 1024*1024*16, n = 16):
             t.result()
 
 def test_concurrent_small(server):
-    _test_concurrent(1024, 32)
+    _test_concurrent(1024, 128)
 
 def test_concurrent_medium(server):
     _test_concurrent(1024*1024, 16)

@@ -46,3 +46,8 @@ CREATE TABLE IF NOT EXISTS blobs.fdata (
     file_id CHAR(32) PRIMARY KEY,
     data BLOB
 );
+
+CREATE TABLE IF NOT EXISTS blobs.dupcount (
+    file_id CHAR(32) PRIMARY KEY,
+    count INTEGER DEFAULT 0
+);

@@ -1,4 +1,4 @@
-import subprocess
+import subprocess, sqlite3
 from ..config import SANDBOX_DIR
 from .common import get_conn, create_server_context
 import pytest
@@ -45,6 +45,14 @@ def test_copy0(server):
     c.copy('u0/c/', 'u1/x/')
     assert c.get('u1/x/test3.txt') == b'hello world 3'
 
+    # delete
+    c.delete('u0/c/')
+    assert c.count_files('u0/c/') == 0
+
+    c.delete('u0/a/')
+    assert c.count_files('u0/a/') == 0
+    assert c.count_files('u1/x/') != 0
+
 def test_copy1(server):
     c = get_conn('u1')
     c.copy('u1/a/test2.txt', 'u1/a/test2.json')
@@ -62,3 +70,25 @@ def test_copy1(server):
     with pytest.raises(Exception, match='403'):
         c.copy('u1/c/', 'u0/x/')
 
+def test_user_delete(server):
+    # make more copied before deleting
+    c = get_conn('u0')
+    c.copy('u1/x/', 'u0/a1/')
+    c.copy('u1/x/', 'u0/a2/')
+
+    subprocess.check_output(['lfss-user', 'delete', 'u0'], cwd=SANDBOX_DIR)
+    subprocess.check_output(['lfss-user', 'delete', 'u1'], cwd=SANDBOX_DIR)
+
+    with pytest.raises(Exception, match='401'):
+        c = get_conn('u0')
+        c.whoami()
+    
+    data_db_file = SANDBOX_DIR / '.storage_data' / 'blobs.db'
+    assert data_db_file.exists()
+
+    conn = sqlite3.connect(data_db_file)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM fdata")
+    assert cursor.fetchone() is None
+    cursor.execute("SELECT * FROM dupcount")
+    assert cursor.fetchone() is None

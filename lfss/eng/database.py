@@ -21,7 +21,7 @@ from .datatype import (
     )
 from .config import LARGE_BLOB_DIR, CHUNK_SIZE, LARGE_FILE_BYTES, MAX_MEM_FILE_BYTES
 from .log import get_logger
-from .utils import decode_uri_compnents, hash_credential, concurrent_wrap, debounce_async, copy_file, static_vars
+from .utils import decode_uri_compnents, hash_credential, concurrent_wrap, debounce_async, static_vars
 from .error import *
 
 class DBObjectBase(ABC):
@@ -419,16 +419,12 @@ class FileConn(DBObjectBase):
         new_exists = await self.get_file_record(new_url)
         if new_exists is not None:
             raise FileExistsError(f"File {new_url} already exists")
-        new_fid = str(uuid.uuid4())
         user_id = old.owner_id if user_id is None else user_id
         await self.cur.execute(
             "INSERT INTO fmeta (url, owner_id, file_id, file_size, permission, external, mime_type) VALUES (?, ?, ?, ?, ?, ?, ?)", 
-            (new_url, user_id, new_fid, old.file_size, old.permission, old.external, old.mime_type)
+            (new_url, user_id, old.file_id, old.file_size, old.permission, old.external, old.mime_type)
             )
-        if not old.external:
-            await self.set_file_blob(new_fid, await self.get_file_blob(old.file_id))
-        else:
-            await copy_file(LARGE_BLOB_DIR / old.file_id, LARGE_BLOB_DIR / new_fid)
+        await self.cur.execute("INSERT OR REPLACE INTO dupcount (file_id, count) VALUES (?, COALESCE((SELECT count FROM dupcount WHERE file_id = ?), 0) + 1)", (old.file_id, old.file_id))
         await self._user_size_inc(user_id, old.file_size)
         self.logger.info(f"Copied file {old_url} to {new_url}")
     
@@ -446,16 +442,12 @@ class FileConn(DBObjectBase):
             new_r = new_url + old_record.url[len(old_url):]
             if await (await self.cur.execute("SELECT url FROM fmeta WHERE url = ?", (new_r, ))).fetchone() is not None:
                 raise FileExistsError(f"File {new_r} already exists")
-            new_fid = str(uuid.uuid4())
             user_id = old_record.owner_id if user_id is None else user_id
             await self.cur.execute(
                 "INSERT INTO fmeta (url, owner_id, file_id, file_size, permission, external, mime_type) VALUES (?, ?, ?, ?, ?, ?, ?)", 
-                (new_r, user_id, new_fid, old_record.file_size, old_record.permission, old_record.external, old_record.mime_type)
+                (new_r, user_id, old_record.file_id, old_record.file_size, old_record.permission, old_record.external, old_record.mime_type)
                 )
-            if not old_record.external:
-                await self.set_file_blob(new_fid, await self.get_file_blob(old_record.file_id))
-            else:
-                await copy_file(LARGE_BLOB_DIR / old_record.file_id, LARGE_BLOB_DIR / new_fid)
+            await self.cur.execute("INSERT OR REPLACE INTO dupcount (file_id, count) VALUES (?, COALESCE((SELECT count FROM dupcount WHERE file_id = ?), 0) + 1)", (old_record.file_id, old_record.file_id))
             await self._user_size_inc(user_id, old_record.file_size)
         self.logger.info(f"Copied path {old_url} to {new_url}")
     
@@ -499,6 +491,7 @@ class FileConn(DBObjectBase):
         return file_record
     
     async def delete_user_file_records(self, owner_id: int) -> list[FileRecord]:
+        """ Delete all records with owner_id """
         cursor = await self.cur.execute("SELECT * FROM fmeta WHERE owner_id = ?", (owner_id, ))
         res = await cursor.fetchall()
         await self.cur.execute("DELETE FROM usize WHERE user_id = ?", (owner_id, ))
@@ -530,7 +523,7 @@ class FileConn(DBObjectBase):
         return [self.parse_record(r) for r in all_f_rec]
     
     async def set_file_blob(self, file_id: str, blob: bytes):
-        await self.cur.execute("INSERT OR REPLACE INTO blobs.fdata (file_id, data) VALUES (?, ?)", (file_id, blob))
+        await self.cur.execute("INSERT INTO blobs.fdata (file_id, data) VALUES (?, ?)", (file_id, blob))
     
     @staticmethod
     async def set_file_blob_external(file_id: str, stream: AsyncIterable[bytes])->int:
@@ -582,16 +575,78 @@ class FileConn(DBObjectBase):
                     if not chunk: break
                     yield chunk
     
-    @staticmethod
-    async def delete_file_blob_external(file_id: str):
+    async def unlink_file_blob_external(self, file_id: str):
+        # first check if the file has duplication
+        cursor = await self.cur.execute("SELECT count FROM dupcount WHERE file_id = ?", (file_id, ))
+        res = await cursor.fetchone()
+        if res is not None and res[0] > 0:
+            await self.cur.execute("UPDATE dupcount SET count = count - 1 WHERE file_id = ?", (file_id, ))
+            return
+
+        # finally delete the file and the duplication count
         if (LARGE_BLOB_DIR / file_id).exists():
             await aiofiles.os.remove(LARGE_BLOB_DIR / file_id)
+        await self.cur.execute("DELETE FROM dupcount WHERE file_id = ?", (file_id, ))
     
-    async def delete_file_blob(self, file_id: str):
+    async def unlink_file_blob(self, file_id: str):
+        # first check if the file has duplication
+        cursor = await self.cur.execute("SELECT count FROM dupcount WHERE file_id = ?", (file_id, ))
+        res = await cursor.fetchone()
+        if res is not None and res[0] > 0:
+            await self.cur.execute("UPDATE dupcount SET count = count - 1 WHERE file_id = ?", (file_id, ))
+            return
+
+        # finally delete the file and the duplication count
         await self.cur.execute("DELETE FROM blobs.fdata WHERE file_id = ?", (file_id, ))
+        await self.cur.execute("DELETE FROM dupcount WHERE file_id = ?", (file_id, ))
     
-    async def delete_file_blobs(self, file_ids: list[str]):
-        await self.cur.execute("DELETE FROM blobs.fdata WHERE file_id IN ({})".format(','.join(['?'] * len(file_ids))), file_ids)
+    async def _group_del(self, file_ids_all: list[str]):
+        """
+        The file_ids_all may contain duplication, 
+        yield tuples of unique (to_del_ids, to_dec_ids) for each iteration, 
+        every iteration should unlink one copy of the files, repeat until all re-occurrence in the input list are removed.
+        """
+        async def check_dup(file_ids: set[str]):
+            cursor = await self.cur.execute("SELECT file_id FROM dupcount WHERE file_id IN ({}) AND count > 0".format(','.join(['?'] * len(file_ids))), tuple(file_ids))
+            res = await cursor.fetchall()
+            to_dec_ids = [r[0] for r in res]
+            to_del_ids = list(file_ids - set(to_dec_ids))
+            return to_del_ids, to_dec_ids
+        # gather duplication from all file_ids
+        fid_occurrence = {}
+        for file_id in file_ids_all:
+            fid_occurrence[file_id] = fid_occurrence.get(file_id, 0) + 1
+        while fid_occurrence:
+            to_del_ids, to_dec_ids = await check_dup(set(fid_occurrence.keys()))
+            for file_id in to_del_ids:
+                del fid_occurrence[file_id]
+            for file_id in to_dec_ids:
+                fid_occurrence[file_id] -= 1
+                if fid_occurrence[file_id] == 0:
+                    del fid_occurrence[file_id]
+            yield (to_del_ids, to_dec_ids)
+    
+    async def unlink_file_blobs(self, file_ids: list[str]):
+        async for (to_del_ids, to_dec_ids) in self._group_del(file_ids):
+            # delete the only copy
+            await self.cur.execute("DELETE FROM blobs.fdata WHERE file_id IN ({})".format(','.join(['?'] * len(to_del_ids))), to_del_ids)
+            await self.cur.execute("DELETE FROM dupcount WHERE file_id IN ({})".format(','.join(['?'] * len(to_del_ids))), to_del_ids)
+            # decrease duplication count
+            await self.cur.execute("UPDATE dupcount SET count = count - 1 WHERE file_id IN ({})".format(','.join(['?'] * len(to_dec_ids))), to_dec_ids)
+    
+    async def unlink_file_blobs_external(self, file_ids: list[str]):
+        async def del_file(file_id: str):
+            if (LARGE_BLOB_DIR / file_id).exists():
+                await aiofiles.os.remove(LARGE_BLOB_DIR / file_id)
+        async for (to_del_ids, to_dec_ids) in self._group_del(file_ids):
+            # delete the only copy
+            await asyncio.gather(*(
+                [del_file(file_id) for file_id in to_del_ids] + 
+                [self.cur.execute("DELETE FROM dupcount WHERE file_id = ?", (file_id, )) for file_id in to_del_ids]
+                ))
+            # decrease duplication count
+            await self.cur.execute("UPDATE dupcount SET count = count - 1 WHERE file_id IN ({})".format(','.join(['?'] * len(to_dec_ids))), to_dec_ids)
+        
 
 _log_active_queue = []
 _log_active_lock = asyncio.Lock()
@@ -788,9 +843,9 @@ class Database:
                     raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot delete file {url}")
             f_id = r.file_id
             if r.external:
-                await fconn.delete_file_blob_external(f_id)
+                await fconn.unlink_file_blob_external(f_id)
             else:
-                await fconn.delete_file_blob(f_id)
+                await fconn.unlink_file_blob(f_id)
             return r
     
     async def move_file(self, old_url: str, new_url: str, op_user: Optional[UserRecord] = None):
@@ -889,11 +944,12 @@ class Database:
         
         async def del_internal():
             for i in range(0, len(internal_ids), batch_size):
-                await fconn.delete_file_blobs([r for r in internal_ids[i:i+batch_size]])
+                await fconn.unlink_file_blobs([r for r in internal_ids[i:i+batch_size]])
         async def del_external():
-            for i in range(0, len(external_ids)):
-                await fconn.delete_file_blob_external(external_ids[i])
-        await asyncio.gather(del_internal(), del_external())
+            for i in range(0, len(external_ids), batch_size):
+                await fconn.unlink_file_blobs_external([r for r in external_ids[i:i+batch_size]])
+        await del_internal()
+        await del_external()
 
     async def delete_path(self, url: str, op_user: Optional[UserRecord] = None) -> Optional[list[FileRecord]]:
         validate_url(url, is_file=False)

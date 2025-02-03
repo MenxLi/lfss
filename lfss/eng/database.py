@@ -251,7 +251,7 @@ class FileConn(DBObjectBase):
 
     async def list_path_dirs(
         self, url: str, 
-        offset: int = 0, limit: int = int(1e5), 
+        offset: int = 0, limit: int = 10_000, 
         order_by: DirSortKey = '', order_desc: bool = False,
         skim: bool = True
         ) -> list[DirectoryRecord]:
@@ -295,7 +295,7 @@ class FileConn(DBObjectBase):
 
     async def list_path_files(
         self, url: str, 
-        offset: int = 0, limit: int = int(1e5), 
+        offset: int = 0, limit: int = 10_000, 
         order_by: FileSortKey = '', order_desc: bool = False,
         flat: bool = False, 
         ) -> list[FileRecord]:
@@ -326,7 +326,7 @@ class FileConn(DBObjectBase):
         - It cannot flatten directories
         - It cannot list directories with details
         """
-        MAX_ITEMS = int(1e4)
+        MAX_ITEMS = 10_000
         dir_count = await self.count_path_dirs(url)
         file_count = await self.count_path_files(url, flat=False)
         if dir_count + file_count > MAX_ITEMS:
@@ -1114,6 +1114,9 @@ async def check_path_permission(path: str, user: UserRecord, cursor: Optional[ai
     if user.id == 0:
         return AccessLevel.GUEST
     
+    if user.is_admin:
+        return AccessLevel.ALL
+    
     @asynccontextmanager
     async def this_cur():
         if cursor is None:
@@ -1127,7 +1130,7 @@ async def check_path_permission(path: str, user: UserRecord, cursor: Optional[ai
         path_owner = await _get_path_owner(cur, path)
 
     # check if user is admin or the owner of the path
-    if user.is_admin or user.id == path_owner.id:
+    if user.id == path_owner.id:
         return AccessLevel.ALL
     
     # if the path is a file, check if the user is the owner

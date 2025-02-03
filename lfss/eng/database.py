@@ -640,6 +640,9 @@ def validate_url(url: str, is_file = True):
         raise InvalidPathError(f"URL too long: {url}")
 
     is_valid = validate_url.prohibited_regex.search(url) is None
+    if not is_valid:    # early return, no need to check further
+        raise InvalidPathError(f"Invalid URL: {url}")
+
     for part in url.split('/'):
         if validate_url.prohibited_part_regex.search(urllib.parse.unquote(part)):
             is_valid = False
@@ -1011,7 +1014,7 @@ async def check_file_read_permission(user: UserRecord, file: FileRecord, cursor:
     This does not consider alias level permission,
     use check_path_permission for alias level permission check first:
     ```
-    if await check_path_permission(path, user) < AccessLevel.READ:
+    if await check_path_permission(file.url, user) < AccessLevel.READ:
         read_allowed, reason = check_file_read_permission(user, file)
     ```
     The implementation assumes the user is not admin and is not the owner of the file/path

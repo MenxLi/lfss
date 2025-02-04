@@ -2,10 +2,11 @@
 Vacuum the database and external storage to ensure that the storage is consistent and minimal.
 """
 
-from lfss.eng.config import LARGE_BLOB_DIR
-import argparse, time
+from lfss.eng.config import LARGE_BLOB_DIR, THUMB_DB
+import argparse, time, itertools
 from functools import wraps
 from asyncio import Semaphore
+import aiosqlite
 import aiofiles, asyncio
 import aiofiles.os
 from contextlib import contextmanager
@@ -32,7 +33,7 @@ def barriered(func):
     return wrapper
 
 @global_entrance()
-async def vacuum_main(index: bool = False, blobs: bool = False):
+async def vacuum_main(index: bool = False, blobs: bool = False, thumbs: bool = False, vacuum_all: bool = False):
 
     # check if any file in the Large Blob directory is not in the database
     # the reverse operation is not necessary, because by design, the database should be the source of truth...
@@ -49,23 +50,55 @@ async def vacuum_main(index: bool = False, blobs: bool = False):
 
     # create a temporary index to speed up the process...
     with indicator("Clearing un-referenced files in external storage"):
-        async with transaction() as c:
-            await c.execute("CREATE INDEX IF NOT EXISTS fmeta_file_id ON fmeta (file_id)")
-        for i, f in enumerate(LARGE_BLOB_DIR.iterdir()):
-            f_id = f.name
-            await ensure_external_consistency(f_id)
-            if (i+1) % 1_000 == 0:
-                print(f"Checked {(i+1)//1000}k files in external storage.", end='\r')
-        async with transaction() as c:
-            await c.execute("DROP INDEX IF EXISTS fmeta_file_id")
+        try:
+            async with transaction() as c:
+                await c.execute("CREATE INDEX IF NOT EXISTS fmeta_file_id ON fmeta (file_id)")
+            for i, f in enumerate(LARGE_BLOB_DIR.iterdir()):
+                f_id = f.name
+                await ensure_external_consistency(f_id)
+                if (i+1) % 1_000 == 0:
+                    print(f"Checked {(i+1)//1000}k files in external storage.", end='\r')
+        finally:
+            async with transaction() as c:
+                await c.execute("DROP INDEX IF EXISTS fmeta_file_id")
 
-    async with unique_cursor(is_write=True) as c:
-        if index:
+    if index or vacuum_all:
+        async with unique_cursor(is_write=True) as c:
             with indicator("VACUUM-index"):
                 await c.execute("VACUUM main")
-        if blobs:
+    if blobs or vacuum_all:
+        async with unique_cursor(is_write=True) as c:
             with indicator("VACUUM-blobs"):
                 await c.execute("VACUUM blobs")
+    
+    if thumbs or vacuum_all:
+        try:
+            async with transaction() as c:
+                await c.execute("CREATE INDEX IF NOT EXISTS fmeta_file_id ON fmeta (file_id)")
+            with indicator("VACUUM-thumbs"):
+                async with unique_cursor() as db_c:
+                    async with aiosqlite.connect(THUMB_DB) as t_conn:
+                        batch_size = 10_000
+                        for batch_count in itertools.count(start=0):
+                            exceeded_rows = list(await (await t_conn.execute(
+                                "SELECT file_id FROM thumbs LIMIT ? OFFSET ?",
+                                (batch_size, batch_size * batch_count)
+                            )).fetchall())
+                            if not exceeded_rows:
+                                break
+                            batch_ids = [row[0] for row in exceeded_rows]
+                            for f_id in batch_ids:
+                                cursor = await db_c.execute("SELECT file_id FROM fmeta WHERE file_id = ?", (f_id,))
+                                if not await cursor.fetchone():
+                                    print(f"Thumbnail {f_id} not found in database, removing from thumb cache.")
+                                    await t_conn.execute("DELETE FROM thumbs WHERE file_id = ?", (f_id,))
+                            print(f"Checked {batch_count+1} batches of {batch_size} thumbnails.")
+
+                        await t_conn.commit()
+                        await t_conn.execute("VACUUM")
+        finally:
+            async with transaction() as c:
+                await c.execute("DROP INDEX IF EXISTS fmeta_file_id")
 
 async def vacuum_requests():
     with indicator("VACUUM-requests"):
@@ -76,15 +109,17 @@ async def vacuum_requests():
 def main():
     global sem
     parser = argparse.ArgumentParser(description="Balance the storage by ensuring that large file thresholds are met.")
+    parser.add_argument("--all", action="store_true", help="Vacuum all")
     parser.add_argument("-j", "--jobs", type=int, default=2, help="Number of concurrent jobs")
     parser.add_argument("-m", "--metadata", action="store_true", help="Vacuum metadata")
     parser.add_argument("-d", "--data", action="store_true", help="Vacuum blobs")
+    parser.add_argument("-t", "--thumb", action="store_true", help="Vacuum thumbnails")
     parser.add_argument("-r", "--requests", action="store_true", help="Vacuum request logs to only keep at most recent 1M rows in 7 days")
     args = parser.parse_args()
     sem = Semaphore(args.jobs)
-    asyncio.run(vacuum_main(index=args.metadata, blobs=args.data))
+    asyncio.run(vacuum_main(index=args.metadata, blobs=args.data, thumbs=args.thumb, vacuum_all=args.all))
 
-    if args.requests:
+    if args.requests or args.all:
         asyncio.run(vacuum_requests())
 
 if __name__ == '__main__':

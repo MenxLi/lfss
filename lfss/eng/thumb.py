@@ -11,47 +11,42 @@ from contextlib import asynccontextmanager
 async def _maybe_init_thumb(c: aiosqlite.Cursor):
     await c.execute('''
         CREATE TABLE IF NOT EXISTS thumbs (
-            path TEXT PRIMARY KEY,
-            ctime TEXT,
+            file_id CHAR(32) PRIMARY KEY,
             thumb BLOB
         )
     ''')
-    await c.execute('CREATE INDEX IF NOT EXISTS thumbs_path_idx ON thumbs (path)')
+    await c.execute('CREATE INDEX IF NOT EXISTS thumbs_path_idx ON thumbs (file_id)')
 
-async def _get_cache_thumb(c: aiosqlite.Cursor, path: str, ctime: str) -> Optional[bytes]:
+async def _get_cache_thumb(c: aiosqlite.Cursor, file_id: str) -> Optional[bytes]:
     res = await c.execute('''
-        SELECT ctime, thumb FROM thumbs WHERE path = ? 
-    ''', (path, ))
+        SELECT thumb FROM thumbs WHERE file_id = ? 
+    ''', (file_id, ))
     row = await res.fetchone()
     if row is None:
         return None
-    # check if ctime matches, if not delete and return None
-    if row[0] != ctime:
-        await _delete_cache_thumb(c, path)
-        return None
-    blob: bytes = row[1]
+    blob: bytes = row[0]
     return blob
     
-async def _save_cache_thumb(c: aiosqlite.Cursor, path: str, ctime: str, raw_bytes: bytes) -> bytes:
+async def _save_cache_thumb(c: aiosqlite.Cursor, file_id: str, raw_bytes: bytes) -> bytes:
     try:
         raw_img = Image.open(BytesIO(raw_bytes))
     except Exception:
-        raise InvalidDataError('Invalid image data for thumbnail: ' + path)
+        raise InvalidDataError('Invalid image data for thumbnail: ' + file_id)
     raw_img.thumbnail(THUMB_SIZE)
     img = raw_img.convert('RGB')
     bio = BytesIO()
     img.save(bio, 'JPEG')
     blob = bio.getvalue()
     await c.execute('''
-        INSERT OR REPLACE INTO thumbs (path, ctime, thumb) VALUES (?, ?, ?)
-    ''', (path, ctime, blob))
+        INSERT OR REPLACE INTO thumbs (file_id, thumb) VALUES (?, ?)
+    ''', (file_id, blob))
     await c.execute('COMMIT')  # commit immediately
     return blob
 
-async def _delete_cache_thumb(c: aiosqlite.Cursor, path: str):
+async def _delete_cache_thumb(c: aiosqlite.Cursor, file_id: str):
     await c.execute('''
-        DELETE FROM thumbs WHERE path = ?
-    ''', (path, ))
+        DELETE FROM thumbs WHERE file_id = ?
+    ''', (file_id, ))
     await c.execute('COMMIT')
 
 @asynccontextmanager
@@ -75,15 +70,13 @@ async def get_thumb(path: str) -> Optional[tuple[bytes, str]]:
         r = await fconn.get_file_record(path)
 
     if r is None:
-        async with cache_cursor() as cur:
-            await _delete_cache_thumb(cur, path)
         raise FileNotFoundError(f'File not found: {path}')
     if not r.mime_type.startswith('image/'):
         return None
 
+    file_id = r.file_id
     async with cache_cursor() as cur:
-        c_time = r.create_time
-        thumb_blob = await _get_cache_thumb(cur, path, c_time)
+        thumb_blob = await _get_cache_thumb(cur, file_id)
         if thumb_blob is not None:
             return thumb_blob, "image/jpeg"
         
@@ -98,5 +91,5 @@ async def get_thumb(path: str) -> Optional[tuple[bytes, str]]:
                 data = await fconn.get_file_blob(r.file_id)
             assert data is not None
         
-        thumb_blob = await _save_cache_thumb(cur, path, c_time, data)
+        thumb_blob = await _save_cache_thumb(cur, file_id, data)
         return thumb_blob, "image/jpeg"

@@ -170,14 +170,15 @@ def download_directory(
     _counter = 0
     _counter_lock = Lock()
     failed_items: list[tuple[str, str]] = []
+    file_count = 0
     def get_file(c, src_url):
-        nonlocal _counter, failed_items
+        nonlocal _counter, failed_items, file_count, verbose
         with _counter_lock:
             _counter += 1
             this_count = _counter
             dst_path = f"{directory}{os.path.relpath(decode_uri_compnents(src_url), decode_uri_compnents(src_path))}"
             if verbose:
-                print(f"[{this_count}] Downloading {src_url} to {dst_path}")
+                print(f"[{this_count}/{file_count}] Downloading {src_url} to {dst_path}")
 
         if not (res:=download_file(
             c, src_url, dst_path, 
@@ -185,11 +186,13 @@ def download_directory(
             ))[0]:
             failed_items.append((src_url, res[1]))
         
-    batch_size = 10000
+    batch_size = 10_000
     file_list: list[FileRecord] = []
     with connector.session(n_concurrent) as c:
         file_count = c.count_files(src_path, flat=True)
         for offset in range(0, file_count, batch_size):
+            if verbose:
+                print(f"Retrieving file list... ({offset}/{file_count})", end='\r')
             file_list.extend(c.list_files(
                 src_path, offset=offset, limit=batch_size, flat=True
             ))

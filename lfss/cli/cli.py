@@ -12,7 +12,7 @@ def parse_permission(s: str) -> FileReadPermission:
     raise ValueError(f"Invalid permission {s}")
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description="Command line interface, please set LFSS_ENDPOINT and LFSS_TOKEN environment variables.")
+    parser = argparse.ArgumentParser(description="Client-side command line interface, set LFSS_ENDPOINT and LFSS_TOKEN environment variables for authentication.")
 
     sp = parser.add_subparsers(dest="command", required=True)
 

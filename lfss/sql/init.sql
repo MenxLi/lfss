@@ -22,6 +22,11 @@ CREATE TABLE IF NOT EXISTS fmeta (
     FOREIGN KEY(owner_id) REFERENCES user(id)
 );
 
+CREATE TABLE IF NOT EXISTS dupcount (
+    file_id CHAR(32) PRIMARY KEY,
+    count INTEGER DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS usize (
     user_id INTEGER PRIMARY KEY,
     size INTEGER DEFAULT 0
@@ -45,9 +50,4 @@ CREATE INDEX IF NOT EXISTS idx_user_credential ON user(credential);
 CREATE TABLE IF NOT EXISTS blobs.fdata (
     file_id CHAR(32) PRIMARY KEY,
     data BLOB
-);
-
-CREATE TABLE IF NOT EXISTS blobs.dupcount (
-    file_id CHAR(32) PRIMARY KEY,
-    count INTEGER DEFAULT 0
 );

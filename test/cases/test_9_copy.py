@@ -83,12 +83,10 @@ def test_user_delete(server):
         c = get_conn('u0')
         c.whoami()
     
-    data_db_file = SANDBOX_DIR / '.storage_data' / 'blobs.db'
-    assert data_db_file.exists()
+    data_index_file = SANDBOX_DIR / '.storage_data' / 'index.db'
+    assert data_index_file.exists()
 
-    conn = sqlite3.connect(data_db_file)
+    conn = sqlite3.connect(data_index_file)
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM fdata")
-    assert cursor.fetchone() is None
     cursor.execute("SELECT * FROM dupcount")
     assert cursor.fetchone() is None

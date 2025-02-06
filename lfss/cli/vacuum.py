@@ -63,12 +63,14 @@ async def vacuum_main(index: bool = False, blobs: bool = False, thumbs: bool = F
                 await c.execute("DROP INDEX IF EXISTS fmeta_file_id")
 
     if index or vacuum_all:
-        async with unique_cursor(is_write=True) as c:
-            with indicator("VACUUM-index"):
+        with indicator("VACUUM-index"):
+            async with transaction() as c:
+                await c.execute("DELETE FROM dupcount WHERE count = 0")
+            async with unique_cursor(is_write=True) as c:
                 await c.execute("VACUUM main")
     if blobs or vacuum_all:
-        async with unique_cursor(is_write=True) as c:
-            with indicator("VACUUM-blobs"):
+        with indicator("VACUUM-blobs"):
+            async with unique_cursor(is_write=True) as c:
                 await c.execute("VACUUM blobs")
     
     if thumbs or vacuum_all:
@@ -76,6 +78,8 @@ async def vacuum_main(index: bool = False, blobs: bool = False, thumbs: bool = F
             async with transaction() as c:
                 await c.execute("CREATE INDEX IF NOT EXISTS fmeta_file_id ON fmeta (file_id)")
             with indicator("VACUUM-thumbs"):
+                if not THUMB_DB.exists():
+                    raise FileNotFoundError("Thumbnail database not found.")
                 async with unique_cursor() as db_c:
                     async with aiosqlite.connect(THUMB_DB) as t_conn:
                         batch_size = 10_000
@@ -96,6 +100,10 @@ async def vacuum_main(index: bool = False, blobs: bool = False, thumbs: bool = F
 
                         await t_conn.commit()
                         await t_conn.execute("VACUUM")
+        except FileNotFoundError as e:
+            if "Thumbnail database not found." in str(e):
+                print("Thumbnail database not found, skipping.")
+            
         finally:
             async with transaction() as c:
                 await c.execute("DROP INDEX IF EXISTS fmeta_file_id")

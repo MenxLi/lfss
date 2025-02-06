@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "lfss"
-version = "0.10.0"
+version = "0.11.0"
 description = "Lightweight file storage service"
-authors = ["li_mengxun <limengxun45@outlookc.com>"]
+authors = ["Li, Mengxun <mengxunli@whu.edu.cn>"]
 readme = "Readme.md"
 homepage = "https://github.com/MenxLi/lfss"
 repository = "https://github.com/MenxLi/lfss"

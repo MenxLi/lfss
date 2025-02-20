@@ -96,69 +96,99 @@ export function asHtmlText(text){
 }
 
 /**
- * @param {Event} e 
- * @param {(relPath: string, file: Promise<File>) => Promise<void>} callback 
- * @returns {Promise<void>[]}
+ * Iterates over all files dropped in the event,
+ * including files inside directories, and processes them
+ * using the provided callback with a concurrency limit.
+ *
+ * @param {Event} e The drop event.
+ * @param {(relPath: string, file: Promise<File>) => Promise<void>} callback A function
+ *        that receives the relative path and a promise for the File.
+ * @param {number} [maxConcurrent=5] Maximum number of concurrent callback executions.
+ * @returns {Promise<Promise<void>[]>} A promise resolving to an array of callback promises.
  */
-export async function forEachFile(e, callback){
-    /** @param {DataTransferItem} item */
-    function inferFileType(item){
-        let ftype = '';
-        if (item.webkitGetAsEntry){
-            const entry = item.webkitGetAsEntry();
-            if (entry.isFile){ ftype = 'file'; }
-            if (entry.isDirectory){ ftype = 'directory'; }
+export async function forEachFile(e, callback, maxConcurrent = 5) {
+    const results = []; // to collect callback promises
+
+    // Concurrency barrier variables.
+    let activeCount = 0;
+    const queue = [];
+
+    /**
+     * Runs the given async task when below the concurrency limit.
+     * If at limit, waits until a slot is free.
+     *
+     * @param {() => Promise<any>} task An async function returning a promise.
+     * @returns {Promise<any>}
+     */
+    async function runWithLimit(task) {
+        // If we reached the concurrency limit, wait for a free slot.
+        if (activeCount >= maxConcurrent) {
+            await new Promise(resolve => queue.push(resolve));
         }
-        else{
-            if (item.kind === 'file'){
-                if (item.type === '' && item.size % 4096 === 0){
-                    // https://stackoverflow.com/a/25095250/24720063
-                    console.log("Infer directory from size", item);
-                    ftype = 'directory';
-                }
-                else{
-                    ftype = 'file';
-                }
+        activeCount++;
+        try {
+            return await task();
+        } finally {
+            activeCount--;
+            // If there are waiting tasks, allow the next one to run.
+            if (queue.length) {
+                queue.shift()();
             }
         }
-        return ftype;
     }
-    /** 
-     * @param {FileSystemEntry} entry 
-     * @param {function(string, File): Promise<void>} uploadFn
+
+    /**
+     * Recursively traverses a file system entry.
+     *
+     * @param {FileSystemEntry} entry The entry (file or directory).
+     * @param {string} path The current relative path.
      */
-    async function handleOneEntry(entry, promises){
-        if (entry.isFile){
-            const relPath = entry.fullPath.startsWith('/') ? entry.fullPath.slice(1) : entry.fullPath;
+    async function traverse(entry, path) {
+        if (entry.isFile) {
+            // Wrap file retrieval in a promise.
             const filePromise = new Promise((resolve, reject) => {
                 entry.file(resolve, reject);
             });
-            promises.push(callback(relPath, filePromise));
-        }
-        if (entry.isDirectory){
+            // Use the concurrency barrier for the callback invocation.
+            results.push(runWithLimit(() => callback(path + entry.name, filePromise)));
+        } else if (entry.isDirectory) {
             const reader = entry.createReader();
-            const entries = await new Promise((resolve, reject) => {
-                reader.readEntries(resolve, reject);
-            });
-            for (let i = 0; i < entries.length; i++){
-                await handleOneEntry(entries[i], promises);
+
+            async function readAllEntries(reader) {
+                const entries = [];
+                while (true) {
+                const chunk = await new Promise((resolve, reject) => {
+                    reader.readEntries(resolve, reject);
+                });
+                if (chunk.length === 0) break;
+                entries.push(...chunk);
+                }
+                return entries;
             }
+
+            const entries = await readAllEntries(reader);
+            await Promise.all(
+                entries.map(ent => traverse(ent, path + entry.name + '/'))
+            );
         }
     }
 
-    const promises = [];
-    const items = e.dataTransfer.items;
-    for (let i = 0; i < items.length; i++){
-        const item = items[i];
-        const ftype = inferFileType(item);
-        if (ftype === 'file' || ftype === 'directory'){
-            const entry = item.webkitGetAsEntry();
-            await handleOneEntry(entry, promises);
-        }
-        else{
-            console.error("Unknown file type", item);
-        }
+    // Process using DataTransfer items if available.
+    if (e.dataTransfer && e.dataTransfer.items) {
+        await Promise.all(
+        Array.from(e.dataTransfer.items).map(async item => {
+            const entry = item.webkitGetAsEntry && item.webkitGetAsEntry();
+            if (entry) {
+            await traverse(entry, '');
+            }
+        })
+        );
+    } else if (e.dataTransfer && e.dataTransfer.files) {
+        // Fallback for browsers that support only dataTransfer.files.
+        Array.from(e.dataTransfer.files).forEach(file => {
+        results.push(runWithLimit(() => callback(file.name, Promise.resolve(file))));
+        });
     }
-
-    return promises;
+    return results;
 }
+

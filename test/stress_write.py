@@ -51,7 +51,7 @@ if __name__ == '__main__':
     parser.add_argument('--delete-all', action='store_true', help='Delete path after writing, be careful!!')
     args = parser.parse_args()
 
-    if args.delete_all and c.get_metadata(args.path):
+    if args.delete_all and c.get_meta(args.path):
         ans = input(f"Path: {args.path} already exists, are you sure you wan to delete it after testing? (y/n): ")
         if ans.lower() != 'y':
             print("Aborted.")

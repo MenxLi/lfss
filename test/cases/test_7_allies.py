@@ -39,12 +39,12 @@ def test_cross_read(server):
     c0 = get_conn('u0')
     assert c0.get('u2/1.bin') == b'hello world'
     assert c0.get('u2/3.bin') == b'hello world'
-    assert c0.get_metadata('u2/1.bin')
+    assert c0.get_meta('u2/1.bin')
 
     c1 = get_conn('u1')
     assert c1.get('u2/1.bin') == b'hello world'
     assert c1.get('u2/2.bin') == b'hello world'
-    assert c1.get_metadata('u2/1.bin').owner_id == 1    #type: ignore
+    assert c1.get_meta('u2/1.bin').owner_id == 1    #type: ignore
 
 def test_list(server):
     def check_ls(user: str):

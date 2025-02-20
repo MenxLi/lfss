@@ -113,7 +113,7 @@ def download_file(
                 print(f"File {file_path} already exists, skipping download.")
             return True, error_msg
         try:
-            fmeta = connector.get_metadata(src_url)
+            fmeta = connector.get_meta(src_url)
             if fmeta is None:
                 error_msg = "File not found."
                 return False, error_msg

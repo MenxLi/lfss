@@ -98,7 +98,7 @@ class Connector:
 
         # Skip ahead by checking if the file already exists
         if conflict == 'skip-ahead':
-            exists = self.get_metadata(path)
+            exists = self.get_meta(path)
             if exists is None:
                 conflict = 'skip'
             else:
@@ -122,7 +122,7 @@ class Connector:
 
         # Skip ahead by checking if the file already exists
         if conflict == 'skip-ahead':
-            exists = self.get_metadata(path)
+            exists = self.get_meta(path)
             if exists is None:
                 conflict = 'skip'
             else:
@@ -154,7 +154,7 @@ class Connector:
 
         # Skip ahead by checking if the file already exists
         if conflict == 'skip-ahead':
-            exists = self.get_metadata(path)
+            exists = self.get_meta(path)
             if exists is None:
                 conflict = 'skip'
             else:
@@ -211,7 +211,7 @@ class Connector:
         """Deletes the file at the specified path."""
         self._fetch_factory('DELETE', path)()
     
-    def get_metadata(self, path: str) -> Optional[FileRecord | DirectoryRecord]:
+    def get_meta(self, path: str) -> Optional[FileRecord | DirectoryRecord]:
         """Gets the metadata for the file at the specified path."""
         try:
             response = self._fetch_factory('GET', '_api/meta', {'path': path})()
@@ -223,6 +223,9 @@ class Connector:
             if e.response.status_code == 404:
                 return None
             raise e
+    # shorthand methods for type constraints
+    def get_fmeta(self, path: str) -> Optional[FileRecord]: assert (f:=self.get_meta(path)) is None or isinstance(f, FileRecord); return f 
+    def get_dmeta(self, path: str) -> Optional[DirectoryRecord]: assert (d:=self.get_meta(path)) is None or isinstance(d, DirectoryRecord); return d
     
     def list_path(self, path: str) -> PathContents:
         """ 

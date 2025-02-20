@@ -37,7 +37,7 @@ if __name__ == '__main__':
 
     with c.session(pool_size=args.jobs):
         file_list = c.list_files(args.path, flat=True, limit=int(1e6))
-        path_meta = c.get_metadata(args.path)
+        path_meta = c.get_meta(args.path)
         assert path_meta is not None, "Path not found"
         total_bytes = path_meta.size    # type: ignore
         s_time = time.time()

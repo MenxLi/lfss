@@ -126,7 +126,7 @@ def main():
     elif args.command == "query":
         for path in args.path:
             with catch_request_error():
-                res = connector.get_metadata(path)
+                res = connector.get_meta(path)
                 if res is None:
                     print(f"\033[31mNot found\033[0m ({path})")
                 else:

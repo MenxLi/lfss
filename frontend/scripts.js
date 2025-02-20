@@ -5,6 +5,7 @@ import { showInfoPanel, showDirInfoPanel } from './info.js';
 import { makeThumbHtml } from './thumb.js';
 import { store } from './state.js';
 import { maybeShowLoginPanel } from './login.js';
+import { forEachFile } from './utils.js';
 
 /** @type {import('./api.js').UserRecord}*/
 let userRecord = null;
@@ -158,7 +159,7 @@ uploadFileNameInput.addEventListener('input', debounce(onFileNameInpuChange, 500
         e.preventDefault();
         e.stopPropagation();
     });
-    window.addEventListener('drop', (e) => {
+    window.addEventListener('drop', async (e) => {
         e.preventDefault();
         e.stopPropagation();
         const items = e.dataTransfer.items;
@@ -181,56 +182,8 @@ Note that same name files will be overwritten.
 Are you sure you want to proceed?\
         `)){ return; }
 
-
-        /** @param {DataTransferItem} item */
-        function inferFileType(item){
-            let ftype = '';
-            if (item.webkitGetAsEntry){
-                const entry = item.webkitGetAsEntry();
-                if (entry.isFile){ ftype = 'file'; }
-                if (entry.isDirectory){ ftype = 'directory'; }
-            }
-            else{
-                if (item.kind === 'file'){
-                    if (item.type === '' && item.size % 4096 === 0){
-                        // https://stackoverflow.com/a/25095250/24720063
-                        console.log("Infer directory from size", item);
-                        ftype = 'directory';
-                    }
-                    else{
-                        ftype = 'file';
-                    }
-                }
-            }
-            return ftype;
-        }
-        /** 
-         * @param {FileSystemEntry} entry 
-         * @param {function(string, File): Promise<void>} uploadFn
-         */
-        async function handleOneEntry(entry, uploadFn){
-            if (entry.isFile){
-                const relPath = entry.fullPath.startsWith('/') ? entry.fullPath.slice(1) : entry.fullPath;
-                const file = await new Promise((resolve, reject) => {
-                    entry.file(resolve, reject);
-                });
-                await uploadFn(dstPath + relPath, file);
-            }
-            if (entry.isDirectory){
-                const reader = entry.createReader();
-                const entries = await new Promise((resolve, reject) => {
-                    reader.readEntries(resolve, reject);
-                });
-                for (let i = 0; i < entries.length; i++){
-                    await handleOneEntry(entries[i], uploadFn);
-                }
-            }
-        }
-
         let counter = 0;
         async function uploadFileFn(path, file){
-            // console.log("Uploading file", path, file);
-            counter += 1;
             const this_count = counter;
             try{
                 await uploadFile(conn, path, file, {conflict: 'overwrite'});
@@ -241,19 +194,11 @@ Are you sure you want to proceed?\
             console.log(`[${this_count}/${counter}] Uploaded file: ${path}`);
         }
 
-        const promises = [];
-        for (let i = 0; i < items.length; i++){
-            const item = items[i];
-            const ftype = inferFileType(item);
-            if (ftype === 'file' || ftype === 'directory'){
-                promises.push(
-                    handleOneEntry(item.webkitGetAsEntry(), uploadFileFn)
-                )
-            }
-            else{
-                console.warn("Unknown file type", item);
-            }
-        }
+        const promises = await forEachFile(e, async (relPath, filePromise) => {
+            counter += 1;
+            const file = await filePromise;
+            await uploadFileFn(dstPath + relPath, file);
+        });
 
         showPopup('Uploading multiple files...', {level: 'info', timeout: 3000});
         Promise.all(promises).then(

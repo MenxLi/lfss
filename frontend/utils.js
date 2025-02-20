@@ -94,3 +94,71 @@ export function asHtmlText(text){
     const htmlText = anonElem.innerHTML;
     return htmlText;
 }
+
+/**
+ * @param {Event} e 
+ * @param {(relPath: string, file: Promise<File>) => Promise<void>} callback 
+ * @returns {Promise<void>[]}
+ */
+export async function forEachFile(e, callback){
+    /** @param {DataTransferItem} item */
+    function inferFileType(item){
+        let ftype = '';
+        if (item.webkitGetAsEntry){
+            const entry = item.webkitGetAsEntry();
+            if (entry.isFile){ ftype = 'file'; }
+            if (entry.isDirectory){ ftype = 'directory'; }
+        }
+        else{
+            if (item.kind === 'file'){
+                if (item.type === '' && item.size % 4096 === 0){
+                    // https://stackoverflow.com/a/25095250/24720063
+                    console.log("Infer directory from size", item);
+                    ftype = 'directory';
+                }
+                else{
+                    ftype = 'file';
+                }
+            }
+        }
+        return ftype;
+    }
+    /** 
+     * @param {FileSystemEntry} entry 
+     * @param {function(string, File): Promise<void>} uploadFn
+     */
+    async function handleOneEntry(entry, promises){
+        if (entry.isFile){
+            const relPath = entry.fullPath.startsWith('/') ? entry.fullPath.slice(1) : entry.fullPath;
+            const filePromise = new Promise((resolve, reject) => {
+                entry.file(resolve, reject);
+            });
+            promises.push(callback(relPath, filePromise));
+        }
+        if (entry.isDirectory){
+            const reader = entry.createReader();
+            const entries = await new Promise((resolve, reject) => {
+                reader.readEntries(resolve, reject);
+            });
+            for (let i = 0; i < entries.length; i++){
+                await handleOneEntry(entries[i], promises);
+            }
+        }
+    }
+
+    const promises = [];
+    const items = e.dataTransfer.items;
+    for (let i = 0; i < items.length; i++){
+        const item = items[i];
+        const ftype = inferFileType(item);
+        if (ftype === 'file' || ftype === 'directory'){
+            const entry = item.webkitGetAsEntry();
+            await handleOneEntry(entry, promises);
+        }
+        else{
+            console.error("Unknown file type", item);
+        }
+    }
+
+    return promises;
+}

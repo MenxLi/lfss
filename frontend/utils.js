@@ -106,7 +106,7 @@ export function asHtmlText(text){
  * @param {number} [maxConcurrent=5] Maximum number of concurrent callback executions.
  * @returns {Promise<Promise<void>[]>} A promise resolving to an array of callback promises.
  */
-export async function forEachFile(e, callback, maxConcurrent = 5) {
+export async function forEachFile(e, callback, maxConcurrent = 16) {
     const results = []; // to collect callback promises
 
     // Concurrency barrier variables.

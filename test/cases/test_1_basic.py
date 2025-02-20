@@ -180,3 +180,8 @@ def test_path_deletion(server):
     c1.delete('u1/')
 
     assert c.get('u1/upload_by_u0.txt') == None
+
+def test_invalid_path(server):
+    c = get_conn('u0')
+    with pytest.raises(Exception, match='400'):
+        c.put('u_non_exists/test1.txt', b'hello world 1')

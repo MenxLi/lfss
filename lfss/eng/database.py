@@ -1062,7 +1062,7 @@ async def _get_path_owner(cur: aiosqlite.Cursor, path: str) -> UserRecord:
     uconn = UserConn(cur)
     path_user = await uconn.get_user(path_username)
     if path_user is None:
-        raise PathNotFoundError(f"Invalid path: {path_username} is not a valid username")
+        raise InvalidPathError(f"Invalid path: {path_username} is not a valid username")
     return path_user
 
 async def check_file_read_permission(user: UserRecord, file: FileRecord, cursor: Optional[aiosqlite.Cursor] = None) -> tuple[bool, str]:
@@ -1111,12 +1111,6 @@ async def check_path_permission(path: str, user: UserRecord, cursor: Optional[ai
     If the path is a file, the user will have all access if the user is the owner.
     Otherwise, the user will have alias level access w.r.t. the path user.
     """
-    if user.id == 0:
-        return AccessLevel.GUEST
-    
-    if user.is_admin:
-        return AccessLevel.ALL
-    
     @asynccontextmanager
     async def this_cur():
         if cursor is None:
@@ -1125,10 +1119,16 @@ async def check_path_permission(path: str, user: UserRecord, cursor: Optional[ai
         else:
             yield cursor
 
-    # check if path user exists
+    # check if path user exists, may raise exception
     async with this_cur() as cur:
         path_owner = await _get_path_owner(cur, path)
 
+    if user.id == 0:
+        return AccessLevel.GUEST
+    
+    if user.is_admin:
+        return AccessLevel.ALL
+    
     # check if user is admin or the owner of the path
     if user.id == path_owner.id:
         return AccessLevel.ALL

@@ -161,52 +161,111 @@ uploadFileNameInput.addEventListener('input', debounce(onFileNameInpuChange, 500
     window.addEventListener('drop', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const files = e.dataTransfer.files;
-        if (files.length == 1){
-            uploadFileSelector.files = files;
-            uploadFileNameInput.value = files[0].name;
+        const items = e.dataTransfer.items;
+        if (items.length == 1 && items[0].kind === 'file' && items[0].webkitGetAsEntry().isFile){
+            uploadFileSelector.files = e.dataTransfer.files;
+            uploadFileNameInput.value = e.dataTransfer.files[0].name;
             uploadFileNameInput.focus();
+            return;
         }
-        else if (files.length > 1){
-            let dstPath = store.dirpath + uploadFileNameInput.value;
-            if (!dstPath.endsWith('/')){ dstPath += '/'; }
-            if (!confirm(`
+
+        /** @type {[string, File][]} */
+        const uploadInputVal = uploadFileNameInput.value? uploadFileNameInput.value : '';
+        let dstPath = store.dirpath + uploadInputVal;
+        if (!dstPath.endsWith('/')){ dstPath += '/'; }
+
+        if (!confirm(`\
 You are trying to upload multiple files at once. 
 This will directly upload the files to the [${dstPath}] directory without renaming. 
 Note that same name files will be overwritten.
-Are you sure you want to proceed?
-                `)){ return; }
-            
-            let counter = 0;
-            async function uploadFileFn(...args){
-                const [file, path] = args;
-                try{
-                    await uploadFile(conn, path, file, {conflict: 'overwrite'});
-                }
-                catch (err){
-                    showPopup('Failed to upload file [' + file.name + ']: ' + err, {level: 'error', timeout: 5000});
-                }
-                counter += 1;
-                console.log("Uploading file: ", counter, "/", files.length);
+Are you sure you want to proceed?\
+        `)){ return; }
+
+
+        /** @param {DataTransferItem} item */
+        function inferFileType(item){
+            let ftype = '';
+            if (item.webkitGetAsEntry){
+                const entry = item.webkitGetAsEntry();
+                if (entry.isFile){ ftype = 'file'; }
+                if (entry.isDirectory){ ftype = 'directory'; }
             }
-            
-            let promises = [];
-            for (let i = 0; i < files.length; i++){
-                const file = files[i];
-                const path = dstPath + file.name;
-                promises.push(uploadFileFn(file, path));
-            }
-            showPopup('Uploading multiple files...', {level: 'info', timeout: 3000});
-            Promise.all(promises).then(
-                () => {
-                    showPopup('Upload success.', {level: 'success', timeout: 3000});
-                    refreshFileList();
-                }, 
-                (err) => {
-                    showPopup('Failed to upload some files: ' + err, {level: 'error', timeout: 5000});
+            else{
+                if (item.kind === 'file'){
+                    if (item.type === '' && item.size % 4096 === 0){
+                        // https://stackoverflow.com/a/25095250/24720063
+                        console.log("Infer directory from size", item);
+                        ftype = 'directory';
+                    }
+                    else{
+                        ftype = 'file';
+                    }
                 }
-            );
+            }
+            return ftype;
         }
+        /** 
+         * @param {FileSystemEntry} entry 
+         * @param {function(string, File): Promise<void>} uploadFn
+         */
+        async function handleOneEntry(entry, uploadFn){
+            if (entry.isFile){
+                const relPath = entry.fullPath.startsWith('/') ? entry.fullPath.slice(1) : entry.fullPath;
+                const file = await new Promise((resolve, reject) => {
+                    entry.file(resolve, reject);
+                });
+                await uploadFn(dstPath + relPath, file);
+            }
+            if (entry.isDirectory){
+                const reader = entry.createReader();
+                const entries = await new Promise((resolve, reject) => {
+                    reader.readEntries(resolve, reject);
+                });
+                for (let i = 0; i < entries.length; i++){
+                    await handleOneEntry(entries[i], uploadFn);
+                }
+            }
+        }
+
+        let counter = 0;
+        async function uploadFileFn(path, file){
+            // console.log("Uploading file", path, file);
+            counter += 1;
+            const this_count = counter;
+            try{
+                await uploadFile(conn, path, file, {conflict: 'overwrite'});
+            }
+            catch (err){
+                showPopup('Failed to upload file [' + file.name + ']: ' + err, {level: 'error', timeout: 5000});
+            }
+            console.log(`[${this_count}/${counter}] Uploaded file: ${path}`);
+        }
+
+        const promises = [];
+        for (let i = 0; i < items.length; i++){
+            const item = items[i];
+            const ftype = inferFileType(item);
+            if (ftype === 'file' || ftype === 'directory'){
+                promises.push(
+                    handleOneEntry(item.webkitGetAsEntry(), uploadFileFn)
+                )
+            }
+            else{
+                console.warn("Unknown file type", item);
+            }
+        }
+
+        showPopup('Uploading multiple files...', {level: 'info', timeout: 3000});
+        Promise.all(promises).then(
+            () => {
+                showPopup('Upload success.', {level: 'success', timeout: 3000});
+                refreshFileList();
+            }, 
+            (err) => {
+                showPopup('Failed to upload some files: ' + err, {level: 'error', timeout: 5000});
+            }
+        );
+
     });
 }
 

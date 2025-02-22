@@ -183,15 +183,17 @@ Are you sure you want to proceed?\
         `)){ return; }
 
         let counter = 0;
+        let totalCount = 0;
+        const uploadPopup = showPopup('Uploading multiple files...', {level: 'info', timeout: 999999});
         async function uploadFileFn(path, file){
-            const this_count = counter;
             try{
                 await uploadFile(conn, path, file, {conflict: 'overwrite'});
             }
             catch (err){
                 showPopup('Failed to upload file [' + file.name + ']: ' + err, {level: 'error', timeout: 5000});
             }
-            console.log(`[${this_count}/${counter}] Uploaded file: ${path}`);
+            console.log(`[${counter}/${totalCount}] Uploaded file: ${path}`);
+            uploadPopup.setContent(`Uploading multiple files... [${counter}/${totalCount}]`);
         }
 
         const promises = await forEachFile(e, async (relPath, filePromiseFn) => {
@@ -199,10 +201,11 @@ Are you sure you want to proceed?\
             const file = await filePromiseFn();
             await uploadFileFn(dstPath + relPath, file);
         });
+        totalCount = promises.length;
 
-        showPopup('Uploading multiple files...', {level: 'info', timeout: 3000});
         Promise.all(promises).then(
             () => {
+                window.setTimeout(uploadPopup.close, 3000);
                 showPopup('Upload success.', {level: 'success', timeout: 3000});
                 refreshFileList();
             }, 

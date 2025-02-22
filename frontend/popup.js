@@ -109,7 +109,14 @@ export function showPopup(content = '',  {
 } = {}){
     const popup = document.createElement("div");
     popup.classList.add("popup-window");
-    popup.innerHTML = showTime? `<span>[${new Date().toLocaleTimeString()}]</span> ${content}` : content;
+    /**
+     * @param {string} c
+     * @returns {void}
+     */
+    function setPopupContent(c){
+        popup.innerHTML = showTime? `<span>[${new Date().toLocaleTimeString()}]</span> ${c}` : c;
+    }
+    setPopupContent(content);
     popup.style.width = width;
     const popupHeight = '1rem';
     popup.style.height = popupHeight;
@@ -132,11 +139,19 @@ export function showPopup(content = '',  {
     if (level === "success") popup.style.backgroundColor = "darkgreen";
     document.body.appendChild(popup);
     shownPopups.push(popup);
-    window.setTimeout(() => {
+
+    function closePopup(){
         if (popup.parentNode) document.body.removeChild(popup);
         shownPopups.splice(shownPopups.indexOf(popup), 1);
         for (let i = 0; i < shownPopups.length; i++) {
             shownPopups[i].style.top = `${i * (parseInt(popupHeight) + 2*parseInt(paddingHeight))*1.2 + 0.5}rem`;
         }
-    }, timeout);
+    }
+
+    window.setTimeout(closePopup, timeout);
+    return {
+        elem: popup, 
+        setContent: setPopupContent, 
+        close: closePopup
+    }
 }

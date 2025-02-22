@@ -101,7 +101,7 @@ export function asHtmlText(text){
  * using the provided callback with a concurrency limit.
  *
  * @param {Event} e The drop event.
- * @param {(relPath: string, file: Promise<File>) => Promise<void>} callback A function
+ * @param {(relPath: string, file: () => Promise<File>) => Promise<void>} callback A function
  *        that receives the relative path and a promise for the File.
  * @param {number} [maxConcurrent=5] Maximum number of concurrent callback executions.
  * @returns {Promise<Promise<void>[]>} A promise resolving to an array of callback promises.
@@ -146,11 +146,10 @@ export async function forEachFile(e, callback, maxConcurrent = 16) {
     async function traverse(entry, path) {
         if (entry.isFile) {
             // Wrap file retrieval in a promise.
-            const filePromise = new Promise((resolve, reject) => {
-                entry.file(resolve, reject);
-            });
+            const filePromiseFn = () =>
+                new Promise((resolve, reject) => entry.file(resolve, reject));
             // Use the concurrency barrier for the callback invocation.
-            results.push(runWithLimit(() => callback(path + entry.name, filePromise)));
+            results.push(runWithLimit(() => callback(path + entry.name, filePromiseFn)));
         } else if (entry.isDirectory) {
             const reader = entry.createReader();
 

@@ -194,9 +194,9 @@ Are you sure you want to proceed?\
             console.log(`[${this_count}/${counter}] Uploaded file: ${path}`);
         }
 
-        const promises = await forEachFile(e, async (relPath, filePromise) => {
+        const promises = await forEachFile(e, async (relPath, filePromiseFn) => {
             counter += 1;
-            const file = await filePromise;
+            const file = await filePromiseFn();
             await uploadFileFn(dstPath + relPath, file);
         });
 

@@ -180,7 +180,7 @@ async def _get_dir_impl(
                 else:
                     raise HTTPException(status_code=404, detail="User not found")
             else:
-                if await FileConn(cur).count_path_files(path, flat=True) > 0:
+                if await FileConn(cur).count_dir_files(path, flat=True) > 0:
                     return Response(status_code=200)
                 else:
                     raise HTTPException(status_code=404, detail="Path not found")
@@ -295,7 +295,7 @@ async def delete_impl(path: str, user: UserRecord):
     logger.info(f"DELETE {path}, user: {user.username}")
 
     if path.endswith("/"):
-        res = await db.delete_path(path, user)
+        res = await db.delete_dir(path, user)
     else:
         res = await db.delete_file(path, user)
 
@@ -327,8 +327,8 @@ async def copy_impl(
     else:
         async with unique_cursor() as cur:
             fconn = FileConn(cur)
-            dst_fcount = await fconn.count_path_files(dst_path, flat=True)
+            dst_fcount = await fconn.count_dir_files(dst_path, flat=True)
         if dst_fcount > 0:
             raise HTTPException(status_code=409, detail="Destination exists")
-        await db.copy_path(src_path, dst_path, op_user)
+        await db.copy_dir(src_path, dst_path, op_user)
     return Response(status_code=201, content="OK")

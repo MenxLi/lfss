@@ -225,12 +225,12 @@ class FileConn(DBObjectBase):
             await self.cur.execute("SELECT username FROM user")
             res = await self.cur.fetchall()
             dirnames = [u[0] + '/' for u in res]
-            dirs = [await self.get_path_record(u) for u in dirnames] if not skim else [DirectoryRecord(u) for u in dirnames]
+            dirs = [await self.get_dir_record(u) for u in dirnames] if not skim else [DirectoryRecord(u) for u in dirnames]
             return dirs
         else:
             # list specific users
             dirnames = [uname + '/' for uname in usernames]
-            dirs = [await self.get_path_record(u) for u in dirnames] if not skim else [DirectoryRecord(u) for u in dirnames]
+            dirs = [await self.get_dir_record(u) for u in dirnames] if not skim else [DirectoryRecord(u) for u in dirnames]
             return dirs
     
     async def count_path_dirs(self, url: str):
@@ -278,11 +278,11 @@ class FileConn(DBObjectBase):
             if skim:
                 return DirectoryRecord(dir_url)
             else:
-                return await self.get_path_record(dir_url)
+                return await self.get_dir_record(dir_url)
         dirs = [await get_dir(url + d) for d in dirs_str]
         return dirs
     
-    async def count_path_files(self, url: str, flat: bool = False):
+    async def count_dir_files(self, url: str, flat: bool = False):
         if not url.endswith('/'): url += '/'
         if url == '/': url = ''
         if flat:
@@ -293,7 +293,7 @@ class FileConn(DBObjectBase):
         assert res is not None, "Error: count_path_files"
         return res[0]
 
-    async def list_path_files(
+    async def list_dir_files(
         self, url: str, 
         offset: int = 0, limit: int = 10_000, 
         order_by: FileSortKey = '', order_desc: bool = False,
@@ -328,15 +328,15 @@ class FileConn(DBObjectBase):
         """
         MAX_ITEMS = 10_000
         dir_count = await self.count_path_dirs(url)
-        file_count = await self.count_path_files(url, flat=False)
+        file_count = await self.count_dir_files(url, flat=False)
         if dir_count + file_count > MAX_ITEMS:
             raise TooManyItemsError("Too many items, please paginate")
         return PathContents(
             dirs = await self.list_path_dirs(url, skim=True, limit=MAX_ITEMS),
-            files = await self.list_path_files(url, flat=False, limit=MAX_ITEMS)
+            files = await self.list_dir_files(url, flat=False, limit=MAX_ITEMS)
             )
     
-    async def get_path_record(self, url: str) -> DirectoryRecord:
+    async def get_dir_record(self, url: str) -> DirectoryRecord:
         """
         Get the full record of a directory, including size, create_time, update_time, access_time etc.
         """
@@ -411,7 +411,6 @@ class FileConn(DBObjectBase):
         await self._user_size_inc(owner_id, file_size)
         self.logger.info(f"File {url} created")
 
-    # not tested
     async def copy_file(self, old_url: str, new_url: str, user_id: Optional[int] = None):
         old = await self.get_file_record(old_url)
         if old is None:
@@ -428,7 +427,7 @@ class FileConn(DBObjectBase):
         await self._user_size_inc(user_id, old.file_size)
         self.logger.info(f"Copied file {old_url} to {new_url}")
     
-    async def copy_path(self, old_url: str, new_url: str, user_id: Optional[int] = None):
+    async def copy_dir(self, old_url: str, new_url: str, user_id: Optional[int] = None):
         assert old_url.endswith('/'), "Old path must end with /"
         assert new_url.endswith('/'), "New path must end with /"
         if user_id is None:
@@ -461,7 +460,7 @@ class FileConn(DBObjectBase):
         await self.cur.execute("UPDATE fmeta SET url = ?, create_time = CURRENT_TIMESTAMP WHERE url = ?", (new_url, old_url))
         self.logger.info(f"Moved file {old_url} to {new_url}")
     
-    async def move_path(self, old_url: str, new_url: str, user_id: Optional[int] = None):
+    async def move_dir(self, old_url: str, new_url: str, user_id: Optional[int] = None):
         assert old_url.endswith('/'), "Old path must end with /"
         assert new_url.endswith('/'), "New path must end with /"
         if user_id is None:
@@ -500,7 +499,7 @@ class FileConn(DBObjectBase):
         self.logger.info(f"Deleted {len(ret)} file records for user {owner_id}") # type: ignore
         return ret
     
-    async def delete_path_records(self, path: str, under_owner_id: Optional[int] = None) -> list[FileRecord]:
+    async def delete_records_by_prefix(self, path: str, under_owner_id: Optional[int] = None) -> list[FileRecord]:
         """Delete all records with url starting with path"""
         # update user size
         cursor = await self.cur.execute("SELECT DISTINCT owner_id FROM fmeta WHERE url LIKE ?", (path + '%', ))
@@ -689,7 +688,7 @@ async def delayed_log_access(url: str):
         ])
     ),
 )
-def validate_url(url: str, is_file = True):
+def validate_url(url: str, utype: Literal['file', 'dir'] = 'file'):
     """ Check if a path is valid. The input path is considered url safe """
     if len(url) > 1024: 
         raise InvalidPathError(f"URL too long: {url}")
@@ -703,7 +702,7 @@ def validate_url(url: str, is_file = True):
             is_valid = False
             break
 
-    if is_file: is_valid = is_valid and not url.endswith('/')
+    if utype == 'file': is_valid = is_valid and not url.endswith('/')
     else: is_valid = is_valid and url.endswith('/')
 
     if not is_valid: 
@@ -885,9 +884,9 @@ class Database:
                     raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot copy file to {new_url}")
             await fconn.copy_file(old_url, new_url, user_id=op_user.id if op_user is not None else None)
     
-    async def move_path(self, old_url: str, new_url: str, op_user: UserRecord):
-        validate_url(old_url, is_file=False)
-        validate_url(new_url, is_file=False)
+    async def move_dir(self, old_url: str, new_url: str, op_user: UserRecord):
+        validate_url(old_url, 'dir')
+        validate_url(new_url, 'dir')
 
         if new_url.startswith('/'):
             new_url = new_url[1:]
@@ -906,12 +905,11 @@ class Database:
 
         async with transaction() as cur:
             fconn = FileConn(cur)
-            await fconn.move_path(old_url, new_url, op_user.id)
+            await fconn.move_dir(old_url, new_url, op_user.id)
     
-    # not tested
-    async def copy_path(self, old_url: str, new_url: str, op_user: UserRecord):
-        validate_url(old_url, is_file=False)
-        validate_url(new_url, is_file=False)
+    async def copy_dir(self, old_url: str, new_url: str, op_user: UserRecord):
+        validate_url(old_url, 'dir')
+        validate_url(new_url, 'dir')
         
         if new_url.startswith('/'):
             new_url = new_url[1:]
@@ -930,7 +928,7 @@ class Database:
         
         async with transaction() as cur:
             fconn = FileConn(cur)
-            await fconn.copy_path(old_url, new_url, op_user.id)
+            await fconn.copy_dir(old_url, new_url, op_user.id)
 
     async def __batch_delete_file_blobs(self, fconn: FileConn, file_records: list[FileRecord], batch_size: int = 512):
         # https://github.com/langchain-ai/langchain/issues/10321
@@ -951,13 +949,13 @@ class Database:
         await del_internal()
         await del_external()
 
-    async def delete_path(self, url: str, op_user: Optional[UserRecord] = None) -> Optional[list[FileRecord]]:
-        validate_url(url, is_file=False)
+    async def delete_dir(self, url: str, op_user: Optional[UserRecord] = None) -> Optional[list[FileRecord]]:
+        validate_url(url, 'dir')
         from_owner_id = op_user.id if op_user is not None and not (op_user.is_admin or await check_path_permission(url, op_user) >= AccessLevel.WRITE) else None
 
         async with transaction() as cur:
             fconn = FileConn(cur)
-            records = await fconn.delete_path_records(url, from_owner_id)
+            records = await fconn.delete_records_by_prefix(url, from_owner_id)
             if not records:
                 return None
             await self.__batch_delete_file_blobs(fconn, records)
@@ -981,14 +979,15 @@ class Database:
 
             # make sure the user's directory is deleted, 
             # may contain admin's files, but delete them all
-            await fconn.delete_path_records(user.username + '/')
+            await fconn.delete_records_by_prefix(user.username + '/')
     
-    async def iter_path(self, top_url: str, urls: Optional[list[str]]) -> AsyncIterable[tuple[FileRecord, bytes | AsyncIterable[bytes]]]:
+    async def iter_dir(self, top_url: str, urls: Optional[list[str]]) -> AsyncIterable[tuple[FileRecord, bytes | AsyncIterable[bytes]]]:
+        validate_url(top_url, 'dir')
         async with unique_cursor() as cur:
             fconn = FileConn(cur)
             if urls is None:
-                fcount = await fconn.count_path_files(top_url, flat=True)
-                urls = [r.url for r in (await fconn.list_path_files(top_url, flat=True, limit=fcount))]
+                fcount = await fconn.count_dir_files(top_url, flat=True)
+                urls = [r.url for r in (await fconn.list_dir_files(top_url, flat=True, limit=fcount))]
 
             for url in urls:
                 if not url.startswith(top_url):
@@ -1003,7 +1002,7 @@ class Database:
                     blob = await fconn.get_file_blob(f_id)
                 yield r, blob
     
-    async def zip_path_stream(self, top_url: str, op_user: Optional[UserRecord] = None) -> AsyncIterable[bytes]:
+    async def zip_dir_stream(self, top_url: str, op_user: Optional[UserRecord] = None) -> AsyncIterable[bytes]:
         from stat import S_IFREG
         from stream_zip import async_stream_zip, ZIP_64
         if top_url.startswith('/'):
@@ -1015,7 +1014,7 @@ class Database:
         
         # https://stream-zip.docs.trade.gov.uk/async-interface/
         async def data_iter():
-            async for (r, blob) in self.iter_path(top_url, None):
+            async for (r, blob) in self.iter_dir(top_url, None):
                 rel_path = r.url[len(top_url):]
                 rel_path = decode_uri_compnents(rel_path)
                 b_iter: AsyncIterable[bytes]
@@ -1035,7 +1034,7 @@ class Database:
         return async_stream_zip(data_iter())
 
     @concurrent_wrap()
-    async def zip_path(self, top_url: str, op_user: Optional[UserRecord]) -> io.BytesIO:
+    async def zip_dir(self, top_url: str, op_user: Optional[UserRecord]) -> io.BytesIO:
         if top_url.startswith('/'):
             top_url = top_url[1:]
         
@@ -1045,7 +1044,7 @@ class Database:
         
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, 'w') as zf:
-            async for (r, blob) in self.iter_path(top_url, None):
+            async for (r, blob) in self.iter_dir(top_url, None):
                 rel_path = r.url[len(top_url):]
                 rel_path = decode_uri_compnents(rel_path)
                 if r.external:

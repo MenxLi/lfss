@@ -90,13 +90,13 @@ async def bundle_files(path: str, user: UserRecord = Depends(registered_user)):
         raise HTTPException(status_code=400, detail="Cannot bundle root")
     
     async with unique_cursor() as cur:
-        dir_record = await FileConn(cur).get_path_record(path)
+        dir_record = await FileConn(cur).get_dir_record(path)
 
     pathname = f"{path.split('/')[-2]}"
 
     if dir_record.size < MAX_MEM_FILE_BYTES:
         logger.debug(f"Bundle {path} in memory")
-        dir_bytes = (await db.zip_path(path, op_user=user)).getvalue()
+        dir_bytes = (await db.zip_dir(path, op_user=user)).getvalue()
         return Response(
             content = dir_bytes,
             media_type = "application/zip",
@@ -109,7 +109,7 @@ async def bundle_files(path: str, user: UserRecord = Depends(registered_user)):
     else:
         logger.debug(f"Bundle {path} in stream")
         return StreamingResponse(
-            content = await db.zip_path_stream(path, op_user=user),
+            content = await db.zip_dir_stream(path, op_user=user),
             media_type = "application/zip",
             headers = {
                 f"Content-Disposition": f"attachment; filename=bundle-{pathname}.zip",
@@ -134,7 +134,7 @@ async def get_file_meta(path: str, user: UserRecord = Depends(registered_user)):
         else:
             if await check_path_permission(path, user, cursor=cur) < AccessLevel.READ:
                 raise HTTPException(status_code=403, detail="Permission denied")
-            record = await fconn.get_path_record(path)
+            record = await fconn.get_dir_record(path)
     return record
 
 @router_api.post("/meta")
@@ -171,7 +171,7 @@ async def update_file_meta(
             new_path = ensure_uri_compnents(new_path)
             logger.info(f"Update path of {path} to {new_path}")
             # will raise duplicate path error if same name path exists in the new path
-            await db.move_path(path, new_path, user)
+            await db.move_dir(path, new_path, user)
 
     return Response(status_code=200, content="OK")
 
@@ -194,7 +194,7 @@ async def count_files(path: str, flat: bool = False, user: UserRecord = Depends(
     path = ensure_uri_compnents(path)
     async with unique_cursor() as conn:
         fconn = FileConn(conn)
-        return { "count": await fconn.count_path_files(url = path, flat = flat) }
+        return { "count": await fconn.count_dir_files(url = path, flat = flat) }
 @router_api.get("/list-files")
 async def list_files(
     path: str, offset: int = 0, limit: int = 1000,
@@ -205,7 +205,7 @@ async def list_files(
     path = ensure_uri_compnents(path)
     async with unique_cursor() as conn:
         fconn = FileConn(conn)
-        return await fconn.list_path_files(
+        return await fconn.list_dir_files(
             url = path, offset = offset, limit = limit,
             order_by=order_by, order_desc=order_desc, 
             flat=flat

@@ -57,9 +57,9 @@ async def eval_path(path: str) -> tuple[ptype, str, Optional[FileRecord | Direct
         if len(dir_path_sp) > 2:
             async with unique_cursor() as c:
                 fconn = FileConn(c)
-                if await fconn.count_path_files(path, flat=True) == 0:
+                if await fconn.count_dir_files(path, flat=True) == 0:
                     return None, lfss_path, None
-                return "dir", lfss_path, await fconn.get_path_record(path)
+                return "dir", lfss_path, await fconn.get_dir_record(path)
         else:
             # test if its a user's root directory
             assert len(dir_path_sp) == 2
@@ -85,8 +85,8 @@ async def eval_path(path: str) -> tuple[ptype, str, Optional[FileRecord | Direct
     async with unique_cursor() as c:
         lfss_path = path + "/"
         fconn = FileConn(c)
-        if await fconn.count_path_files(lfss_path) > 0:
-            return "dir", lfss_path, await fconn.get_path_record(lfss_path)
+        if await fconn.count_dir_files(lfss_path) > 0:
+            return "dir", lfss_path, await fconn.get_dir_record(lfss_path)
     
     return None, path, None
 
@@ -235,7 +235,7 @@ async def dav_propfind(request: Request, path: str, user: UserRecord = Depends(r
         # query root directory content
         async def user_path_record(user_name: str, cur) -> DirectoryRecord:
             try:
-                return await FileConn(cur).get_path_record(user_name + "/")
+                return await FileConn(cur).get_dir_record(user_name + "/")
             except PathNotFoundError:
                 return DirectoryRecord(user_name + "/", size=0, n_files=0, create_time="1970-01-01 00:00:00", update_time="1970-01-01 00:00:00", access_time="1970-01-01 00:00:00")
 
@@ -253,7 +253,7 @@ async def dav_propfind(request: Request, path: str, user: UserRecord = Depends(r
     elif path_type == "dir":
         # query directory content
         async with unique_cursor() as c:
-            flist = await FileConn(c).list_path_files(lfss_path, flat = True if depth == "infinity" else False)
+            flist = await FileConn(c).list_dir_files(lfss_path, flat = True if depth == "infinity" else False)
         for frecord in flist:
             if frecord.url.endswith(f"/{MKDIR_PLACEHOLDER}"): continue
             file_el = await create_file_xml_element(frecord)
@@ -315,7 +315,7 @@ async def dav_move(request: Request, path: str, user: UserRecord = Depends(regis
         assert ptype == "dir", "Directory path should end with /"
         assert lfss_path.endswith("/"), "Directory path should end with /"
         if not dlfss_path.endswith("/"): dlfss_path += "/"  # the header destination may not end with /
-        await db.move_path(lfss_path, dlfss_path, user)
+        await db.move_dir(lfss_path, dlfss_path, user)
     return Response(status_code=201)
 
 @router_dav.api_route("/{path:path}", methods=["COPY"])

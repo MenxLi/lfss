@@ -3,7 +3,6 @@ import { createFloatingWindow, showPopup } from "./popup.js";
 
 /**
  * @import { store } from "./state.js";
- * @import { UserRecord } from "./api.js";
  * 
  * Shows the login panel if necessary.
  * @param {store} store - The store object.

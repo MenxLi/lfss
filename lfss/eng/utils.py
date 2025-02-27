@@ -11,7 +11,6 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TypeVar, Callable, Awaitable
 from functools import wraps, partial
 from uuid import uuid4
-import os
 
 async def copy_file(source: str|pathlib.Path, destination: str|pathlib.Path):
     async with aiofiles.open(source, mode='rb') as src:
@@ -160,7 +159,7 @@ _g_executor = None
 def get_global_executor():
     global _g_executor
     if _g_executor is None:
-        _g_executor = ThreadPoolExecutor(max_workers=4 if (cpu_count:=os.cpu_count()) and cpu_count > 4 else cpu_count)
+        _g_executor = ThreadPoolExecutor()
     return _g_executor
 def async_wrap(executor=None):
     if executor is None:

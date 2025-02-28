@@ -2,7 +2,7 @@
 Vacuum the database and external storage to ensure that the storage is consistent and minimal.
 """
 
-from lfss.eng.config import LARGE_BLOB_DIR, THUMB_DB
+from lfss.eng.config import LARGE_BLOB_DIR, THUMB_DB, LOG_DIR
 import argparse, time, itertools
 from functools import wraps
 from asyncio import Semaphore
@@ -14,6 +14,7 @@ from lfss.eng.database import transaction, unique_cursor
 from lfss.svc.request_log import RequestDB
 from lfss.eng.utils import now_stamp
 from lfss.eng.connection_pool import global_entrance
+from lfss.cli.log import trim
 
 sem: Semaphore
 
@@ -33,7 +34,7 @@ def barriered(func):
     return wrapper
 
 @global_entrance()
-async def vacuum_main(index: bool = False, blobs: bool = False, thumbs: bool = False, vacuum_all: bool = False):
+async def vacuum_main(index: bool = False, blobs: bool = False, thumbs: bool = False, logs: bool = False, vacuum_all: bool = False):
 
     # check if any file in the Large Blob directory is not in the database
     # the reverse operation is not necessary, because by design, the database should be the source of truth...
@@ -72,6 +73,11 @@ async def vacuum_main(index: bool = False, blobs: bool = False, thumbs: bool = F
         with indicator("VACUUM-blobs"):
             async with unique_cursor(is_write=True) as c:
                 await c.execute("VACUUM blobs")
+    
+    if logs or vacuum_all:
+        with indicator("VACUUM-logs"):
+            for log_file in LOG_DIR.glob("*.log.db"):
+                trim(str(log_file), keep=10_000)
     
     if thumbs or vacuum_all:
         try:
@@ -123,9 +129,10 @@ def main():
     parser.add_argument("-d", "--data", action="store_true", help="Vacuum blobs")
     parser.add_argument("-t", "--thumb", action="store_true", help="Vacuum thumbnails")
     parser.add_argument("-r", "--requests", action="store_true", help="Vacuum request logs to only keep at most recent 1M rows in 7 days")
+    parser.add_argument("-l", "--logs", action="store_true", help="Trim log to keep at most recent 10k rows for each category")
     args = parser.parse_args()
     sem = Semaphore(args.jobs)
-    asyncio.run(vacuum_main(index=args.metadata, blobs=args.data, thumbs=args.thumb, vacuum_all=args.all))
+    asyncio.run(vacuum_main(index=args.metadata, blobs=args.data, thumbs=args.thumb, logs = args.logs, vacuum_all=args.all))
 
     if args.requests or args.all:
         asyncio.run(vacuum_requests())

@@ -1,4 +1,4 @@
-from .config import DATA_HOME
+from .config import LOG_DIR
 import time, sqlite3, dataclasses
 from typing import TypeVar, Callable, Literal, Optional
 from concurrent.futures import ThreadPoolExecutor
@@ -67,6 +67,7 @@ class SQLiteFileHandler(logging.FileHandler):
         self._flush_interval = 10
         self._last_flush = time.time()
         conn = sqlite3.connect(self._db_file, check_same_thread=False)
+        conn.execute('PRAGMA journal_mode=WAL')
         conn.execute('''
             CREATE TABLE IF NOT EXISTS log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -128,7 +129,7 @@ _fh_T = Literal['rotate', 'simple', 'daily', 'sqlite']
 __g_logger_dict: dict[str, BaseLogger] = {}
 def get_logger(
     name = 'default', 
-    log_home = pathlib.Path(DATA_HOME) / 'logs', 
+    log_home = LOG_DIR, 
     level = 'DEBUG',
     term_level = 'INFO',
     file_handler_type: _fh_T = 'sqlite', 

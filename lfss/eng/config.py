@@ -11,6 +11,7 @@ if not DATA_HOME.exists():
 DATA_HOME = DATA_HOME.resolve().absolute()
 LARGE_BLOB_DIR = DATA_HOME / 'large_blobs'
 LARGE_BLOB_DIR.mkdir(exist_ok=True)
+LOG_DIR = DATA_HOME / 'logs'
 
 # https://sqlite.org/fasterthanfs.html
 __env_large_file = os.environ.get('LFSS_LARGE_FILE', None)

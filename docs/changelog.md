@@ -1,3 +1,30 @@
+## 0.11
+
+### 0.11.2
+- Improve frontend directory upload feedback. 
+- Set default large file threashold to 1M. 
+- Increase default concurrent threads. 
+- Use sqlite for logging.
+- Add vacuum logs. 
+- Refactor: use dir for directory path. 
+
+### 0.11.1
+- Rename api `get_meta` function.
+- Frontend support upload directory.  
+- Fix admin put to non-exists user path. 
+
+### 0.11.0
+- Copy file as hard link. 
+- Add vacuum thumb and all.
+- Thumb database use file_id as index. 
+- improve username and url check with regular expression.
+
+## 0.10
+
+### 0.10.0
+- Inherit permission from path owner for `unset` permission files.
+- Add timeout and verify options for client api.
+- Bundle small files in memory.
 
 ## 0.9
 

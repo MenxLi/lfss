@@ -19,6 +19,7 @@ uvicorn = "0.*"
 stream-zip = "0.*"
 python-multipart = "*"
 pillow = "*"
+rich = "*"
 
 [tool.poetry.dev-dependencies]
 pytest = "*"
@@ -32,6 +33,7 @@ lfss-panel = "lfss.cli.panel:main"
 lfss-cli = "lfss.cli.cli:main"
 lfss-vacuum = "lfss.cli.vacuum:main"
 lfss-balance = "lfss.cli.balance:main"
+lfss-log = "lfss.cli.log:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

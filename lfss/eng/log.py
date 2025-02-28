@@ -1,4 +1,5 @@
 from .config import DATA_HOME
+import time, sqlite3, dataclasses
 from typing import TypeVar, Callable, Literal, Optional
 from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
@@ -57,7 +58,72 @@ class BaseLogger(logging.Logger):
     @thread_wrap
     def error(self, *args, **kwargs): super().error(*args, **kwargs)
 
-_fh_T = Literal['rotate', 'simple', 'daily']
+class SQLiteFileHandler(logging.FileHandler):
+    def __init__(self, filename, *args, **kwargs):
+        super().__init__(filename, *args, **kwargs)
+        self._db_file = filename
+        self._buffer: list[logging.LogRecord] = []
+        self._buffer_size = 100
+        self._flush_interval = 10
+        self._last_flush = time.time()
+        conn = sqlite3.connect(self._db_file, check_same_thread=False)
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created TIMESTAMP,
+                created_epoch FLOAT,
+                name TEXT,
+                levelname VARCHAR(16),
+                level INTEGER,
+                message TEXT
+            )
+        ''')
+        conn.commit()
+        conn.close()
+    
+    def flush(self): 
+        def format_time(self, record: logging.LogRecord):
+            """ Create a time stamp """
+            return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(record.created))
+        self.acquire()
+        try:
+            conn = sqlite3.connect(self._db_file, check_same_thread=False)
+            conn.executemany('''
+                INSERT INTO log (created, created_epoch, name, levelname, level, message)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', [
+                (format_time(self, record), record.created, record.name, record.levelname, record.levelno, record.getMessage())
+                for record in self._buffer
+            ])
+            conn.commit()
+            conn.close()
+            self._buffer.clear()
+            self._last_flush = time.time()
+        finally:
+            self.release()
+
+    def emit(self, record: logging.LogRecord):
+        self._buffer.append(record)
+        if len(self._buffer) > self._buffer_size or time.time() - self._last_flush > self._flush_interval:
+            self.flush()
+    
+    def close(self):
+        self.flush()
+        return super().close()
+
+def eval_logline(row: sqlite3.Row):
+    @dataclasses.dataclass
+    class DBLogRecord:
+        id: int
+        created: str
+        created_epoch: float
+        name: str
+        levelname: str
+        level: int
+        message: str
+    return DBLogRecord(*row)
+
+_fh_T = Literal['rotate', 'simple', 'daily', 'sqlite']
 
 __g_logger_dict: dict[str, BaseLogger] = {}
 def get_logger(
@@ -65,7 +131,7 @@ def get_logger(
     log_home = pathlib.Path(DATA_HOME) / 'logs', 
     level = 'DEBUG',
     term_level = 'INFO',
-    file_handler_type: _fh_T = 'rotate', 
+    file_handler_type: _fh_T = 'sqlite', 
     global_instance = True
     )->BaseLogger:
     if global_instance and name in __g_logger_dict:
@@ -100,6 +166,8 @@ def get_logger(
             file_handler = handlers.RotatingFileHandler(
                 log_file, maxBytes=1024*1024, backupCount=5
             )
+        elif file_handler_type == 'sqlite':
+            file_handler = SQLiteFileHandler(log_file if log_file.suffix == '.db' else log_file.with_suffix('.log.db'))
 
         file_handler.setFormatter(formatter_plain)
         logger.addHandler(file_handler)

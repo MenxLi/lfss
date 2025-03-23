@@ -412,6 +412,10 @@ class FileConn(DBObjectBase):
         self.logger.info(f"File {url} created")
 
     async def copy_file(self, old_url: str, new_url: str, user_id: Optional[int] = None):
+        """
+        Copy file from old_url to new_url, 
+        if user_id is None, will not change the owner_id of the file. Otherwise, will change the owner_id to user_id.
+        """
         old = await self.get_file_record(old_url)
         if old is None:
             raise FileNotFoundError(f"File {old_url} not found")
@@ -428,14 +432,14 @@ class FileConn(DBObjectBase):
         self.logger.info(f"Copied file {old_url} to {new_url}")
     
     async def copy_dir(self, old_url: str, new_url: str, user_id: Optional[int] = None):
+        """
+        Copy all files under old_url to new_url, 
+        if user_id is None, will not change the owner_id of the files. Otherwise, will change the owner_id to user_id.
+        """
         assert old_url.endswith('/'), "Old path must end with /"
         assert new_url.endswith('/'), "New path must end with /"
-        if user_id is None:
-            cursor = await self.cur.execute("SELECT * FROM fmeta WHERE url LIKE ?", (old_url + '%', ))
-            res = await cursor.fetchall()
-        else:
-            cursor = await self.cur.execute("SELECT * FROM fmeta WHERE url LIKE ? AND owner_id = ?", (old_url + '%', user_id))
-            res = await cursor.fetchall()
+        cursor = await self.cur.execute("SELECT * FROM fmeta WHERE url LIKE ?", (old_url + '%', ))
+        res = await cursor.fetchall()
         for r in res:
             old_record = FileRecord(*r)
             new_r = new_url + old_record.url[len(old_url):]

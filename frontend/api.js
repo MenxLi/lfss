@@ -149,6 +149,24 @@ export default class Connector {
         return (await res.json()).url;
     }
 
+    /**
+     * @param {string} path - the path to the file (url), should have content type application/json
+     * @returns {Promise<Object>} - return the json object
+    */
+    async getJson(path){
+        if (path.startsWith('/')){ path = path.slice(1); }
+        const res = await fetch(this.config.endpoint + '/' + path, {
+            method: 'GET',
+            headers: {
+             "Authorization": 'Bearer ' + this.config.token
+            },
+        });
+        if (res.status != 200){
+            throw new Error(`Failed to get object, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
+        }
+        return await res.json();
+    }
+
     async delete(path){
         if (path.startsWith('/')){ path = path.slice(1); }
         const res = await fetch(this.config.endpoint + '/' + path, {

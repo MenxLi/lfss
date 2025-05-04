@@ -26,4 +26,4 @@ CHUNK_SIZE = 1024 * 1024   # 1MB chunks for streaming (on large files)
 DEBUG_MODE = os.environ.get('LFSS_DEBUG', '0') == '1'
 
 THUMB_DB = DATA_HOME / 'thumbs.v0-11.db'
-THUMB_SIZE = (48, 48)
+THUMB_SIZE = (64, 64)

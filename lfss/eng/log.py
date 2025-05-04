@@ -1,9 +1,9 @@
-from .config import LOG_DIR
+from .config import LOG_DIR, DISABLE_LOGGING
 import time, sqlite3, dataclasses
 from typing import TypeVar, Callable, Literal, Optional
 from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
-import logging, pathlib, asyncio
+import logging, asyncio
 from logging import handlers
 
 class BCOLORS:
@@ -154,24 +154,25 @@ def get_logger(
             if isinstance(color, str) and color.startswith('\033'):
                 format_str_plain = format_str_plain.replace(color, '')
 
-        formatter_plain = logging.Formatter(format_str_plain)
-        log_home.mkdir(exist_ok=True)
-        log_file = log_home / f'{name}.log'
-        if file_handler_type == 'simple':
-            file_handler = logging.FileHandler(log_file)
-        elif file_handler_type == 'daily':
-            file_handler = handlers.TimedRotatingFileHandler(
-                log_file, when='midnight', interval=1, backupCount=30
-            )
-        elif file_handler_type == 'rotate':
-            file_handler = handlers.RotatingFileHandler(
-                log_file, maxBytes=1024*1024, backupCount=5
-            )
-        elif file_handler_type == 'sqlite':
-            file_handler = SQLiteFileHandler(log_file if log_file.suffix == '.db' else log_file.with_suffix('.log.db'))
+        if not DISABLE_LOGGING:
+            formatter_plain = logging.Formatter(format_str_plain)
+            log_home.mkdir(exist_ok=True)
+            log_file = log_home / f'{name}.log'
+            if file_handler_type == 'simple':
+                file_handler = logging.FileHandler(log_file)
+            elif file_handler_type == 'daily':
+                file_handler = handlers.TimedRotatingFileHandler(
+                    log_file, when='midnight', interval=1, backupCount=30
+                )
+            elif file_handler_type == 'rotate':
+                file_handler = handlers.RotatingFileHandler(
+                    log_file, maxBytes=1024*1024, backupCount=5
+                )
+            elif file_handler_type == 'sqlite':
+                file_handler = SQLiteFileHandler(log_file if log_file.suffix == '.db' else log_file.with_suffix('.log.db'))
 
-        file_handler.setFormatter(formatter_plain)
-        logger.addHandler(file_handler)
+            file_handler.setFormatter(formatter_plain)
+            logger.addHandler(file_handler)
     
     logger = BaseLogger(name)
     setupLogger(logger)

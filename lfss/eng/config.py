@@ -13,6 +13,8 @@ LARGE_BLOB_DIR = DATA_HOME / 'large_blobs'
 LARGE_BLOB_DIR.mkdir(exist_ok=True)
 LOG_DIR = DATA_HOME / 'logs'
 
+DISABLE_LOGGING = os.environ.get('DISABLE_LOGGING', '0') == '1'
+
 # https://sqlite.org/fasterthanfs.html
 __env_large_file = os.environ.get('LFSS_LARGE_FILE', None)
 if __env_large_file is not None:

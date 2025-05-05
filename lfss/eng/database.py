@@ -835,36 +835,56 @@ class Database:
         ret = blob_stream()
         return ret
     
-    async def read_files_bulk(self, urls: list[str]) -> dict[str, bytes]:
+    async def read_files_bulk(
+        self, urls: list[str], 
+        skip_content = False, 
+        op_user: Optional[UserRecord] = None, 
+        ) -> dict[str, bytes]:
         """
         A frequent use case is to read multiple files at once, 
         this method will read all files in the list and return a dict of url -> blob.
         if the file is not found, it will be skipped.
+        - skip_content: if True, will not read the content of the file, resulting in a dict of url -> b''
+
         may raise StorageExceededError if the total size of the files exceeds MAX_MEM_FILE_BYTES
         """
         for url in urls:
             validate_url(url)
-
-        # first check if the files are too big
+        
         async with unique_cursor() as cur:
             fconn = FileConn(cur)
             file_records = await fconn.get_file_records(urls)
+
+            if op_user is not None:
+                for r in file_records:
+                    if await check_path_permission(r.url, op_user, cursor=cur) >= AccessLevel.READ:
+                        continue
+                    is_allowed, reason = await check_file_read_permission(op_user, r, cursor=cur)
+                    if not is_allowed:
+                        raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot read file {r.url}: {reason}")
+
+        # first check if the files are too big
         sum_size = sum([r.file_size for r in file_records])
-        if sum_size > MAX_MEM_FILE_BYTES:
+        if not skip_content and sum_size > MAX_MEM_FILE_BYTES:
             raise StorageExceededError(f"Unable to read files at once, total size {sum_size} exceeds {MAX_MEM_FILE_BYTES}")
         
-        self.logger.debug(f"Reading {len(file_records)} files, getting {sum_size} bytes, from {urls}")
-        # read the files
+        self.logger.debug(f"Reading {len(file_records)} files{' (skip content)' if skip_content else ''}, getting {sum_size} bytes, from {urls}")
+        # read the file content
         async with unique_cursor() as cur:
             fconn = FileConn(cur)
             blobs: dict[str, bytes] = {}
             for r in file_records:
+                if skip_content:
+                    blobs[r.url] = b''
+                    continue
+
                 if r.external:
                     blob_iter = fconn.get_file_blob_external(r.file_id)
                     blob = b''.join([chunk async for chunk in blob_iter])
                 else:
                     blob = await fconn.get_file_blob(r.file_id)
                 blobs[r.url] = blob
+
             return blobs
 
     async def delete_file(self, url: str, op_user: Optional[UserRecord] = None) -> Optional[FileRecord]:

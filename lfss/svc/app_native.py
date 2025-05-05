@@ -238,6 +238,7 @@ async def list_dirs(
 @handle_exception
 async def get_multiple_files(
     path: Annotated[list[str], Query()], 
+    skip_content: bool = False,
     user: UserRecord = Depends(registered_user)
     ):
     """
@@ -250,13 +251,9 @@ async def get_multiple_files(
         if p.endswith("/"):
             raise HTTPException(status_code=400, detail="Path must not end with /")
     path = [ensure_uri_compnents(path) for path in path]
-    # check permission for all paths
-    async with unique_cursor() as conn:
-        for p in path:
-            if await check_path_permission(p, user, cursor=conn) < AccessLevel.READ:
-                raise HTTPException(status_code=403, detail="Permission denied for path: " + p)
+
     # get files
-    res = await db.read_files_bulk(path)
+    res = await db.read_files_bulk(path, skip_content=skip_content, op_user=user)
     for k in res.keys():
         await delayed_log_access(k)
     partial_content = len(res) != len(path)

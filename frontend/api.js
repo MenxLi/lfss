@@ -69,6 +69,10 @@ export default class Connector {
     /**
     * @param {string} path - the path to the file (url)
     * @param {File} file - the file to upload
+    * @param {Object} [options] - Optional upload configuration.
+    * @param {'abort' | 'overwrite' | 'skip'} [options.conflict='abort'] - Conflict resolution strategy:  
+    * `'abort'` to cancel and raise 409, `'overwrite'` to replace.
+    * @param {number} [options.permission=0] - Optional permission setting for the file (refer to backend impl).
     * @returns {Promise<string>} - the promise of the request, the url of the file
     */
     async put(path, file, {
@@ -96,8 +100,12 @@ export default class Connector {
     }
 
     /**
-    * @param {string} path - the path to the file (url)
+    * @param {string} path - the path to the file (url), should end with .json
     * @param {File} file - the file to upload
+    * @param {Object} [options] - Optional upload configuration.
+    * @param {'abort' | 'overwrite' | 'skip'} [options.conflict='abort'] - Conflict resolution strategy:  
+    * `'abort'` to cancel and raise 409, `'overwrite'` to replace, `'skip'` to ignore if already exists.
+    * @param {number} [options.permission=0] - Optional permission setting for the file (refer to backend impl).
     * @returns {Promise<string>} - the promise of the request, the url of the file
     */
     async post(path, file, {
@@ -129,13 +137,23 @@ export default class Connector {
 
     /**
     * @param {string} path - the path to the file (url), should end with .json
-    * @param {Objec} data - the data to upload
+    * @param {Object} data - the data to upload
+    * @param {Object} [options] - Optional upload configuration.
+    * @param {'abort' | 'overwrite' | 'skip'} [options.conflict='abort'] - Conflict resolution strategy:  
+    * `'abort'` to cancel and raise 409, `'overwrite'` to replace, `'skip'` to ignore if already exists.
+    * @param {number} [options.permission=0] - Optional permission setting for the file (refer to backend impl).
     * @returns {Promise<string>} - the promise of the request, the url of the file
     */
-    async putJson(path, data){
+    async putJson(path, data, {
+        conflict = "overwrite", 
+        permission = 0
+    } = {}){
         if (!path.endsWith('.json')){ throw new Error('Upload object must end with .json'); }
         if (path.startsWith('/')){ path = path.slice(1); }
-        const res = await fetch(this.config.endpoint + '/' + path, {
+        const dst = new URL(this.config.endpoint + '/' + path);
+        dst.searchParams.append('conflict', conflict);
+        dst.searchParams.append('permission', permission);
+        const res = await fetch(dst.toString(), {
             method: 'PUT',
             headers: {
                 'Authorization': 'Bearer ' + this.config.token,
@@ -169,10 +187,15 @@ export default class Connector {
 
     /**
      * @param {string[]} paths - the paths to the files (url), should have content type plain/text, application/json, etc.
+     * @param {Object} [options] - Optional configuration.
+     * @param {boolean} [options.skipContent=false] - If true, skips fetching content and returns a record of <path, ''>.
      * @returns {Promise<Record<string, string>>} - return the mapping of path to text content, non-existing paths will be ignored
      */
-    async getMultipleText(paths){
+    async getMultipleText(paths, {
+        skipContent = false
+    } = {}){
         const url = new URL(this.config.endpoint + '/_api/get-multiple');
+        url.searchParams.append('skip_content', skipContent);
         for (const path of paths){
             url.searchParams.append('path', path);
         }

@@ -76,7 +76,11 @@ class Connector:
             path = path[1:]
         path = ensure_uri_compnents(path)
         def f(**kwargs):
-            url = f"{self.config['endpoint']}/{path}" + "?" + urllib.parse.urlencode(search_params, doseq=True)
+            search_params_t = [
+                (k, str(v).lower() if isinstance(v, bool) else v)
+                for k, v in search_params.items()
+            ]   # tuple form
+            url = f"{self.config['endpoint']}/{path}" + "?" + urllib.parse.urlencode(search_params_t, doseq=True)
             headers: dict = kwargs.pop('headers', {})
             headers.update({
                 'Authorization': f"Bearer {self.config['token']}",
@@ -207,9 +211,12 @@ class Connector:
         assert response.headers['Content-Type'] == 'application/json'
         return response.json()
     
-    def get_multiple_text(self, *paths: str) -> dict[str, str]:
+    def get_multiple_text(self, *paths: str, skip_content = False) -> dict[str, str]:
         """ Gets text contents of multiple files at once. """
-        response = self._fetch_factory('GET', '_api/get-multiple', {'path': paths})()
+        response = self._fetch_factory(
+            'GET', '_api/get-multiple', 
+            {'path': paths, "skip_content": skip_content}
+            )()
         return response.json()
     
     def delete(self, path: str):

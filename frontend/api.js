@@ -167,6 +167,27 @@ export default class Connector {
         return await res.json();
     }
 
+    /**
+     * @param {string[]} paths - the paths to the files (url), should have content type plain/text, application/json, etc.
+     * @returns {Promise<Record<string, string>>} - return the mapping of path to text content, non-existing paths will be ignored
+     */
+    async getMultipleText(paths){
+        const url = new URL(this.config.endpoint + '/_api/get-multiple');
+        for (const path of paths){
+            url.searchParams.append('path', path);
+        }
+        const res = await fetch(url.toString(), {
+            method: 'GET',
+            headers: {
+                "Authorization": 'Bearer ' + this.config.token,
+            }
+        });
+        if (res.status != 200 && res.status != 206){
+            throw new Error(`Failed to get multiple files, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
+        }
+        return await res.json();
+    }
+
     async delete(path){
         if (path.startsWith('/')){ path = path.slice(1); }
         const res = await fetch(this.config.endpoint + '/' + path, {

@@ -210,6 +210,10 @@ class FileConn(DBObjectBase):
         return self.parse_record(res)
     
     async def get_file_records(self, urls: list[str]) -> list[FileRecord]:
+        """
+        Get all file records with the given urls, only urls in the database will be returned. 
+        If the urls are not in the database, they will be ignored.
+        """
         await self.cur.execute("SELECT * FROM fmeta WHERE url IN ({})".format(','.join(['?'] * len(urls))), urls)
         res = await self.cur.fetchall()
         if res is None:
@@ -830,6 +834,38 @@ class Database:
                     yield blob
         ret = blob_stream()
         return ret
+    
+    async def read_files_bulk(self, urls: list[str]) -> dict[str, bytes]:
+        """
+        A frequent use case is to read multiple files at once, 
+        this method will read all files in the list and return a dict of url -> blob.
+        if the file is not found, it will be skipped.
+        may raise StorageExceededError if the total size of the files exceeds MAX_MEM_FILE_BYTES
+        """
+        for url in urls:
+            validate_url(url)
+
+        # first check if the files are too big
+        async with unique_cursor() as cur:
+            fconn = FileConn(cur)
+            file_records = await fconn.get_file_records(urls)
+        sum_size = sum([r.file_size for r in file_records])
+        if sum_size > MAX_MEM_FILE_BYTES:
+            raise StorageExceededError(f"Unable to read files at once, total size {sum_size} exceeds {MAX_MEM_FILE_BYTES}")
+        
+        self.logger.debug(f"Reading {len(file_records)} files, getting {sum_size} bytes, from {urls}")
+        # read the files
+        async with unique_cursor() as cur:
+            fconn = FileConn(cur)
+            blobs: dict[str, bytes] = {}
+            for r in file_records:
+                if r.external:
+                    blob_iter = fconn.get_file_blob_external(r.file_id)
+                    blob = b''.join([chunk async for chunk in blob_iter])
+                else:
+                    blob = await fconn.get_file_blob(r.file_id)
+                blobs[r.url] = blob
+            return blobs
 
     async def delete_file(self, url: str, op_user: Optional[UserRecord] = None) -> Optional[FileRecord]:
         validate_url(url)

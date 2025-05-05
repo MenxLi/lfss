@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Optional, Literal
 from collections.abc import Iterator
-import os
+import os, json
 import requests
 import requests.adapters
 import urllib.parse
@@ -76,7 +76,7 @@ class Connector:
             path = path[1:]
         path = ensure_uri_compnents(path)
         def f(**kwargs):
-            url = f"{self.config['endpoint']}/{path}" + "?" + urllib.parse.urlencode(search_params)
+            url = f"{self.config['endpoint']}/{path}" + "?" + urllib.parse.urlencode(search_params, doseq=True)
             headers: dict = kwargs.pop('headers', {})
             headers.update({
                 'Authorization': f"Bearer {self.config['token']}",
@@ -205,6 +205,11 @@ class Connector:
         response = self._get(path)
         if response is None: return None
         assert response.headers['Content-Type'] == 'application/json'
+        return response.json()
+    
+    def get_multiple_text(self, *paths: str) -> dict[str, str]:
+        """ Gets text contents of multiple files at once. """
+        response = self._fetch_factory('GET', '_api/get-multiple', {'path': paths})()
         return response.json()
     
     def delete(self, path: str):

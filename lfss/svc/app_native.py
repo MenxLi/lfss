@@ -1,13 +1,13 @@
-from typing import Optional, Literal
+from typing import Optional, Literal, Annotated
 
-from fastapi import Depends, Request, Response, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi import Depends, Request, Response, UploadFile, Query
+from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.exceptions import HTTPException 
 
 from ..eng.utils import ensure_uri_compnents
 from ..eng.config import MAX_MEM_FILE_BYTES
 from ..eng.connection_pool import unique_cursor
-from ..eng.database import check_file_read_permission, check_path_permission, UserConn, FileConn
+from ..eng.database import check_file_read_permission, check_path_permission, FileConn, delayed_log_access
 from ..eng.datatype import (
     FileReadPermission, UserRecord, AccessLevel, 
     FileSortKey, DirSortKey
@@ -232,6 +232,46 @@ async def list_dirs(
             url = path, offset = offset, limit = limit,
             order_by=order_by, order_desc=order_desc, skim=skim
         )
+
+# https://fastapi.tiangolo.com/tutorial/query-params-str-validations/#query-parameter-list-multiple-values
+@router_api.get("/get-multiple")
+@handle_exception
+async def get_multiple_files(
+    path: Annotated[list[str], Query()], 
+    user: UserRecord = Depends(registered_user)
+    ):
+    """
+    Get multiple files by path. 
+    Please note that the content is supposed to be text and are small enough to fit in memory.
+    """
+    if len(path) == 0:
+        raise HTTPException(status_code=400, detail="No path provided")
+    for p in path:
+        if p.endswith("/"):
+            raise HTTPException(status_code=400, detail="Path must not end with /")
+    path = [ensure_uri_compnents(path) for path in path]
+    # check permission for all paths
+    async with unique_cursor() as conn:
+        for p in path:
+            if await check_path_permission(p, user, cursor=conn) < AccessLevel.READ:
+                raise HTTPException(status_code=403, detail="Permission denied for path: " + p)
+    # get files
+    res = await db.read_files_bulk(path)
+    for k in res.keys():
+        await delayed_log_access(k)
+    partial_content = len(res) != len(path)
+    return JSONResponse(
+        content = {
+            k: v.decode('utf-8') for k, v in res.items()
+        },
+        status_code = 206 if partial_content else 200,
+        headers = {
+            "X-Partial-Content": str(partial_content),
+            "X-Content-Count": str(len(res)),
+            "X-Requested-Paths": ",".join(path),
+        }
+    )
+    
     
 @router_api.get("/whoami")
 @handle_exception

@@ -50,3 +50,14 @@ def test_get_empty(server):
     r = c.get_multiple_text('u0/test1.txt', 'u0/a/test2.txt', 'u0/a/test3.json', 'u0/non-exist.txt', skip_content=True)
     assert len(r) == 3, "File count is not correct"
     assert r['u0/test1.txt'] == '', "File content is not correct"
+
+def test_nameparse(server):
+    c = get_conn('u0')
+    # fname = "test 1你好.txt" -> 
+    # 500 server error: UnicodeEncodeError: 'latin-1' codec can't encode characters in position ...
+    fname = "test 1.txt"
+    c.put(f'u0/{fname}', b'hello world 1')
+
+    r = c.get_multiple_text(f'u0/{fname}')
+    assert len(r) == 1, "File count is not correct"
+    assert r[f'u0/{fname}'] == 'hello world 1', "File content is not correct"

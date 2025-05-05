@@ -1,4 +1,5 @@
 from typing import Optional, Literal, Annotated
+from collections import OrderedDict
 
 from fastapi import Depends, Request, Response, UploadFile, Query
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -245,26 +246,32 @@ async def get_multiple_files(
     Get multiple files by path. 
     Please note that the content is supposed to be text and are small enough to fit in memory.
     """
-    if len(path) == 0:
-        raise HTTPException(status_code=400, detail="No path provided")
     for p in path:
         if p.endswith("/"):
             raise HTTPException(status_code=400, detail="Path must not end with /")
-    path = [ensure_uri_compnents(path) for path in path]
+
+    # here we unify the path, so need to keep a record of the inputs
+    # make output keys consistent with inputs
+    upath2path = OrderedDict[str, str]()
+    for p in path:
+        p_ = p if not p.startswith("/") else p[1:]
+        upath2path[ensure_uri_compnents(p_)] = p
+    upaths = list(upath2path.keys())
 
     # get files
-    res = await db.read_files_bulk(path, skip_content=skip_content, op_user=user)
-    for k in res.keys():
+    raw_res = await db.read_files_bulk(upaths, skip_content=skip_content, op_user=user)
+    for k in raw_res.keys():
         await delayed_log_access(k)
-    partial_content = len(res) != len(path)
+    partial_content = len(raw_res) != len(upaths)
+
     return JSONResponse(
         content = {
-            k: v.decode('utf-8') for k, v in res.items()
+            upath2path[k]: v.decode('utf-8') for k, v in raw_res.items()
         },
         status_code = 206 if partial_content else 200,
         headers = {
             "X-Partial-Content": str(partial_content),
-            "X-Content-Count": str(len(res)),
+            "X-Content-Count": str(len(raw_res)),
             "X-Requested-Paths": ",".join(path),
         }
     )

@@ -60,10 +60,13 @@ def handle_exception(fn):
             raise 
     return wrapper
 
+env_origins = os.environ.get("LFSS_ORIGINS", "*")
+logger.debug(f"LFSS_ORIGINS: {env_origins}")
+origins = [x.strip() for x in env_origins.split(",") if x.strip()]
 app = FastAPI(docs_url=None, redoc_url=None, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

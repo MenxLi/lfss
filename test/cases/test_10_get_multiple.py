@@ -53,9 +53,7 @@ def test_get_empty(server):
 
 def test_nameparse(server):
     c = get_conn('u0')
-    # fname = "test 1你好.txt" -> 
-    # 500 server error: UnicodeEncodeError: 'latin-1' codec can't encode characters in position ...
-    fname = "test 1.txt"
+    fname = "test 1你好.txt"
     c.put(f'u0/{fname}', b'hello world 1')
 
     r = c.get_multiple_text(f'u0/{fname}')

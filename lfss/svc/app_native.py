@@ -268,12 +268,7 @@ async def get_multiple_files(
         content = {
             upath2path[k]: v.decode('utf-8') for k, v in raw_res.items()
         },
-        status_code = 206 if partial_content else 200,
-        headers = {
-            "X-Partial-Content": str(partial_content),
-            "X-Content-Count": str(len(raw_res)),
-            "X-Requested-Paths": ",".join(path),
-        }
+        status_code = 206 if partial_content else 200
     )
     
     

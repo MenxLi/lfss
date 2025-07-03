@@ -190,6 +190,7 @@ async def validate_path_read_permission(path: str, user: UserRecord):
     if not await check_path_permission(path, user) >= AccessLevel.READ:
         raise HTTPException(status_code=403, detail="Permission denied")
 @router_api.get("/count-files")
+@handle_exception
 async def count_files(path: str, flat: bool = False, user: UserRecord = Depends(registered_user)):
     await validate_path_read_permission(path, user)
     path = ensure_uri_compnents(path)
@@ -197,6 +198,7 @@ async def count_files(path: str, flat: bool = False, user: UserRecord = Depends(
         fconn = FileConn(conn)
         return { "count": await fconn.count_dir_files(url = path, flat = flat) }
 @router_api.get("/list-files")
+@handle_exception
 async def list_files(
     path: str, offset: int = 0, limit: int = 1000,
     order_by: FileSortKey = "", order_desc: bool = False,
@@ -213,6 +215,7 @@ async def list_files(
         )
 
 @router_api.get("/count-dirs")
+@handle_exception
 async def count_dirs(path: str, user: UserRecord = Depends(registered_user)):
     await validate_path_read_permission(path, user)
     path = ensure_uri_compnents(path)
@@ -220,6 +223,7 @@ async def count_dirs(path: str, user: UserRecord = Depends(registered_user)):
         fconn = FileConn(conn)
         return { "count": await fconn.count_path_dirs(url = path) }
 @router_api.get("/list-dirs")
+@handle_exception
 async def list_dirs(
     path: str, offset: int = 0, limit: int = 1000,
     order_by: DirSortKey = "", order_desc: bool = False,

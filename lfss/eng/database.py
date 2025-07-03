@@ -839,11 +839,11 @@ class Database:
         self, urls: list[str], 
         skip_content = False, 
         op_user: Optional[UserRecord] = None, 
-        ) -> dict[str, bytes]:
+        ) -> dict[str, Optional[bytes]]:
         """
         A frequent use case is to read multiple files at once, 
         this method will read all files in the list and return a dict of url -> blob.
-        if the file is not found, it will be skipped.
+        if the file is not found, the value will be None.
         - skip_content: if True, will not read the content of the file, resulting in a dict of url -> b''
 
         may raise StorageExceededError if the total size of the files exceeds MAX_MEM_FILE_BYTES
@@ -884,8 +884,8 @@ class Database:
                 else:
                     blob = await fconn.get_file_blob(r.file_id)
                 blobs[r.url] = blob
-
-            return blobs
+            
+            return {url: blobs.get(url, None) for url in urls}
 
     async def delete_file(self, url: str, op_user: Optional[UserRecord] = None) -> Optional[FileRecord]:
         validate_url(url)

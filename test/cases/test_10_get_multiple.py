@@ -29,11 +29,13 @@ def test_basic_upload(server):
 def test_basic_multiple(server):
     c = get_conn('u0')
     r = c.get_multiple_text('u0/test1.txt', 'u0/a/test2.txt', 'u0/a/test3.json', 'u0/non-exist.txt')
-    assert len(r) == 3, "File count is not correct"
+    assert len(r) == 4, "File count is not correct"
+    assert r['u0/non-exist.txt'] is None, "Non-existing file should return None"
     assert r['u0/test1.txt'] == 'hello world 1', "File content is not correct"
 
     r1 = c.get_multiple_text('u1/test1.txt', 'u1/a/test2.txt', 'u1/a/test3.json', 'u1/non-exist.txt')
-    assert len(r1) == 3, "File count is not correct"
+    assert len(r1) == 4, "File count is not correct"
+    assert r1['u1/non-exist.txt'] is None, "Non-existing file should return None"
     assert r1['u1/a/test2.txt'] == 'hello world 2', "File content is not correct"
     assert json.loads(r1['u1/a/test3.json']) == {"hello": "world 3"}, "File content is not correct"
 
@@ -48,7 +50,7 @@ def test_get_perm(server):
 def test_get_empty(server):
     c = get_conn('u0')
     r = c.get_multiple_text('u0/test1.txt', 'u0/a/test2.txt', 'u0/a/test3.json', 'u0/non-exist.txt', skip_content=True)
-    assert len(r) == 3, "File count is not correct"
+    assert len(r) == 4, "File count is not correct"
     assert r['u0/test1.txt'] == '', "File content is not correct"
 
 def test_nameparse(server):

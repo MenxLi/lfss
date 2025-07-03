@@ -13,6 +13,7 @@ from ..eng.datatype import (
     FileReadPermission, UserRecord, AccessLevel, 
     FileSortKey, DirSortKey
 )
+from ..eng.error import InvalidPathError
 
 from .app_base import *
 from .common_impl import get_impl, put_file_impl, post_file_impl, delete_impl, copy_impl
@@ -249,10 +250,13 @@ async def get_multiple_files(
     """
     Get multiple files by path. 
     Please note that the content is supposed to be text and are small enough to fit in memory.
+
+    Not existing files will have content null, and the response will be 206 Partial Content if not all files are found.
+    if skip_content is True, the content of the files will always be ''
     """
     for p in path:
         if p.endswith("/"):
-            raise HTTPException(status_code=400, detail="Path must not end with /")
+            raise InvalidPathError(f"Path '{p}' must not end with /")
 
     # here we unify the path, so need to keep a record of the inputs
     # make output keys consistent with inputs
@@ -270,7 +274,7 @@ async def get_multiple_files(
 
     return JSONResponse(
         content = {
-            upath2path[k]: v.decode('utf-8') for k, v in raw_res.items()
+            upath2path[k]: v.decode('utf-8') if v is not None else None for k, v in raw_res.items()
         },
         status_code = 206 if partial_content else 200
     )

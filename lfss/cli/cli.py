@@ -1,5 +1,5 @@
 from pathlib import Path
-import argparse, typing
+import argparse, typing, sys
 from lfss.api import Connector, upload_directory, upload_file, download_file, download_directory
 from lfss.eng.datatype import FileReadPermission, FileSortKey, DirSortKey
 from lfss.eng.utils import decode_uri_compnents
@@ -78,9 +78,9 @@ def main():
                 permission=args.permission
             )
             if failed_upload:
-                print("\033[91mFailed to upload:\033[0m")
+                print("\033[91mFailed to upload:\033[0m", file=sys.stderr)
                 for path in failed_upload:
-                    print(f"  {path}")
+                    print(f"  {path}", file=sys.stderr)
         else:
             success, msg = upload_file(
                 connector, 
@@ -93,7 +93,7 @@ def main():
                 permission=args.permission
             )
             if not success:
-                print("\033[91mFailed to upload: \033[0m", msg)
+                print("\033[91mFailed to upload: \033[0m", msg, file=sys.stderr)
     
     elif args.command == "download":
         is_dir = args.src.endswith("/")
@@ -107,9 +107,9 @@ def main():
                 overwrite=args.overwrite
             )
             if failed_download:
-                print("\033[91mFailed to download:\033[0m")
+                print("\033[91mFailed to download:\033[0m", file=sys.stderr)
                 for path in failed_download:
-                    print(f"  {path}")
+                    print(f"  {path}", file=sys.stderr)
         else:
             success, msg = download_file(
                 connector, 
@@ -121,7 +121,7 @@ def main():
                 overwrite=args.overwrite
             )
             if not success:
-                print("\033[91mFailed to download: \033[0m", msg)
+                print("\033[91mFailed to download: \033[0m", msg, file=sys.stderr)
     
     elif args.command == "query":
         for path in args.path:

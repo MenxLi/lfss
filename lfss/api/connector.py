@@ -211,8 +211,11 @@ class Connector:
         assert response.headers['Content-Type'] == 'application/json'
         return response.json()
     
-    def get_multiple_text(self, *paths: str, skip_content = False) -> dict[str, str]:
-        """ Gets text contents of multiple files at once. """
+    def get_multiple_text(self, *paths: str, skip_content = False) -> dict[str, Optional[str]]:
+        """ 
+        Gets text contents of multiple files at once. Non-existing files will return None. 
+        - skip_content: if True, the file contents will not be fetched, always be empty string ''.
+        """
         response = self._fetch_factory(
             'GET', '_api/get-multiple', 
             {'path': paths, "skip_content": skip_content}

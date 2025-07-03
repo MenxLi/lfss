@@ -189,7 +189,7 @@ export default class Connector {
      * @param {string[]} paths - the paths to the files (url), should have content type plain/text, application/json, etc.
      * @param {Object} [options] - Optional configuration.
      * @param {boolean} [options.skipContent=false] - If true, skips fetching content and returns a record of <path, ''>.
-     * @returns {Promise<Record<string, string>>} - return the mapping of path to text content, non-existing paths will be ignored
+     * @returns {Promise<Record<string, string | null>>} - return the mapping of path to text content, non-existing paths will be ignored
      */
     async getMultipleText(paths, {
         skipContent = false

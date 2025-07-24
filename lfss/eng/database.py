@@ -197,6 +197,11 @@ class FileConn(DBObjectBase):
     def parse_record(record) -> FileRecord:
         return FileRecord(*record)
     
+    @staticmethod
+    def escape_sqlike(url: str) -> str:
+        """ Escape a url for use in SQL LIKE clause (The % and _ characters) """
+        return url.replace('%', r'\%').replace('_', r'\_')
+    
     @overload
     async def get_file_record(self, url: str, throw: Literal[True]) -> FileRecord: ...
     @overload
@@ -246,9 +251,9 @@ class FileConn(DBObjectBase):
                 url, LENGTH(?) + 1, 
                 INSTR(SUBSTR(url, LENGTH(?) + 1), '/')
                 ) AS dirname
-            FROM fmeta WHERE url LIKE ? AND dirname != ''
+            FROM fmeta WHERE url LIKE ? ESCAPE '\\' AND dirname != ''
         )
-        """, (url, url, url + '%'))
+        """, (url, url, self.escape_sqlike(url) + '%'))
         res = await cursor.fetchone()
         assert res is not None, "Error: count_path_dirs"
         return res[0]
@@ -271,11 +276,11 @@ class FileConn(DBObjectBase):
                 1 + LENGTH(?),
                 INSTR(SUBSTR(url, 1 + LENGTH(?)), '/')
             ) AS dirname 
-            FROM fmeta WHERE url LIKE ? AND dirname != ''
+            FROM fmeta WHERE url LIKE ? ESCAPE '\\' AND dirname != ''
         """ \
         + (f"ORDER BY {order_by} {'DESC' if order_desc else 'ASC'}" if order_by else '') \
         + " LIMIT ? OFFSET ?"
-        cursor = await self.cur.execute(sql_qury, (url, url, url + '%', limit, offset))
+        cursor = await self.cur.execute(sql_qury, (url, url, self.escape_sqlike(url) + '%', limit, offset))
         res = await cursor.fetchall()
         dirs_str = [r[0] for r in res]
         async def get_dir(dir_url):
@@ -290,9 +295,15 @@ class FileConn(DBObjectBase):
         if not url.endswith('/'): url += '/'
         if url == '/': url = ''
         if flat:
-            cursor = await self.cur.execute("SELECT COUNT(*) FROM fmeta WHERE url LIKE ?", (url + '%', ))
+            cursor = await self.cur.execute(
+                "SELECT COUNT(*) FROM fmeta WHERE url LIKE ? ESCAPE '\\'", 
+                (self.escape_sqlike(url) + '%', )
+                )
         else:
-            cursor = await self.cur.execute("SELECT COUNT(*) FROM fmeta WHERE url LIKE ? AND url NOT LIKE ?", (url + '%', url + '%/%'))
+            cursor = await self.cur.execute(
+                "SELECT COUNT(*) FROM fmeta WHERE url LIKE ? ESCAPE '\\' AND url NOT LIKE ? ESCAPE '\\'", 
+                (self.escape_sqlike(url) + '%', self.escape_sqlike(url) + '%/%')
+                )
         res = await cursor.fetchone()
         assert res is not None, "Error: count_path_files"
         return res[0]
@@ -309,14 +320,14 @@ class FileConn(DBObjectBase):
         if not url.endswith('/'): url += '/'
         if url == '/': url = ''
 
-        sql_query = "SELECT * FROM fmeta WHERE url LIKE ?"
-        if not flat: sql_query += " AND url NOT LIKE ?"
+        sql_query = "SELECT * FROM fmeta WHERE url LIKE ? ESCAPE '\\'"
+        if not flat: sql_query += " AND url NOT LIKE ? ESCAPE '\\'"
         if order_by: sql_query += f" ORDER BY {order_by} {'DESC' if order_desc else 'ASC'}"
         sql_query += " LIMIT ? OFFSET ?"
         if flat:
-            cursor = await self.cur.execute(sql_query, (url + '%', limit, offset))
+            cursor = await self.cur.execute(sql_query, (self.escape_sqlike(url) + '%', limit, offset))
         else:
-            cursor = await self.cur.execute(sql_query, (url + '%', url + '%/%', limit, offset))
+            cursor = await self.cur.execute(sql_query, (self.escape_sqlike(url) + '%', self.escape_sqlike(url) + '%/%', limit, offset))
         res = await cursor.fetchall()
         files = [self.parse_record(r) for r in res]
         return files
@@ -351,8 +362,8 @@ class FileConn(DBObjectBase):
                 MAX(access_time) as access_time, 
                 COUNT(*) as n_files
             FROM fmeta 
-            WHERE url LIKE ?
-        """, (url + '%', ))
+            WHERE url LIKE ? ESCAPE '\\'
+        """, (self.escape_sqlike(url) + '%', ))
         result = await cursor.fetchone()
         if result is None or any(val is None for val in result):
             raise PathNotFoundError(f"Path {url} not found")
@@ -376,10 +387,16 @@ class FileConn(DBObjectBase):
         if not url.endswith('/'):
             url += '/'
         if not include_subpath:
-            cursor = await self.cur.execute("SELECT SUM(file_size) FROM fmeta WHERE url LIKE ? AND url NOT LIKE ?", (url + '%', url + '%/%'))
+            cursor = await self.cur.execute(
+                "SELECT SUM(file_size) FROM fmeta WHERE url LIKE ? ESCAPE '\\' AND url NOT LIKE ? ESCAPE '\\'",
+                (self.escape_sqlike(url) + '%', self.escape_sqlike(url) + '%/%')
+                )
             res = await cursor.fetchone()
         else:
-            cursor = await self.cur.execute("SELECT SUM(file_size) FROM fmeta WHERE url LIKE ?", (url + '%', ))
+            cursor = await self.cur.execute(
+                "SELECT SUM(file_size) FROM fmeta WHERE url LIKE ? ESCAPE '\\'",
+                (self.escape_sqlike(url) + '%', )
+                )
             res = await cursor.fetchone()
         assert res is not None
         return res[0] or 0
@@ -442,7 +459,10 @@ class FileConn(DBObjectBase):
         """
         assert old_url.endswith('/'), "Old path must end with /"
         assert new_url.endswith('/'), "New path must end with /"
-        cursor = await self.cur.execute("SELECT * FROM fmeta WHERE url LIKE ?", (old_url + '%', ))
+        cursor = await self.cur.execute(
+            "SELECT * FROM fmeta WHERE url LIKE ? ESCAPE '\\'",
+            (self.escape_sqlike(old_url) + '%', )
+            )
         res = await cursor.fetchall()
         for r in res:
             old_record = FileRecord(*r)
@@ -472,10 +492,16 @@ class FileConn(DBObjectBase):
         assert old_url.endswith('/'), "Old path must end with /"
         assert new_url.endswith('/'), "New path must end with /"
         if user_id is None:
-            cursor = await self.cur.execute("SELECT * FROM fmeta WHERE url LIKE ?", (old_url + '%', ))
+            cursor = await self.cur.execute(
+                "SELECT * FROM fmeta WHERE url LIKE ? ESCAPE '\\'",
+                (self.escape_sqlike(old_url) + '%', )
+                )
             res = await cursor.fetchall()
         else:
-            cursor = await self.cur.execute("SELECT * FROM fmeta WHERE url LIKE ? AND owner_id = ?", (old_url + '%', user_id))
+            cursor = await self.cur.execute(
+                "SELECT * FROM fmeta WHERE url LIKE ? ESCAPE '\\' AND owner_id = ?", 
+                (self.escape_sqlike(old_url) + '%', user_id)
+                )
             res = await cursor.fetchall()
         for r in res:
             new_r = new_url + r[0][len(old_url):]
@@ -510,10 +536,16 @@ class FileConn(DBObjectBase):
     async def delete_records_by_prefix(self, path: str, under_owner_id: Optional[int] = None) -> list[FileRecord]:
         """Delete all records with url starting with path"""
         # update user size
-        cursor = await self.cur.execute("SELECT DISTINCT owner_id FROM fmeta WHERE url LIKE ?", (path + '%', ))
+        cursor = await self.cur.execute(
+            "SELECT DISTINCT owner_id FROM fmeta WHERE url LIKE ? ESCAPE '\\'",
+            (self.escape_sqlike(path) + '%', )
+            )
         res = await cursor.fetchall()
         for r in res:
-            cursor = await self.cur.execute("SELECT SUM(file_size) FROM fmeta WHERE owner_id = ? AND url LIKE ?", (r[0], path + '%'))
+            cursor = await self.cur.execute(
+                "SELECT SUM(file_size) FROM fmeta WHERE owner_id = ? AND url LIKE ? ESCAPE '\\'", 
+                (r[0], self.escape_sqlike(path) + '%')
+                )
             size = await cursor.fetchone()
             if size is not None:
                 await self._user_size_dec(r[0], size[0])
@@ -522,9 +554,9 @@ class FileConn(DBObjectBase):
         # but it's not a big deal... we should have only one writer
         
         if under_owner_id is None:
-            res = await self.cur.execute("DELETE FROM fmeta WHERE url LIKE ? RETURNING *", (path + '%', ))
+            res = await self.cur.execute("DELETE FROM fmeta WHERE url LIKE ? ESCAPE '\\' RETURNING *", (self.escape_sqlike(path) + '%', ))
         else:
-            res = await self.cur.execute("DELETE FROM fmeta WHERE url LIKE ? AND owner_id = ? RETURNING *", (path + '%', under_owner_id))
+            res = await self.cur.execute("DELETE FROM fmeta WHERE url LIKE ? ESCAPE '\\' AND owner_id = ? RETURNING *", (self.escape_sqlike(path) + '%', under_owner_id))
         all_f_rec = await res.fetchall()
         self.logger.info(f"Deleted {len(all_f_rec)} file(s) for path {path}") # type: ignore
         return [self.parse_record(r) for r in all_f_rec]
@@ -692,7 +724,7 @@ async def delayed_log_access(url: str):
     prohibited_part_regex = re.compile(
         "|".join([
             r"^\s*\.+\s*$",       # dot path
-            "[{}]".format("".join(re.escape(c) for c in ('/', "\\", "'", '"', "*", "%"))), # prohibited characters
+            "[{}]".format("".join(re.escape(c) for c in ('/', "\\", "'", '"', "*"))), # prohibited characters
         ])
     ),
 )

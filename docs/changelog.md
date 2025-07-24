@@ -1,5 +1,16 @@
 ## 0.11
 
+### 0.11.4
+- Fix SQL query for LIKE clause to escape special characters in path.
+
+### 0.11.3
+- Add method to get multiple files, maybe with content, at once.
+- Allow copy directory files that the user is not the owner of.
+- Environment variables to set origin and disable file logging.
+- Fix error handling for some endpoints.
+- Redirect CLI error output to stderr.
+- Increase thumb image size to 64x64.
+
 ### 0.11.2
 - Improve frontend directory upload feedback. 
 - Set default large file threashold to 1M. 

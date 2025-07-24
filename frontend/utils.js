@@ -114,10 +114,10 @@ export function isMimeText(mime){
  * @param {Event} e The drop event.
  * @param {(relPath: string, file: () => Promise<File>) => Promise<void>} callback A function
  *        that receives the relative path and a promise for the File.
- * @param {number} [maxConcurrent=5] Maximum number of concurrent callback executions.
+ * @param {number} [maxConcurrent=8] Maximum number of concurrent callback executions.
  * @returns {Promise<Promise<void>[]>} A promise resolving to an array of callback promises.
  */
-export async function forEachFile(e, callback, maxConcurrent = 16) {
+export async function forEachFile(e, callback, maxConcurrent = 8) {
     const results = []; // to collect callback promises
 
     // Concurrency barrier variables.

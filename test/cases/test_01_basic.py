@@ -185,3 +185,15 @@ def test_invalid_path(server):
     c = get_conn('u0')
     with pytest.raises(Exception, match='400'):
         c.put('u_non_exists/test1.txt', b'hello world 1')
+
+def test_invalid_char(server):
+    c = get_conn('u0')
+
+    c.put('u0/@/1.txt', b'hello world 1')
+    c.put('u0/40/1.txt', b'hello world 2')
+
+    _at_dir_meta = c.get_dmeta('u0/@/')
+    assert _at_dir_meta and _at_dir_meta.n_files == 1, "Invalid character path failed"
+    assert len(c.list_files('u0/@/')) == 1, "Invalid character path failed"
+    assert len(c.list_dirs('u0/@/')) == 0, "Invalid character path failed"
+    assert len(c.list_files('u0/@/', flat=True)) == 1, "Invalid character path failed"

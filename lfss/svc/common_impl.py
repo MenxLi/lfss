@@ -6,7 +6,7 @@ from ..eng.connection_pool import unique_cursor
 from ..eng.datatype import UserRecord, FileRecord, PathContents, AccessLevel, FileReadPermission
 from ..eng.database import FileConn, UserConn, delayed_log_access, check_file_read_permission, check_path_permission
 from ..eng.thumb import get_thumb
-from ..eng.utils import format_last_modified, ensure_uri_compnents
+from ..eng.utils import format_last_modified, ensure_uri_components
 from ..eng.config import CHUNK_SIZE, DEBUG_MODE
 
 from .app_base import skip_request_log, db, logger
@@ -100,7 +100,7 @@ async def get_impl(
     thumb: bool = False,
     is_head = False,
     ):
-    path = ensure_uri_compnents(path)
+    path = ensure_uri_components(path)
     if path.startswith("/"): path = path[1:]
 
     # handle directory query
@@ -194,7 +194,7 @@ async def put_file_impl(
     conflict: Literal["overwrite", "skip", "abort"] = "overwrite",
     permission: int = 0,
     ):
-    path = ensure_uri_compnents(path)
+    path = ensure_uri_components(path)
     assert not path.endswith("/"), "Path must not end with /"
 
     access_level = await check_path_permission(path, user)
@@ -249,7 +249,7 @@ async def post_file_impl(
     conflict: Literal["overwrite", "skip", "abort"] = "overwrite",
     permission: int = 0,
 ):
-    path = ensure_uri_compnents(path)
+    path = ensure_uri_components(path)
     assert not path.endswith("/"), "Path must not end with /"
 
     access_level = await check_path_permission(path, user)
@@ -288,7 +288,7 @@ async def post_file_impl(
     }, content=json.dumps({"url": path}))
 
 async def delete_impl(path: str, user: UserRecord):
-    path = ensure_uri_compnents(path)
+    path = ensure_uri_components(path)
     if await check_path_permission(path, user) < AccessLevel.WRITE:
         raise HTTPException(status_code=403, detail="Permission denied")
     
@@ -307,8 +307,8 @@ async def delete_impl(path: str, user: UserRecord):
 async def copy_impl(
     op_user: UserRecord, src_path: str, dst_path: str,
 ):
-    src_path = ensure_uri_compnents(src_path)
-    dst_path = ensure_uri_compnents(dst_path)
+    src_path = ensure_uri_components(src_path)
+    dst_path = ensure_uri_components(dst_path)
     copy_type = "file" if not src_path[-1] == "/" else "directory"
     if (src_path[-1] == "/") != (dst_path[-1] == "/"):
         raise HTTPException(status_code=400, detail="Source and destination must be same type")

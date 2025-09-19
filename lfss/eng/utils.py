@@ -21,19 +21,19 @@ async def copy_file(source: str|pathlib.Path, destination: str|pathlib.Path):
 def hash_credential(username: str, password: str):
     return hashlib.sha256(f"{username}:{password}".encode()).hexdigest()
 
-def encode_uri_compnents(path: str):
+def encode_uri_components(path: str):
     path_sp = path.split("/")
     mapped = map(lambda x: urllib.parse.quote(x), path_sp)
     return "/".join(mapped)
 
-def decode_uri_compnents(path: str):
+def decode_uri_components(path: str):
     path_sp = path.split("/")
     mapped = map(lambda x: urllib.parse.unquote(x), path_sp)
     return "/".join(mapped)
 
-def ensure_uri_compnents(path: str):
+def ensure_uri_components(path: str):
     """ Ensure the path components are safe to use """
-    return encode_uri_compnents(decode_uri_compnents(path))
+    return encode_uri_components(decode_uri_components(path))
 
 class TaskManager:
     def __init__(self):

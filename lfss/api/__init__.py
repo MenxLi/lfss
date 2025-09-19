@@ -2,7 +2,7 @@ import os, time, pathlib
 from threading import Lock
 from .connector import Connector
 from ..eng.datatype import FileRecord
-from ..eng.utils import decode_uri_compnents
+from ..eng.utils import decode_uri_components
 from ..eng.bounded_pool import BoundedThreadPoolExecutor
 
 def upload_file(
@@ -105,7 +105,7 @@ def download_file(
     assert not src_url.endswith('/'), "Source URL must not end with a slash."
     while this_try <= n_retries:
         if os.path.isdir(file_path):
-            fname = decode_uri_compnents(src_url.split('/')[-1])
+            fname = decode_uri_components(src_url.split('/')[-1])
             file_path = os.path.join(file_path, fname)
 
         if not overwrite and os.path.exists(file_path):
@@ -176,7 +176,7 @@ def download_directory(
         with _counter_lock:
             _counter += 1
             this_count = _counter
-            dst_path = f"{directory}{os.path.relpath(decode_uri_compnents(src_url), decode_uri_compnents(src_path))}"
+            dst_path = f"{directory}{os.path.relpath(decode_uri_components(src_url), decode_uri_components(src_path))}"
             if verbose:
                 print(f"[{this_count}/{file_count}] Downloading {src_url} to {dst_path}")
 

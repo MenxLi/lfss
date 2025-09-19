@@ -5,7 +5,7 @@ from fastapi import Depends, Request, Response, UploadFile, Query
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.exceptions import HTTPException 
 
-from ..eng.utils import ensure_uri_compnents
+from ..eng.utils import ensure_uri_components
 from ..eng.config import MAX_MEM_FILE_BYTES
 from ..eng.connection_pool import unique_cursor
 from ..eng.database import check_file_read_permission, check_path_permission, FileConn, delayed_log_access
@@ -83,7 +83,7 @@ async def delete_file(path: str, user: UserRecord = Depends(registered_user)):
 @handle_exception
 async def bundle_files(path: str, user: UserRecord = Depends(registered_user)):
     logger.info(f"GET bundle({path}), user: {user.username}")
-    path = ensure_uri_compnents(path)
+    path = ensure_uri_components(path)
     if not path.endswith("/"):
         raise HTTPException(status_code=400, detail="Path must end with /")
     if path[0] == "/":      # adapt to both /path and path
@@ -123,7 +123,7 @@ async def bundle_files(path: str, user: UserRecord = Depends(registered_user)):
 @handle_exception
 async def get_file_meta(path: str, user: UserRecord = Depends(registered_user)):
     logger.info(f"GET meta({path}), user: {user.username}")
-    path = ensure_uri_compnents(path)
+    path = ensure_uri_components(path)
     is_file = not path.endswith("/")
     async with unique_cursor() as cur:
         fconn = FileConn(cur)
@@ -147,7 +147,7 @@ async def update_file_meta(
     new_path: Optional[str] = None,
     user: UserRecord = Depends(registered_user)
     ):
-    path = ensure_uri_compnents(path)
+    path = ensure_uri_components(path)
     if path.startswith("/"):
         path = path[1:]
 
@@ -162,7 +162,7 @@ async def update_file_meta(
             )
     
         if new_path is not None:
-            new_path = ensure_uri_compnents(new_path)
+            new_path = ensure_uri_components(new_path)
             logger.info(f"Update path of {path} to {new_path}")
             await db.move_file(path, new_path, user)
     
@@ -170,7 +170,7 @@ async def update_file_meta(
     else:
         assert perm is None, "Permission is not supported for directory"
         if new_path is not None:
-            new_path = ensure_uri_compnents(new_path)
+            new_path = ensure_uri_components(new_path)
             logger.info(f"Update path of {path} to {new_path}")
             # will raise duplicate path error if same name path exists in the new path
             await db.move_dir(path, new_path, user)
@@ -194,7 +194,7 @@ async def validate_path_read_permission(path: str, user: UserRecord):
 @handle_exception
 async def count_files(path: str, flat: bool = False, user: UserRecord = Depends(registered_user)):
     await validate_path_read_permission(path, user)
-    path = ensure_uri_compnents(path)
+    path = ensure_uri_components(path)
     async with unique_cursor() as conn:
         fconn = FileConn(conn)
         return { "count": await fconn.count_dir_files(url = path, flat = flat) }
@@ -206,7 +206,7 @@ async def list_files(
     flat: bool = False, user: UserRecord = Depends(registered_user)
     ):
     await validate_path_read_permission(path, user)
-    path = ensure_uri_compnents(path)
+    path = ensure_uri_components(path)
     async with unique_cursor() as conn:
         fconn = FileConn(conn)
         return await fconn.list_dir_files(
@@ -219,7 +219,7 @@ async def list_files(
 @handle_exception
 async def count_dirs(path: str, user: UserRecord = Depends(registered_user)):
     await validate_path_read_permission(path, user)
-    path = ensure_uri_compnents(path)
+    path = ensure_uri_components(path)
     async with unique_cursor() as conn:
         fconn = FileConn(conn)
         return { "count": await fconn.count_path_dirs(url = path) }
@@ -231,7 +231,7 @@ async def list_dirs(
     skim: bool = True, user: UserRecord = Depends(registered_user)
     ):
     await validate_path_read_permission(path, user)
-    path = ensure_uri_compnents(path)
+    path = ensure_uri_components(path)
     async with unique_cursor() as conn:
         fconn = FileConn(conn)
         return await fconn.list_path_dirs(
@@ -263,7 +263,7 @@ async def get_multiple_files(
     upath2path = OrderedDict[str, str]()
     for p in path:
         p_ = p if not p.startswith("/") else p[1:]
-        upath2path[ensure_uri_compnents(p_)] = p
+        upath2path[ensure_uri_components(p_)] = p
     upaths = list(upath2path.keys())
 
     # get files

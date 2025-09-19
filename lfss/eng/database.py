@@ -21,7 +21,7 @@ from .datatype import (
     )
 from .config import LARGE_BLOB_DIR, CHUNK_SIZE, LARGE_FILE_BYTES, MAX_MEM_FILE_BYTES
 from .log import get_logger
-from .utils import decode_uri_compnents, hash_credential, concurrent_wrap, debounce_async, static_vars
+from .utils import decode_uri_components, hash_credential, concurrent_wrap, debounce_async, static_vars
 from .error import *
 
 class DBObjectBase(ABC):
@@ -1108,7 +1108,7 @@ class Database:
         async def data_iter():
             async for (r, blob) in self.iter_dir(top_url, None):
                 rel_path = r.url[len(top_url):]
-                rel_path = decode_uri_compnents(rel_path)
+                rel_path = decode_uri_components(rel_path)
                 b_iter: AsyncIterable[bytes]
                 if isinstance(blob, bytes):
                     async def blob_iter(): yield blob
@@ -1138,7 +1138,7 @@ class Database:
         with zipfile.ZipFile(buffer, 'w') as zf:
             async for (r, blob) in self.iter_dir(top_url, None):
                 rel_path = r.url[len(top_url):]
-                rel_path = decode_uri_compnents(rel_path)
+                rel_path = decode_uri_components(rel_path)
                 if r.external:
                     assert isinstance(blob, AsyncIterable)
                     zf.writestr(rel_path, b''.join([chunk async for chunk in blob]))

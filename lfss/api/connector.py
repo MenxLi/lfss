@@ -11,7 +11,7 @@ from lfss.eng.datatype import (
     FileReadPermission, FileRecord, DirectoryRecord, UserRecord, PathContents, 
     FileSortKey, DirSortKey
     )
-from lfss.eng.utils import ensure_uri_compnents
+from lfss.eng.utils import ensure_uri_components
 
 _default_endpoint = os.environ.get('LFSS_ENDPOINT', 'http://localhost:8000')
 _default_token = os.environ.get('LFSS_TOKEN', '')
@@ -74,7 +74,7 @@ class Connector:
     ):
         if path.startswith('/'):
             path = path[1:]
-        path = ensure_uri_compnents(path)
+        path = ensure_uri_components(path)
         def f(**kwargs):
             search_params_t = [
                 (k, str(v).lower() if isinstance(v, bool) else v)

@@ -2,7 +2,7 @@ from pathlib import Path
 import argparse, typing, sys
 from lfss.api import Connector, upload_directory, upload_file, download_file, download_directory
 from lfss.eng.datatype import FileReadPermission, FileSortKey, DirSortKey
-from lfss.eng.utils import decode_uri_compnents
+from lfss.eng.utils import decode_uri_components
 from . import catch_request_error, line_sep
 
 def parse_permission(s: str) -> FileReadPermission:
@@ -143,7 +143,7 @@ def main():
                 order_desc=args.reverse,
             )
             for i, f in enumerate(line_sep(res)):
-                f.url = decode_uri_compnents(f.url)
+                f.url = decode_uri_components(f.url)
                 print(f"[{i+1}] {f if args.long else f.url}")
 
             if len(res) == args.limit:
@@ -160,7 +160,7 @@ def main():
                 order_desc=args.reverse,
             )
             for i, d in enumerate(line_sep(res)):
-                d.url = decode_uri_compnents(d.url)
+                d.url = decode_uri_components(d.url)
                 print(f"[{i+1}] {d if args.long else d.url}")
 
             if len(res) == args.limit:

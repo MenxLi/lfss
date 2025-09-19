@@ -11,7 +11,7 @@ from ..eng.error import *
 from ..eng.config import DATA_HOME, DEBUG_MODE
 from ..eng.datatype import UserRecord, FileRecord, DirectoryRecord, AccessLevel
 from ..eng.database import FileConn, UserConn, check_path_permission
-from ..eng.utils import ensure_uri_compnents, decode_uri_compnents, format_last_modified, static_vars
+from ..eng.utils import ensure_uri_components, decode_uri_components, format_last_modified, static_vars
 from .app_base import *
 from .common_impl import copy_impl
 
@@ -36,7 +36,7 @@ async def eval_path(path: str) -> tuple[ptype, str, Optional[FileRecord | Direct
         and should end with / if it is a directory, otherwise it is a file
     record is the FileRecord or DirectoryRecord object, it is None if the path does not exist
     """
-    path = decode_uri_compnents(path)
+    path = decode_uri_components(path)
     if "://" in path:
         if not path.startswith("http://") and not path.startswith("https://"):
             raise HTTPException(status_code=400, detail="Bad Request, unsupported protocol")
@@ -47,7 +47,7 @@ async def eval_path(path: str) -> tuple[ptype, str, Optional[FileRecord | Direct
         assert path.startswith(route_prefix), "Path should start with the route prefix, got: " + path
         path = path[len(route_prefix):]
 
-    path = ensure_uri_compnents(path)
+    path = ensure_uri_components(path)
     if path.startswith("/"): path = path[1:]
 
     # path now is url-safe and without leading slash
@@ -160,7 +160,7 @@ async def create_file_xml_element(frecord: FileRecord) -> ET.Element:
     href.text = f"/{frecord.url}"
     propstat = ET.SubElement(file_el, f"{{{DAV_NS}}}propstat")
     prop = ET.SubElement(propstat, f"{{{DAV_NS}}}prop")
-    ET.SubElement(prop, f"{{{DAV_NS}}}displayname").text = decode_uri_compnents(frecord.url.split("/")[-1])
+    ET.SubElement(prop, f"{{{DAV_NS}}}displayname").text = decode_uri_components(frecord.url.split("/")[-1])
     ET.SubElement(prop, f"{{{DAV_NS}}}resourcetype")
     ET.SubElement(prop, f"{{{DAV_NS}}}getcontentlength").text = str(frecord.file_size)
     ET.SubElement(prop, f"{{{DAV_NS}}}getlastmodified").text = format_last_modified(frecord.create_time)
@@ -178,7 +178,7 @@ async def create_dir_xml_element(drecord: DirectoryRecord) -> ET.Element:
     href.text = f"/{drecord.url}"
     propstat = ET.SubElement(dir_el, f"{{{DAV_NS}}}propstat")
     prop = ET.SubElement(propstat, f"{{{DAV_NS}}}prop")
-    ET.SubElement(prop, f"{{{DAV_NS}}}displayname").text = decode_uri_compnents(drecord.url.split("/")[-2])
+    ET.SubElement(prop, f"{{{DAV_NS}}}displayname").text = decode_uri_components(drecord.url.split("/")[-2])
     ET.SubElement(prop, f"{{{DAV_NS}}}resourcetype").append(ET.Element(f"{{{DAV_NS}}}collection"))
     if drecord.size >= 0:
         ET.SubElement(prop, f"{{{DAV_NS}}}getlastmodified").text = format_last_modified(drecord.create_time)
@@ -211,7 +211,7 @@ async def dav_options(request: Request, path: str):
 @handle_exception
 async def dav_propfind(request: Request, path: str, user: UserRecord = Depends(registered_user), body: Optional[ET.Element] = Depends(xml_request_body)):
     if path.startswith("/"): path = path[1:]
-    path = ensure_uri_compnents(path)
+    path = ensure_uri_components(path)
 
     if body and DEBUG_MODE:
         print("Propfind-body:", ET.tostring(body, encoding="utf-8", method="xml"))

@@ -1,5 +1,10 @@
 ## 0.11
 
+### 0.11.5
+- Script entry default to client CLI. 
+- Fix single file download name deduce with decoding.
+- Fix code misspell (minor).
+
 ### 0.11.4
 - Fix SQL query for LIKE clause to escape special characters in path.
 

@@ -105,7 +105,7 @@ def download_file(
     assert not src_url.endswith('/'), "Source URL must not end with a slash."
     while this_try <= n_retries:
         if os.path.isdir(file_path):
-            fname = src_url.split('/')[-1]
+            fname = decode_uri_compnents(src_url.split('/')[-1])
             file_path = os.path.join(file_path, fname)
 
         if not overwrite and os.path.exists(file_path):

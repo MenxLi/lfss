@@ -1,11 +1,12 @@
 from __future__ import annotations
 from typing import Optional, Literal
 from collections.abc import Iterator
-import os, json
+import os
 import requests
 import requests.adapters
 import urllib.parse
 from tempfile import SpooledTemporaryFile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from lfss.eng.error import PathNotFoundError
 from lfss.eng.datatype import (
     FileReadPermission, FileRecord, DirectoryRecord, UserRecord, PathContents, AccessLevel, 
@@ -242,17 +243,6 @@ class Connector:
     def get_fmeta(self, path: str) -> Optional[FileRecord]: assert (f:=self.get_meta(path)) is None or isinstance(f, FileRecord); return f 
     def get_dmeta(self, path: str) -> Optional[DirectoryRecord]: assert (d:=self.get_meta(path)) is None or isinstance(d, DirectoryRecord); return d
     
-    def list_path(self, path: str) -> PathContents:
-        """ 
-        shorthand list with limited options, 
-        for large directories / more options, use list_files and list_dirs instead.
-        """
-        assert path.endswith('/')
-        response = self._fetch_factory('GET', path)()
-        dirs = [DirectoryRecord(**d) for d in response.json()['dirs']]
-        files = [FileRecord(**f) for f in response.json()['files']]
-        return PathContents(dirs=dirs, files=files)
-    
     def count_files(self, path: str, flat: bool = False) -> int:
         assert path.endswith('/')
         response = self._fetch_factory('GET', '_api/count-files', {'path': path, 'flat': flat})()
@@ -286,6 +276,65 @@ class Connector:
             'offset': offset, 'limit': limit, 'order_by': order_by, 'order_desc': order_desc, 'skim': skim
         })()
         return [DirectoryRecord(**d) for d in response.json()]
+    
+    def list_path(
+        self, path: str, offset: int = 0, limit: int = 1000,
+        order_by: FileSortKey = '', order_desc: bool = False, 
+        _workers: int = 2
+    ) -> PathContents:
+        """ Aggregately lists both files and directories under the given path.  """
+        assert path.endswith('/')
+        if path == '/':
+            # handle root path separately
+            # TODO: change later
+            response = self._fetch_factory('GET', path)()
+            dirs = [DirectoryRecord(**d) for d in response.json()['dirs']]
+            files = [FileRecord(**f) for f in response.json()['files']]
+            return PathContents(dirs=dirs, files=files)
+
+        dirs: list[DirectoryRecord] = []
+        files: list[FileRecord] = []
+        with ThreadPoolExecutor(max_workers=_workers) as executor:
+            count_futures = {
+                executor.submit(self.count_dirs, path): 'dirs',
+                executor.submit(self.count_files, path, flat=False): 'files'
+            }
+            dir_count = 0
+            file_count = 0
+            for future in as_completed(count_futures):
+                if count_futures[future] == 'dirs':
+                    dir_count = future.result()
+                else:
+                    file_count = future.result()
+            dir_offset = offset
+            dir_limit = min(limit, max(0, dir_count - dir_offset))
+            file_offset = max(0, offset - dir_count)
+            file_limit = min(limit - dir_limit, max(0, file_count - file_offset))
+
+            dir_order_by = 'dirname' if order_by == 'url' else ''
+            file_order_by = order_by
+
+            def fetch_dirs():
+                nonlocal dirs
+                if dir_limit > 0:
+                    dirs = self.list_dirs(
+                        path, offset=dir_offset, limit=dir_limit, 
+                        order_by=dir_order_by, order_desc=order_desc
+                    )
+            def fetch_files():
+                nonlocal files
+                if file_limit > 0:
+                    files = self.list_files(
+                        path, offset=file_offset, limit=file_limit, 
+                        order_by=file_order_by, order_desc=order_desc, flat=False
+                    )
+            futures = [
+                executor.submit(fetch_dirs),
+                executor.submit(fetch_files)
+            ]
+            for future in as_completed(futures):
+                future.result()
+        return PathContents(dirs=dirs, files=files)
 
     def set_file_permission(self, path: str, permission: int | FileReadPermission):
         """Sets the file permission for the specified path."""

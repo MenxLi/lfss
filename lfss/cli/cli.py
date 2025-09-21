@@ -3,7 +3,10 @@ import argparse, typing, sys
 from lfss.api import Connector, upload_directory, upload_file, download_file, download_directory
 from lfss.eng.datatype import FileReadPermission, FileSortKey, DirSortKey, AccessLevel
 from lfss.eng.utils import decode_uri_components, fmt_storage_size
-from . import catch_request_error, line_sep
+from . import catch_request_error, line_sep as _line_sep
+
+# monkey patch to avoid printing line separators...may remove line_sep in the future
+line_sep = lambda *args, **kwargs: _line_sep(*args, enable=False, **kwargs)
 
 def parse_permission(s: str) -> FileReadPermission:
     for p in FileReadPermission:
@@ -65,6 +68,15 @@ def parse_arguments():
     sp_delete = sp.add_parser("delete", help="Delete files or directories", aliases=["del"])
     sp_delete.add_argument("path", help="Path to delete", nargs="+", type=str)
     sp_delete.add_argument("-y", "--yes", action="store_true", help="Confirm deletion without prompt")
+
+    # aggregate list
+    sp_list = sp.add_parser("list", help="Aggregately list files and directories of a given path", aliases=["ls"])
+    sp_list.add_argument("path", help="Path to list", type=str)
+    sp_list.add_argument("--offset", type=int, default=0, help="Offset of the list")
+    sp_list.add_argument("--limit", type=int, default=100, help="Limit of the list")
+    sp_list.add_argument("-l", "--long", action="store_true", help="Detailed list, including all metadata")
+    sp_list.add_argument("--order", "--order-by", type=str, help="Order of the list", default="", choices=typing.get_args(FileSortKey))
+    sp_list.add_argument("--reverse", "--order-desc", action="store_true", help="Reverse the list order")
 
     # list directories
     sp_list_d = sp.add_parser("list-d", help="List directories of a given path", aliases=["lsd"])
@@ -191,6 +203,25 @@ def main():
                     print(f"\033[31mNot found\033[0m ({path})")
                 else:
                     print(res)
+    
+    elif args.command in ["ls", "list"]:
+        with catch_request_error(default_error_handler_dict(args.path)):
+            res = connector.list_path(
+                args.path, 
+                offset=args.offset, 
+                limit=args.limit, 
+                order_by=args.order,
+                order_desc=args.reverse,
+            )
+            for i, d in enumerate(line_sep(res.dirs, end=False)):
+                d.url = decode_uri_components(d.url)
+                print(f"[d{i+1}] {d if args.long else d.url}")
+            for i, f in enumerate(line_sep(res.files)):
+                f.url = decode_uri_components(f.url)
+                print(f"[f{i+1}] {f if args.long else f.url}")
+
+            if len(res.dirs) + len(res.files) == args.limit:
+                print(f"\033[33m[Warning] List limit reached, use --offset and --limit to list more items.\033[0m")
     
     elif args.command in ["lsf", "list-f"]:
         with catch_request_error(default_error_handler_dict(args.path)):

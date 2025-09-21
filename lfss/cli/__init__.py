@@ -19,13 +19,13 @@ T = TypeVar('T')
 def line_sep(iter: Iterable[T], enable=True, start=True, end=True, color="\033[90m") -> Generator[T, None, None]:
     screen_width = os.get_terminal_size().columns
     def print_ln():
-        print(color + "-" * screen_width + "\033[0m")
+        if enable: print(color + "-" * screen_width + "\033[0m")
 
-    if start and enable:
+    if start:
         print_ln()
     for i, line in enumerate(iter):
-        if enable and i > 0:
+        if i > 0:
             print_ln()
         yield line
-    if end and enable:
+    if end:
         print_ln()

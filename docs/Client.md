@@ -14,27 +14,24 @@ then you can use the following commands:
 lfss whoami
 
 # Query a path
-lfss query remote/file[/or_dir/]
+lfss i remote/file[/or_dir/]
 
-# List directories of a specified path
-lfss list-dirs remote/dir/
-
-# List files of a specified path, 
+# List a specified path, 
 # with pagination and sorting
-lfss list-files --offset 0 --limit 100 --order access_time remote/dir/
+lfss ls remote/dir/ --offset 0 --limit 100 --order access_time 
 
 # Upload a file
-lfss upload local/file.txt remote/file.txt
+lfss up local/file.txt remote/file.txt
 
 # Upload a directory, note the ending slashes
-lfss upload local/dir/ remote/dir/
+lfss up local/dir/ remote/dir/
 
 # Download a file
-lfss download remote/file.txt local/file.txt
+lfss down remote/file.txt local/file.txt
 
-# Download a directory, with verbose output and 8 concurrent jobs
+# Download a directory, with 8 concurrent jobs
 # Overwrite existing files
-lfss download -v -j 8 --conflict overwrite remote/dir/ local/dir/   
+lfss down remote/dir/ local/dir/ -j 8 --conflict overwrite  
 ```
 
-More commands can be found using `lfss-cli --help`.
+More commands can be found using `lfss --help`.

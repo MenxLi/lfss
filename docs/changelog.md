@@ -1,3 +1,11 @@
+## 0.12
+
+### 0.12.0
+- Change default script to client CLI
+- Client CLI default to verbose output
+- Client CLI subcommand rename and alias
+- Add delete path and more error handling for client CLI
+
 ## 0.11
 
 ### 0.11.6

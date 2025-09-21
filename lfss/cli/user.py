@@ -1,4 +1,4 @@
-import argparse, asyncio, os
+import argparse, asyncio, os, secrets
 from contextlib import asynccontextmanager
 from .cli import parse_permission, FileReadPermission
 from ..eng.utils import parse_storage_size, fmt_storage_size
@@ -18,10 +18,10 @@ async def _main():
     sp = parser.add_subparsers(dest='subparser_name', required=True)
     sp_add = sp.add_parser('add')
     sp_add.add_argument('username', type=str)
-    sp_add.add_argument('password', type=str)
+    sp_add.add_argument('password', nargs='?', type=str, default=None)
     sp_add.add_argument('--admin', action='store_true', help='Set user as admin')
     sp_add.add_argument("--permission", type=parse_permission, default=FileReadPermission.UNSET, help="File permission, can be public, protected, private, or unset")
-    sp_add.add_argument('--max-storage', type=parse_storage_size, default="1G", help="Maximum storage size, e.g. 1G, 100M, 10K")
+    sp_add.add_argument('--max-storage', type=parse_storage_size, default="10G", help="Maximum storage size, e.g. 1G, 100M, 10K, default is 10G")
     
     sp_delete = sp.add_parser('delete')
     sp_delete.add_argument('username', type=str)
@@ -58,6 +58,9 @@ async def _main():
     
     if args.subparser_name == 'add':
         async with get_uconn() as uconn:
+            if args.password is None:
+                passwd = secrets.token_urlsafe(16)
+                args.password = passwd
             await uconn.create_user(args.username, args.password, args.admin, max_storage=args.max_storage, permission=args.permission)
             user = await uconn.get_user(args.username)
             assert user is not None

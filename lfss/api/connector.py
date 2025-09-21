@@ -318,8 +318,8 @@ class Connector:
         response = self._fetch_factory('GET', '_api/whoami')()
         return UserRecord(**response.json())
 
-    def list_peers(self, level: AccessLevel = AccessLevel.READ) -> list[UserRecord]:
+    def list_peers(self, level: AccessLevel = AccessLevel.READ, incoming: bool = False) -> list[UserRecord]:
         """List all users that have at least the given access level to the current user."""
-        response = self._fetch_factory('GET', '_api/list-peers', {'level': int(level)})()
+        response = self._fetch_factory('GET', '_api/list-peers', {'level': int(level), 'incoming': incoming})()
         users = [UserRecord(**u) for u in response.json()]
         return users

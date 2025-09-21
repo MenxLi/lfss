@@ -163,25 +163,31 @@ class UserConn(DBObjectBase):
             return AccessLevel.NONE
         return AccessLevel(res[0])
     
-    async def list_peer_users(self, src_user: int | str, level: AccessLevel) -> list[UserRecord]:
+    async def list_peer_users(self, user: int | str, level: AccessLevel, incoming = False) -> list[UserRecord]:
         """
-        List all users that src_user can do [AliasLevel] to, with level >= level, 
-        Note: the returned list does not include src_user and is not apporiate for admin (who has all permissions for all users)
+        if not incoming:
+            List all users that user can do [AliasLevel] to, with level >= level, 
+        else:
+            List all users that can do [AliasLevel] to user, with level >= level
+        Note: the returned list does not include user and is not apporiate for admin (who has all permissions for all users)
         """
         assert int(level) > AccessLevel.NONE, f"Invalid level, {level}"
-        match src_user:
+        aim_field = 'src_user_id' if incoming else 'dst_user_id'
+        query_field = 'dst_user_id' if incoming else 'src_user_id'
+    
+        match user:
             case int():
-                await self.cur.execute("""
+                await self.cur.execute(f"""
                     SELECT * FROM user WHERE id IN (
-                        SELECT dst_user_id FROM upeer WHERE src_user_id = ? AND access_level >= ?
+                        SELECT {aim_field} FROM upeer WHERE {query_field} = ? AND access_level >= ?
                     )
-                """, (src_user, int(level)))
+                """, (user, int(level)))
             case str():
-                await self.cur.execute("""
+                await self.cur.execute(f"""
                     SELECT * FROM user WHERE id IN (
-                        SELECT dst_user_id FROM upeer WHERE src_user_id = (SELECT id FROM user WHERE username = ?) AND access_level >= ?
+                        SELECT {aim_field} FROM upeer WHERE {query_field} = (SELECT id FROM user WHERE username = ?) AND access_level >= ?
                     )
-                """, (src_user, int(level)))
+                """, (user, int(level)))
             case _:
                 raise ValueError("Invalid arguments")
         res = await self.cur.fetchall()

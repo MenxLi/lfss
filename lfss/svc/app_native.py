@@ -187,10 +187,10 @@ async def copy_file(
 
 @router_api.get("/list-peers")
 @handle_exception
-async def list_peers(user: UserRecord = Depends(registered_user), level: AccessLevel = AccessLevel.READ):
+async def list_peers(user: UserRecord = Depends(registered_user), level: AccessLevel = AccessLevel.READ, incoming: bool = False):
     async with unique_cursor() as conn:
         uconn = UserConn(conn)
-        peer_users = await uconn.list_peer_users(user.id, level)
+        peer_users = await uconn.list_peer_users(user.id, level, incoming=incoming)
     for u in peer_users:
         u.credential = "__HIDDEN__"
     return peer_users

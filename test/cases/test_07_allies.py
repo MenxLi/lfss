@@ -25,6 +25,10 @@ def test_list_peers(server):
     assert len(peers0) == 1, "Peer count is not correct"
     assert peers0[0].username == 'u2', "Peer username is not correct"
 
+    c2 = get_conn('u2')
+    peers2 = c2.list_peers(incoming=True)
+    assert len(peers2) == 2, "Peer count is not correct"
+
 def test_u2_upload(server):
     c2 = get_conn('u2')
     c2.put('u2/1.bin', b"hello world")

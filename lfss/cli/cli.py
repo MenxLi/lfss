@@ -1,7 +1,7 @@
 from pathlib import Path
 import argparse, typing, sys
 from lfss.api import Connector, upload_directory, upload_file, download_file, download_directory
-from lfss.eng.datatype import FileReadPermission, FileSortKey, DirSortKey
+from lfss.eng.datatype import FileReadPermission, FileSortKey, DirSortKey, AccessLevel
 from lfss.eng.utils import decode_uri_components, fmt_storage_size
 from . import catch_request_error, line_sep
 
@@ -10,6 +10,11 @@ def parse_permission(s: str) -> FileReadPermission:
         if p.name.lower() == s.lower():
             return p
     raise ValueError(f"Invalid permission {s}")
+def parse_access_level(s: str) -> AccessLevel:
+    for p in AccessLevel:
+        if p.name.lower() == s.lower():
+            return p
+    raise ValueError(f"Invalid access level {s}")
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Client-side command line interface, set LFSS_ENDPOINT and LFSS_TOKEN environment variables for authentication.")
@@ -18,6 +23,10 @@ def parse_arguments():
 
     # whoami
     sp_whoami = sp.add_parser("whoami", help="Show current user information")
+
+    # list peers
+    sp_peers = sp.add_parser("peers", help="List all users that have at least the given access level to the current user")
+    sp_peers.add_argument('-l', "--level", type=parse_access_level, default=AccessLevel.READ, help="Access level filter")
 
     # upload
     sp_upload = sp.add_parser("upload", help="Upload file(s)")
@@ -78,6 +87,13 @@ def main():
             print("Default Permission:", user.permission.name)
             print("Created At:", user.create_time)
             print("Last Active:", user.last_active)
+    
+    elif args.command == "peers":
+        with catch_request_error():
+            users = connector.list_peers(level=args.level)
+            print(f"Peers with {args.level.name} access:")
+            for i, u in enumerate(line_sep(users)):
+                print(f"[{i+1}] {u.username} (id={u.id})")
 
     elif args.command == "upload":
         src_path = Path(args.src)

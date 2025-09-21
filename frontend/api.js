@@ -249,6 +249,7 @@ export default class Connector {
     /**
      * @param {string} path - the path to the file directory, should ends with '/'
      * @returns {Promise<PathListResponse>} - the promise of the request
+     * NOTE: will deprecated in future
      */
     async listPath(path){
         path = this._sanitizeDirPath(path);

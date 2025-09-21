@@ -19,6 +19,12 @@ def test_user_creation(server):
     s = subprocess.check_output(['lfss-user', 'set-peer', 'u0', 'u2', '--level', 'write'], cwd=SANDBOX_DIR)
     s = subprocess.check_output(['lfss-user', 'set-peer', 'u1', 'u2', '--level', 'read'], cwd=SANDBOX_DIR)
 
+def test_list_peers(server):
+    c0 = get_conn('u0')
+    peers0 = c0.list_peers()
+    assert len(peers0) == 1, "Peer count is not correct"
+    assert peers0[0].username == 'u2', "Peer username is not correct"
+
 def test_u2_upload(server):
     c2 = get_conn('u2')
     c2.put('u2/1.bin', b"hello world")

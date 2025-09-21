@@ -8,7 +8,7 @@ from fastapi.exceptions import HTTPException
 from ..eng.utils import ensure_uri_components
 from ..eng.config import MAX_MEM_FILE_BYTES
 from ..eng.connection_pool import unique_cursor
-from ..eng.database import check_file_read_permission, check_path_permission, FileConn, delayed_log_access
+from ..eng.database import check_file_read_permission, check_path_permission, FileConn, delayed_log_access, UserConn
 from ..eng.datatype import (
     FileReadPermission, UserRecord, AccessLevel, 
     FileSortKey, DirSortKey
@@ -184,6 +184,16 @@ async def copy_file(
     user: UserRecord = Depends(registered_user)
     ):
     return await copy_impl(src_path = src, dst_path = dst, op_user = user)
+
+@router_api.get("/list-peers")
+@handle_exception
+async def list_peers(user: UserRecord = Depends(registered_user), level: AccessLevel = AccessLevel.READ):
+    async with unique_cursor() as conn:
+        uconn = UserConn(conn)
+        peer_users = await uconn.list_peer_users(user.id, level)
+    for u in peer_users:
+        u.credential = "__HIDDEN__"
+    return peer_users
 
 async def validate_path_read_permission(path: str, user: UserRecord):
     if not path.endswith("/"):

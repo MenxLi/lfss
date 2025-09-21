@@ -8,7 +8,7 @@ import urllib.parse
 from tempfile import SpooledTemporaryFile
 from lfss.eng.error import PathNotFoundError
 from lfss.eng.datatype import (
-    FileReadPermission, FileRecord, DirectoryRecord, UserRecord, PathContents, 
+    FileReadPermission, FileRecord, DirectoryRecord, UserRecord, PathContents, AccessLevel, 
     FileSortKey, DirSortKey
     )
 from lfss.eng.utils import ensure_uri_components
@@ -317,3 +317,9 @@ class Connector:
         """Gets information about the current user."""
         response = self._fetch_factory('GET', '_api/whoami')()
         return UserRecord(**response.json())
+
+    def list_peers(self, level: AccessLevel = AccessLevel.READ) -> list[UserRecord]:
+        """List all users that have at least the given access level to the current user."""
+        response = self._fetch_factory('GET', '_api/list-peers', {'level': int(level)})()
+        users = [UserRecord(**u) for u in response.json()]
+        return users

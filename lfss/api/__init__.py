@@ -75,7 +75,7 @@ def upload_directory(
             this_count = _counter
             dst_path = f"{path}{os.path.relpath(file_path, directory)}"
             if verbose:
-                print(f"[{this_count}] Uploading {file_path} to {dst_path}")
+                print(f"[{this_count}] {file_path} -> {dst_path}")
 
         if not (res:=upload_file(
             c, file_path, dst_path, 
@@ -178,7 +178,7 @@ def download_directory(
             this_count = _counter
             dst_path = f"{directory}{os.path.relpath(decode_uri_components(src_url), decode_uri_components(src_path))}"
             if verbose:
-                print(f"[{this_count}/{file_count}] Downloading {src_url} to {dst_path}")
+                print(f"[{this_count}/{file_count}] {src_url} -> {dst_path}")
 
         if not (res:=download_file(
             c, src_url, dst_path, 

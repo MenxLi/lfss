@@ -43,7 +43,7 @@ def parse_arguments():
     sp_upload = sp.add_parser("upload", help="Upload a file or directory", aliases=["up"])
     sp_upload.add_argument("src", help="Source file or directory", type=str)
     sp_upload.add_argument("dst", help="Destination url path", type=str)
-    sp_upload.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+    sp_upload.add_argument("-q", "--quiet", action="store_true", help="Quiet output, no progress info")
     sp_upload.add_argument("-j", "--jobs", type=int, default=1, help="Number of concurrent uploads")
     sp_upload.add_argument("--interval", type=float, default=0, help="Interval between files, only works with directory upload")
     sp_upload.add_argument("--conflict", choices=["overwrite", "abort", "skip", "skip-ahead"], default="abort", help="Conflict resolution")
@@ -54,10 +54,10 @@ def parse_arguments():
     sp_download = sp.add_parser("download", help="Download a file or directory", aliases=["down"])
     sp_download.add_argument("src", help="Source url path", type=str)
     sp_download.add_argument("dst", help="Destination file or directory", type=str)
-    sp_download.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+    sp_download.add_argument("-q", "--quiet", action="store_true", help="Quiet output, no progress info")
     sp_download.add_argument("-j", "--jobs", type=int, default=1, help="Number of concurrent downloads")
     sp_download.add_argument("--interval", type=float, default=0, help="Interval between files, only works with directory download")
-    sp_download.add_argument("--overwrite", action="store_true", help="Overwrite existing files")
+    sp_download.add_argument("--conflict", choices=["overwrite", "skip"], default="abort", help="Conflict resolution, only works with file download")
     sp_download.add_argument("--retries", type=int, default=0, help="Number of retries")
 
     # query
@@ -128,7 +128,7 @@ def main():
         if src_path.is_dir():
             failed_upload = upload_directory(
                 connector, args.src, args.dst, 
-                verbose=args.verbose,
+                verbose=not args.quiet,
                 n_concurrent=args.jobs, 
                 n_retries=args.retries, 
                 interval=args.interval,
@@ -144,7 +144,7 @@ def main():
                 connector, 
                 file_path = args.src, 
                 dst_url = args.dst, 
-                verbose=args.verbose,
+                verbose=not args.quiet,
                 n_retries=args.retries, 
                 interval=args.interval,
                 conflict=args.conflict,
@@ -158,11 +158,11 @@ def main():
         if is_dir:
             failed_download = download_directory(
                 connector, args.src, args.dst, 
-                verbose=args.verbose,
+                verbose=not args.quiet,
                 n_concurrent=args.jobs, 
                 n_retries=args.retries, 
                 interval=args.interval,
-                overwrite=args.overwrite
+                overwrite=args.conflict == "overwrite"
             )
             if failed_download:
                 print("\033[91mFailed to download:\033[0m", file=sys.stderr)
@@ -173,7 +173,7 @@ def main():
                 connector, 
                 src_url = args.src, 
                 file_path = args.dst, 
-                verbose=args.verbose,
+                verbose=not args.quiet,
                 n_retries=args.retries, 
                 interval=args.interval,
                 overwrite=args.overwrite
@@ -181,7 +181,7 @@ def main():
             if not success:
                 print("\033[91mFailed to download: \033[0m", msg, file=sys.stderr)
     
-    elif args.command == "delete":
+    elif args.command in ["delete", "del"]:
         if not args.yes:
             print("You are about to delete the following paths:")
             for path in args.path:

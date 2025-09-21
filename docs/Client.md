@@ -10,6 +10,9 @@ pip install lfss --no-deps
 Then set the `LFSS_ENDPOINT`, `LFSS_TOKEN` environment variables, 
 then you can use the following commands:
 ```sh
+# Check current user information
+lfss whoami
+
 # Query a path
 lfss query remote/file[/or_dir/]
 

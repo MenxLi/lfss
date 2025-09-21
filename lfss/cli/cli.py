@@ -2,7 +2,7 @@ from pathlib import Path
 import argparse, typing, sys
 from lfss.api import Connector, upload_directory, upload_file, download_file, download_directory
 from lfss.eng.datatype import FileReadPermission, FileSortKey, DirSortKey
-from lfss.eng.utils import decode_uri_components
+from lfss.eng.utils import decode_uri_components, fmt_storage_size
 from . import catch_request_error, line_sep
 
 def parse_permission(s: str) -> FileReadPermission:
@@ -16,8 +16,11 @@ def parse_arguments():
 
     sp = parser.add_subparsers(dest="command", required=True)
 
+    # whoami
+    sp_whoami = sp.add_parser("whoami", help="Show current user information")
+
     # upload
-    sp_upload = sp.add_parser("upload", help="Upload files")
+    sp_upload = sp.add_parser("upload", help="Upload file(s)")
     sp_upload.add_argument("src", help="Source file or directory", type=str)
     sp_upload.add_argument("dst", help="Destination url path", type=str)
     sp_upload.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
@@ -28,7 +31,7 @@ def parse_arguments():
     sp_upload.add_argument("--retries", type=int, default=0, help="Number of retries")
 
     # download
-    sp_download = sp.add_parser("download", help="Download files")
+    sp_download = sp.add_parser("download", help="Download file(s)")
     sp_download.add_argument("src", help="Source url path", type=str)
     sp_download.add_argument("dst", help="Destination file or directory", type=str)
     sp_download.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
@@ -38,7 +41,7 @@ def parse_arguments():
     sp_download.add_argument("--retries", type=int, default=0, help="Number of retries")
 
     # query
-    sp_query = sp.add_parser("query", help="Query files or directories metadata from the server")
+    sp_query = sp.add_parser("query", help="Query file or directories metadata from the server")
     sp_query.add_argument("path", help="Path to query", nargs="*", type=str)
 
     # list directories
@@ -65,7 +68,18 @@ def parse_arguments():
 def main():
     args = parse_arguments()
     connector = Connector()
-    if args.command == "upload":
+    if args.command == "whoami":
+        with catch_request_error():
+            user = connector.whoami()
+            print("Username:", user.username)
+            print("User ID:", user.id)
+            print("Is Admin:", bool(user.is_admin))
+            print("Max Storage:", fmt_storage_size(user.max_storage))
+            print("Default Permission:", user.permission.name)
+            print("Created At:", user.create_time)
+            print("Last Active:", user.last_active)
+
+    elif args.command == "upload":
         src_path = Path(args.src)
         if src_path.is_dir():
             failed_upload = upload_directory(

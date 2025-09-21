@@ -37,7 +37,7 @@ def parse_arguments():
     sp_peers.add_argument('-i', '--incoming', action='store_true', help="List users that have access to you (rather than you have access to them")
 
     # upload
-    sp_upload = sp.add_parser("upload", help="Upload a file or directory")
+    sp_upload = sp.add_parser("upload", help="Upload a file or directory", aliases=["up"])
     sp_upload.add_argument("src", help="Source file or directory", type=str)
     sp_upload.add_argument("dst", help="Destination url path", type=str)
     sp_upload.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
@@ -48,7 +48,7 @@ def parse_arguments():
     sp_upload.add_argument("--retries", type=int, default=0, help="Number of retries")
 
     # download
-    sp_download = sp.add_parser("download", help="Download a file or directory")
+    sp_download = sp.add_parser("download", help="Download a file or directory", aliases=["down"])
     sp_download.add_argument("src", help="Source url path", type=str)
     sp_download.add_argument("dst", help="Destination file or directory", type=str)
     sp_download.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
@@ -58,16 +58,16 @@ def parse_arguments():
     sp_download.add_argument("--retries", type=int, default=0, help="Number of retries")
 
     # query
-    sp_query = sp.add_parser("query", help="Query file or directories metadata from the server")
+    sp_query = sp.add_parser("info", help="Query file or directories metadata from the server", aliases=["i"])
     sp_query.add_argument("path", help="Path to query", nargs="+", type=str)
 
     # delete
-    sp_delete = sp.add_parser("delete", help="Delete files or directories")
+    sp_delete = sp.add_parser("delete", help="Delete files or directories", aliases=["del"])
     sp_delete.add_argument("path", help="Path to delete", nargs="+", type=str)
     sp_delete.add_argument("-y", "--yes", action="store_true", help="Confirm deletion without prompt")
 
     # list directories
-    sp_list_d = sp.add_parser("list-dirs", help="List directories of a given path")
+    sp_list_d = sp.add_parser("list-d", help="List directories of a given path", aliases=["lsd"])
     sp_list_d.add_argument("path", help="Path to list", type=str)
     sp_list_d.add_argument("--offset", type=int, default=0, help="Offset of the list")
     sp_list_d.add_argument("--limit", type=int, default=100, help="Limit of the list")
@@ -76,7 +76,7 @@ def parse_arguments():
     sp_list_d.add_argument("--reverse", "--order-desc", action="store_true", help="Reverse the list order")
 
     # list files
-    sp_list_f = sp.add_parser("list-files", help="List files of a given path")
+    sp_list_f = sp.add_parser("list-f", help="List files of a given path", aliases=["lsf"])
     sp_list_f.add_argument("path", help="Path to list", type=str)
     sp_list_f.add_argument("--offset", type=int, default=0, help="Offset of the list")
     sp_list_f.add_argument("--limit", type=int, default=100, help="Limit of the list")
@@ -111,7 +111,7 @@ def main():
             for i, u in enumerate(line_sep(users)):
                 print(f"[{i+1}] {u.username} (id={u.id})")
 
-    elif args.command == "upload":
+    elif args.command in ["upload", "up"]:
         src_path = Path(args.src)
         if src_path.is_dir():
             failed_upload = upload_directory(
@@ -141,7 +141,7 @@ def main():
             if not success:
                 print("\033[91mFailed to upload: \033[0m", msg, file=sys.stderr)
     
-    elif args.command == "download":
+    elif args.command in ["download", "down"]:
         is_dir = args.src.endswith("/")
         if is_dir:
             failed_download = download_directory(
@@ -183,7 +183,7 @@ def main():
                 connector.delete(path)
                 print(f"\033[32mDeleted\033[0m ({path})")
     
-    elif args.command == "query":
+    elif args.command in ["info", "i"]:
         for path in args.path:
             with catch_request_error(default_error_handler_dict(path)):
                 res = connector.get_meta(path)
@@ -192,7 +192,7 @@ def main():
                 else:
                     print(res)
     
-    elif args.command == "list-files":
+    elif args.command in ["lsf", "list-f"]:
         with catch_request_error(default_error_handler_dict(args.path)):
             res = connector.list_files(
                 args.path, 
@@ -207,9 +207,9 @@ def main():
                 print(f"[{i+1}] {f if args.long else f.url}")
 
             if len(res) == args.limit:
-                print(f"\033[33m[Warning] List limit reached, use --offset and --limit to list more files.")
+                print(f"\033[33m[Warning] List limit reached, use --offset and --limit to list more files.\033[0m")
         
-    elif args.command == "list-dirs":
+    elif args.command in ["lsd", "list-d"]:
         with catch_request_error(default_error_handler_dict(args.path)):
             res = connector.list_dirs(
                 args.path, 
@@ -224,7 +224,7 @@ def main():
                 print(f"[{i+1}] {d if args.long else d.url}")
 
             if len(res) == args.limit:
-                print(f"\033[33m[Warning] List limit reached, use --offset and --limit to list more directories.")
+                print(f"\033[33m[Warning] List limit reached, use --offset and --limit to list more directories.\033[0m")
     
     else:
         raise NotImplementedError(f"Command {args.command} not implemented.")

@@ -15,6 +15,13 @@ def parse_access_level(s: str) -> AccessLevel:
         if p.name.lower() == s.lower():
             return p
     raise ValueError(f"Invalid access level {s}")
+def default_error_handler_dict(path: str):
+    return {
+        401: lambda _: print(f"\033[31mUnauthorized\033[0m ({path})", file=sys.stderr),
+        403: lambda _: print(f"\033[31mForbidden\033[0m ({path})", file=sys.stderr),
+        404: lambda _: print(f"\033[31mNot found\033[0m ({path})", file=sys.stderr), 
+        409: lambda _: print(f"\033[31mConflict\033[0m ({path})", file=sys.stderr),
+    }
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Client-side command line interface, set LFSS_ENDPOINT and LFSS_TOKEN environment variables for authentication.")
@@ -30,7 +37,7 @@ def parse_arguments():
     sp_peers.add_argument('-i', '--incoming', action='store_true', help="List users that have access to you (rather than you have access to them")
 
     # upload
-    sp_upload = sp.add_parser("upload", help="Upload file(s)")
+    sp_upload = sp.add_parser("upload", help="Upload a file or directory")
     sp_upload.add_argument("src", help="Source file or directory", type=str)
     sp_upload.add_argument("dst", help="Destination url path", type=str)
     sp_upload.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
@@ -41,7 +48,7 @@ def parse_arguments():
     sp_upload.add_argument("--retries", type=int, default=0, help="Number of retries")
 
     # download
-    sp_download = sp.add_parser("download", help="Download file(s)")
+    sp_download = sp.add_parser("download", help="Download a file or directory")
     sp_download.add_argument("src", help="Source url path", type=str)
     sp_download.add_argument("dst", help="Destination file or directory", type=str)
     sp_download.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
@@ -52,7 +59,12 @@ def parse_arguments():
 
     # query
     sp_query = sp.add_parser("query", help="Query file or directories metadata from the server")
-    sp_query.add_argument("path", help="Path to query", nargs="*", type=str)
+    sp_query.add_argument("path", help="Path to query", nargs="+", type=str)
+
+    # delete
+    sp_delete = sp.add_parser("delete", help="Delete files or directories")
+    sp_delete.add_argument("path", help="Path to delete", nargs="+", type=str)
+    sp_delete.add_argument("-y", "--yes", action="store_true", help="Confirm deletion without prompt")
 
     # list directories
     sp_list_d = sp.add_parser("list-dirs", help="List directories of a given path")
@@ -157,9 +169,23 @@ def main():
             if not success:
                 print("\033[91mFailed to download: \033[0m", msg, file=sys.stderr)
     
+    elif args.command == "delete":
+        if not args.yes:
+            print("You are about to delete the following paths:")
+            for path in args.path:
+                print("[D]" if path.endswith("/") else "[F]", path)
+            confirm = input("Are you sure? ([yes]/no): ")
+            if confirm.lower() not in ["", "y", "yes"]:
+                print("Aborted.")
+                exit(0)
+        for path in args.path:
+            with catch_request_error(default_error_handler_dict(path)):
+                connector.delete(path)
+                print(f"\033[32mDeleted\033[0m ({path})")
+    
     elif args.command == "query":
         for path in args.path:
-            with catch_request_error():
+            with catch_request_error(default_error_handler_dict(path)):
                 res = connector.get_meta(path)
                 if res is None:
                     print(f"\033[31mNot found\033[0m ({path})")
@@ -167,7 +193,7 @@ def main():
                     print(res)
     
     elif args.command == "list-files":
-        with catch_request_error():
+        with catch_request_error(default_error_handler_dict(args.path)):
             res = connector.list_files(
                 args.path, 
                 offset=args.offset, 
@@ -184,7 +210,7 @@ def main():
                 print(f"\033[33m[Warning] List limit reached, use --offset and --limit to list more files.")
         
     elif args.command == "list-dirs":
-        with catch_request_error():
+        with catch_request_error(default_error_handler_dict(args.path)):
             res = connector.list_dirs(
                 args.path, 
                 offset=args.offset, 

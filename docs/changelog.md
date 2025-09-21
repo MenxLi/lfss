@@ -1,5 +1,10 @@
 ## 0.11
 
+### 0.11.6
+- Hint copy and move success for frontend.
+- Add query user info and list peers api.
+- Add user with random password if not specified.
+
 ### 0.11.5
 - Script entry default to client CLI. 
 - Fix single file download name deduce with decoding.

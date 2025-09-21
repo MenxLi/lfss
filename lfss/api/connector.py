@@ -18,6 +18,13 @@ _default_endpoint = os.environ.get('LFSS_ENDPOINT', 'http://localhost:8000')
 _default_token = os.environ.get('LFSS_TOKEN', '')
 num_t = float | int
 
+def _p(x: str) -> str:
+    if x == '/':
+        return x
+    if x.startswith('/'):
+        x = x[1:]
+    return x
+
 class Connector:
     class Session:
         def __init__(
@@ -100,6 +107,7 @@ class Connector:
     def put(self, path: str, file_data: bytes, permission: int | FileReadPermission = 0, conflict: Literal['overwrite', 'abort', 'skip', 'skip-ahead'] = 'abort'):
         """Uploads a file to the specified path."""
         assert isinstance(file_data, bytes), "file_data must be bytes"
+        path = _p(path)
 
         # Skip ahead by checking if the file already exists
         if conflict == 'skip-ahead':
@@ -124,6 +132,7 @@ class Connector:
         using the POST method, with form-data/multipart.
         file can be a path to a file on disk, or bytes.
         """
+        path = _p(path)
 
         # Skip ahead by checking if the file already exists
         if conflict == 'skip-ahead':
@@ -156,6 +165,7 @@ class Connector:
         """Uploads a JSON file to the specified path."""
         assert path.endswith('.json'), "Path must end with .json"
         assert isinstance(data, dict), "data must be a dict"
+        path = _p(path)
 
         # Skip ahead by checking if the file already exists
         if conflict == 'skip-ahead':
@@ -185,6 +195,7 @@ class Connector:
 
     def get(self, path: str) -> Optional[bytes]:
         """Downloads a file from the specified path."""
+        path = _p(path)
         response = self._get(path)
         if response is None: return None
         return response.content
@@ -194,6 +205,7 @@ class Connector:
         Downloads a partial file from the specified path.
         start and end are the byte offsets, both inclusive.
         """
+        path = _p(path)
         response = self._fetch_factory('GET', path, extra_headers={
             'Range': f"bytes={range_start if range_start >= 0 else ''}-{range_end if range_end >= 0 else ''}"
         })()
@@ -202,11 +214,13 @@ class Connector:
     
     def get_stream(self, path: str) -> Iterator[bytes]:
         """Downloads a file from the specified path, will raise PathNotFoundError if path not found."""
+        path = _p(path)
         response = self._get(path, stream=True)
         if response is None: raise PathNotFoundError("Path not found: " + path)
         return response.iter_content(chunk_size=1024)
 
     def get_json(self, path: str) -> Optional[dict]:
+        path = _p(path)
         response = self._get(path)
         if response is None: return None
         assert response.headers['Content-Type'] == 'application/json'
@@ -219,16 +233,18 @@ class Connector:
         """
         response = self._fetch_factory(
             'GET', '_api/get-multiple', 
-            {'path': paths, "skip_content": skip_content}
+            {'path': [_p(p) for p in paths], "skip_content": skip_content}
             )()
         return response.json()
     
     def delete(self, path: str):
         """Deletes the file at the specified path."""
+        path = _p(path)
         self._fetch_factory('DELETE', path)()
     
     def get_meta(self, path: str) -> Optional[FileRecord | DirectoryRecord]:
         """Gets the metadata for the file at the specified path."""
+        path = _p(path)
         try:
             response = self._fetch_factory('GET', '_api/meta', {'path': path})()
             if path.endswith('/'):
@@ -245,6 +261,7 @@ class Connector:
     
     def count_files(self, path: str, flat: bool = False) -> int:
         assert path.endswith('/')
+        path = _p(path)
         response = self._fetch_factory('GET', '_api/count-files', {'path': path, 'flat': flat})()
         return response.json()['count']
 
@@ -254,6 +271,7 @@ class Connector:
         flat: bool = False
     ) -> list[FileRecord]:
         assert path.endswith('/')
+        path = _p(path)
         response = self._fetch_factory('GET', "_api/list-files", {
             'path': path,
             'offset': offset, 'limit': limit, 'order_by': order_by, 'order_desc': order_desc, 'flat': flat
@@ -262,6 +280,7 @@ class Connector:
     
     def count_dirs(self, path: str) -> int:
         assert path.endswith('/')
+        path = _p(path)
         response = self._fetch_factory('GET', '_api/count-dirs', {'path': path})()
         return response.json()['count']
         
@@ -271,6 +290,7 @@ class Connector:
         skim: bool = True
     ) -> list[DirectoryRecord]:
         assert path.endswith('/')
+        path = _p(path)
         response = self._fetch_factory('GET', "_api/list-dirs", {
             'path': path,
             'offset': offset, 'limit': limit, 'order_by': order_by, 'order_desc': order_desc, 'skim': skim
@@ -284,6 +304,7 @@ class Connector:
     ) -> PathContents:
         """ Aggregately lists both files and directories under the given path.  """
         assert path.endswith('/')
+        path = _p(path)
         if path == '/':
             # handle root path separately
             # TODO: change later
@@ -338,24 +359,28 @@ class Connector:
 
     def set_file_permission(self, path: str, permission: int | FileReadPermission):
         """Sets the file permission for the specified path."""
+        path = _p(path)
         self._fetch_factory('POST', '_api/meta', {'path': path, 'perm': int(permission)})(
             headers={'Content-Type': 'application/www-form-urlencoded'}
         )
         
     def move(self, path: str, new_path: str):
         """Move file or directory to a new path."""
+        path = _p(path); new_path = _p(new_path)
         self._fetch_factory('POST', '_api/meta', {'path': path, 'new_path': new_path})(
             headers = {'Content-Type': 'application/www-form-urlencoded'}
         )
     
     def copy(self, src: str, dst: str):
         """Copy file from src to dst."""
+        src = _p(src); dst = _p(dst)
         self._fetch_factory('POST', '_api/copy', {'src': src, 'dst': dst})(
             headers = {'Content-Type': 'application/www-form-urlencoded'}
         )
     
     def bundle(self, path: str) -> Iterator[bytes]:
         """Bundle a path into a zip file."""
+        path = _p(path)
         response = self._fetch_factory('GET', '_api/bundle', {'path': path})(
             headers = {'Content-Type': 'application/www-form-urlencoded'}, 
             stream = True

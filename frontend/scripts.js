@@ -347,6 +347,7 @@ async function refreshFileList(){
                             console.log("Moving", dirurl, "to", dstPath);
                             conn.move(dirurl, dstPath)
                                 .then(() => {
+                                    showPopup('Successfully moved path.', {level: 'success', timeout: 3000});
                                     refreshFileList();
                                 }, 
                                 (err) => {
@@ -371,6 +372,7 @@ async function refreshFileList(){
                             console.log("Copying", dirurl, "to", dstPath);
                             conn.copy(dirurl, dstPath)
                                 .then(() => {
+                                    showPopup('Successfully copied path.', {level: 'success', timeout: 3000});
                                     refreshFileList();
                                 }, 
                                 (err) => {

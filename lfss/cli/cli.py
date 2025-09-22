@@ -9,7 +9,7 @@ from lfss.eng.datatype import (
 from lfss.eng.utils import decode_uri_components, fmt_storage_size
 
 from . import catch_request_error, line_sep
-from .cli_lib import mimetype_unicode
+from .cli_lib import mimetype_unicode, stream_text
 
 def parse_permission(s: str) -> FileReadPermission:
     for p in FileReadPermission:
@@ -58,9 +58,9 @@ def print_path_list(
         print(decode_uri_components(r.url), end="")
         if detailed:
             if isinstance(r, FileRecord):
-                print(f": size={fmt_storage_size(r.file_size)}, permission={r.permission.name}, created={r.create_time}, accessed={r.access_time}")
+                print(f" | {fmt_storage_size(r.file_size)}, permission={r.permission.name}, created={r.create_time}, accessed={r.access_time}")
             else:
-                print(f": size={fmt_storage_size(r.size)}, created={r.create_time}, accessed={r.access_time}")
+                print()
         else:
             print()
     
@@ -140,6 +140,10 @@ def parse_arguments():
     sp_list_f.add_argument("--order", "--order-by", type=str, help="Order of the list", default="", choices=typing.get_args(FileSortKey))
     sp_list_f.add_argument("--reverse", "--order-desc", action="store_true", help="Reverse the list order")
 
+    # show content
+    sp_show = sp.add_parser("concatenate", help="Concatenate and print files", aliases=["cat"])
+    sp_show.add_argument("path", help="Path to the text files", type=str, nargs="+")
+    sp_show.add_argument("-e", "--encoding", type=str, default="utf-8", help="Text file encoding, default utf-8")
     return parser.parse_args()
 
 def main():
@@ -287,6 +291,15 @@ def main():
             print_path_list(res, detailed=args.long)
             if len(res) == args.limit:
                 print(f"\033[33m[Warning] List limit reached, use --offset and --limit to list more directories.\033[0m")
+    
+    elif args.command in ["cat", "concatenate"]:
+        for _p in args.path:
+            with catch_request_error(default_error_handler_dict(_p)):
+                try:
+                    for chunk in stream_text(connector, _p, encoding=args.encoding):
+                        print(chunk, end="")
+                except (FileNotFoundError, ValueError) as e:
+                    print(f"\033[31m{e}\033[0m", file=sys.stderr)
     
     else:
         raise NotImplementedError(f"Command {args.command} not implemented.")

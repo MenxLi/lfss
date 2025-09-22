@@ -212,12 +212,12 @@ class Connector:
         if response is None: return None
         return response.content
     
-    def get_stream(self, path: str) -> Iterator[bytes]:
+    def get_stream(self, path: str, chunk_size = 1024) -> Iterator[bytes]:
         """Downloads a file from the specified path, will raise PathNotFoundError if path not found."""
         path = _p(path)
         response = self._get(path, stream=True)
         if response is None: raise PathNotFoundError("Path not found: " + path)
-        return response.iter_content(chunk_size=1024)
+        return response.iter_content(chunk_size)
 
     def get_json(self, path: str) -> Optional[dict]:
         path = _p(path)

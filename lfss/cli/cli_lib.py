@@ -1,4 +1,5 @@
 
+from ..api.connector import Connector
 from ..eng.datatype import DirectoryRecord, FileRecord
 
 def mimetype_unicode(r: DirectoryRecord | FileRecord):
@@ -34,3 +35,30 @@ def mimetype_unicode(r: DirectoryRecord | FileRecord):
     elif r.mime_type.startswith("text/"):
         return "📃"
     return "📄"
+
+def stream_text(
+    conn: Connector, 
+    path: str,
+    encoding="utf-8",
+    chunk_size=1024 * 8,
+    ):
+    """
+    Stream text content of a file from the server.
+    Raise FileNotFoundError if the file does not exist.
+    Raise ValueError if the file size exceeds MAX_TEXT_SIZE.
+    
+    Yields str chunks.
+    """
+    MAX_TEXT_SIZE = 100 * 1024 * 1024  # 100 MB
+    r = conn.get_fmeta(path)
+    if r is None:
+        raise FileNotFoundError(f"File not found: {path}")
+    if r.file_size > MAX_TEXT_SIZE:
+        raise ValueError(f"File size {r.file_size} exceeds maximum text size {MAX_TEXT_SIZE}")
+    ss = conn.get_stream(r.url, chunk_size=chunk_size)
+    total_read = 0
+    for chunk in ss:
+        total_read += len(chunk)
+        if total_read > MAX_TEXT_SIZE:
+            raise ValueError(f"File size exceeds maximum text size {MAX_TEXT_SIZE}")
+        yield chunk.decode(encoding, errors='replace')  # decode bytes to str, replace errors

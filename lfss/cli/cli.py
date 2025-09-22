@@ -1,12 +1,15 @@
 from pathlib import Path
 import argparse, typing, sys
 from lfss.api import Connector, upload_directory, upload_file, download_file, download_directory
-from lfss.eng.datatype import FileReadPermission, FileSortKey, DirSortKey, AccessLevel
+from lfss.eng.datatype import (
+    FileReadPermission, AccessLevel, 
+    FileSortKey, DirSortKey, 
+    FileRecord, DirectoryRecord, PathContents
+    )
 from lfss.eng.utils import decode_uri_components, fmt_storage_size
-from . import catch_request_error, line_sep as _line_sep
 
-# monkey patch to avoid printing line separators...may remove line_sep in the future
-line_sep = lambda *args, **kwargs: _line_sep(*args, enable=False, **kwargs)
+from . import catch_request_error, line_sep
+from .cli_lib import mimetype_unicode
 
 def parse_permission(s: str) -> FileReadPermission:
     for p in FileReadPermission:
@@ -25,6 +28,46 @@ def default_error_handler_dict(path: str):
         404: lambda _: print(f"\033[31mNot found\033[0m ({path})", file=sys.stderr), 
         409: lambda _: print(f"\033[31mConflict\033[0m ({path})", file=sys.stderr),
     }
+def print_path_list(
+    path_list: list[FileRecord] | list[DirectoryRecord] | PathContents, 
+    detailed: bool = False
+    ):
+    dirs: list[DirectoryRecord]
+    files: list[FileRecord]
+    if isinstance(path_list, PathContents):
+        dirs = path_list.dirs
+        files = path_list.files
+    else:
+        dirs = [p for p in path_list if isinstance(p, DirectoryRecord)]
+        files = [p for p in path_list if isinstance(p, FileRecord)]
+    # check if terminal supports unicode
+    supports_unicode = sys.stdout.encoding.lower().startswith("utf")
+    def print_ln(r: DirectoryRecord | FileRecord):
+        nonlocal detailed, supports_unicode
+        match (r, supports_unicode):
+            case (DirectoryRecord(), True):
+                print(mimetype_unicode(r), end=" ")
+            case (DirectoryRecord(), False):
+                print("[D]", end=" ")
+            case (FileRecord(), True):
+                print(mimetype_unicode(r), end=" ")
+            case (FileRecord(), False):
+                print("[F]", end=" ")
+            case _:
+                print("[?]", end=" ")
+        print(decode_uri_components(r.url), end="")
+        if detailed:
+            if isinstance(r, FileRecord):
+                print(f": size={fmt_storage_size(r.file_size)}, permission={r.permission.name}, created={r.create_time}, accessed={r.access_time}")
+            else:
+                print(f": size={fmt_storage_size(r.size)}, created={r.create_time}, accessed={r.access_time}")
+        else:
+            print()
+    
+    for d in line_sep(dirs, end=False):
+        print_ln(d)
+    for f in line_sep(files, start=False):
+        print_ln(f)
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Client-side command line interface, set LFSS_ENDPOINT and LFSS_TOKEN environment variables for authentication.")
@@ -213,13 +256,7 @@ def main():
                 order_by=args.order,
                 order_desc=args.reverse,
             )
-            for i, d in enumerate(line_sep(res.dirs, end=False)):
-                d.url = decode_uri_components(d.url)
-                print(f"[d{i+1}] {d if args.long else d.url}")
-            for i, f in enumerate(line_sep(res.files)):
-                f.url = decode_uri_components(f.url)
-                print(f"[f{i+1}] {f if args.long else f.url}")
-
+            print_path_list(res, detailed=args.long)
             if len(res.dirs) + len(res.files) == args.limit:
                 print(f"\033[33m[Warning] List limit reached, use --offset and --limit to list more items.\033[0m")
     
@@ -233,10 +270,7 @@ def main():
                 order_by=args.order,
                 order_desc=args.reverse,
             )
-            for i, f in enumerate(line_sep(res)):
-                f.url = decode_uri_components(f.url)
-                print(f"[{i+1}] {f if args.long else f.url}")
-
+            print_path_list(res, detailed=args.long)
             if len(res) == args.limit:
                 print(f"\033[33m[Warning] List limit reached, use --offset and --limit to list more files.\033[0m")
         
@@ -250,10 +284,7 @@ def main():
                 order_by=args.order,
                 order_desc=args.reverse,
             )
-            for i, d in enumerate(line_sep(res)):
-                d.url = decode_uri_components(d.url)
-                print(f"[{i+1}] {d if args.long else d.url}")
-
+            print_path_list(res, detailed=args.long)
             if len(res) == args.limit:
                 print(f"\033[33m[Warning] List limit reached, use --offset and --limit to list more directories.\033[0m")
     

@@ -16,16 +16,13 @@ def catch_request_error(error_code_handler: Optional[ dict[int, Callable[[reques
             print(f"\033[91m[Error message]: {e.response.text}\033[0m")
 
 T = TypeVar('T')
-def line_sep(iter: Iterable[T], enable=True, start=True, end=True, color="\033[90m") -> Generator[T, None, None]:
+def line_sep(iter: Iterable[T], enable=True, start=True, end=True, middle=False, color="\033[90m") -> Generator[T, None, None]:
     screen_width = os.get_terminal_size().columns
     def print_ln():
         if enable: print(color + "-" * screen_width + "\033[0m")
 
-    if start:
-        print_ln()
+    if start: print_ln()
     for i, line in enumerate(iter):
-        if i > 0:
-            print_ln()
+        if i > 0 and middle: print_ln()
         yield line
-    if end:
-        print_ln()
+    if end: print_ln()

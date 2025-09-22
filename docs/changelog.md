@@ -1,5 +1,9 @@
 ## 0.12
 
+### 0.12.1
+- Add `cat` command
+- Use unicode icons for CLI list command
+
 ### 0.12.0
 - Change default script to client CLI
 - Client CLI default to verbose output

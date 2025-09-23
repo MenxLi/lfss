@@ -112,7 +112,7 @@ def parse_arguments():
     sp_query.add_argument("path", help="Path to query", nargs="+", type=str)
 
     # delete
-    sp_delete = sp.add_parser("delete", help="Delete files or directories", aliases=["del"])
+    sp_delete = sp.add_parser("delete", help="Delete files or directories", aliases=["del", "rm"])
     sp_delete.add_argument("path", help="Path to delete", nargs="+", type=str)
     sp_delete.add_argument("-y", "--yes", action="store_true", help="Confirm deletion without prompt")
 
@@ -231,8 +231,8 @@ def main():
             )
             if not success:
                 print("\033[91mFailed to download: \033[0m", msg, file=sys.stderr)
-    
-    elif args.command in ["delete", "del"]:
+
+    elif args.command in ["delete", "del", "rm"]:
         if not args.yes:
             print("You are about to delete the following paths:")
             for path in args.path:

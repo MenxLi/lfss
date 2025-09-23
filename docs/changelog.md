@@ -1,5 +1,9 @@
 ## 0.12
 
+### 0.12.2
+- Setup optional dependencies
+- Present only the name by default for CLI list command
+
 ### 0.12.1
 - Add `cat` command
 - Use unicode icons for CLI list command

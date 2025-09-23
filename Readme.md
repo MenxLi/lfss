@@ -16,7 +16,7 @@ Tested on 2 million files, and it is still fast.
 
 Usage: 
 ```sh
-pip install lfss
+pip install "lfss[all]"
 lfss-user add <username> <password>
 lfss-serve
 ```

@@ -3,8 +3,7 @@
 
 To install python CLI tools without dependencies (to avoid conflicts with your existing packages):
 ```sh
-pip install requests
-pip install lfss --no-deps
+pip install lfss
 ```
 
 Then set the `LFSS_ENDPOINT`, `LFSS_TOKEN` environment variables, 

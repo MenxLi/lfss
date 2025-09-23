@@ -227,7 +227,7 @@ def main():
                 verbose=not args.quiet,
                 n_retries=args.retries, 
                 interval=args.interval,
-                overwrite=args.overwrite
+                overwrite=args.conflict == "overwrite"
             )
             if not success:
                 print("\033[91mFailed to download: \033[0m", msg, file=sys.stderr)

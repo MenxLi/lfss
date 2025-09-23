@@ -3,6 +3,7 @@
 ### 0.12.3
 - Show partial list hint
 - Delete command alias `rm`
+- Fix download single file with overwrite option
 
 ### 0.12.2
 - Setup optional dependencies

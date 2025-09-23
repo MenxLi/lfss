@@ -265,9 +265,10 @@ def main():
                 order_desc=args.reverse,
             )
             print_path_list(res, detailed=args.long)
-            if len(res.dirs) + len(res.files) == args.limit:
-                print(f"\033[33m[Warning] List limit reached, use --offset and --limit to list more items.\033[0m")
-    
+            if args.path != "/" and len(res.dirs) + len(res.files) == args.limit:
+                _len_str = f"{args.offset + 1}-{args.offset + len(res.dirs) + len(res.files)}/{connector.count_dirs(args.path) + connector.count_files(args.path)}"
+                print(f"{_len_str} items listed.")
+
     elif args.command in ["lsf", "list-f"]:
         with catch_request_error(default_error_handler_dict(args.path)):
             res = connector.list_files(
@@ -279,8 +280,12 @@ def main():
                 order_desc=args.reverse,
             )
             print_path_list(res, detailed=args.long)
-            if len(res) == args.limit:
-                print(f"\033[33m[Warning] List limit reached, use --offset and --limit to list more files.\033[0m")
+            if args.path != "/" and len(res) == args.limit:
+                if args.recursive:
+                    _len_str = f"{args.offset + 1}-{args.offset + len(res)}/{connector.count_files(args.path, flat=True)}"
+                else:
+                    _len_str = f"{args.offset + 1}-{args.offset + len(res)}/{connector.count_files(args.path)}"
+                print(f"{_len_str} files listed.")
         
     elif args.command in ["lsd", "list-d"]:
         with catch_request_error(default_error_handler_dict(args.path)):
@@ -293,8 +298,9 @@ def main():
                 order_desc=args.reverse,
             )
             print_path_list(res, detailed=args.long)
-            if len(res) == args.limit:
-                print(f"\033[33m[Warning] List limit reached, use --offset and --limit to list more directories.\033[0m")
+            if args.path != "/" and len(res) == args.limit:
+                _len_str = f"{args.offset + 1}-{args.offset + len(res)}/{connector.count_dirs(args.path)}"
+                print(f"{_len_str} items listed.")
     
     elif args.command in ["cat", "concatenate"]:
         for _p in args.path:

@@ -1,5 +1,9 @@
 ## 0.12
 
+### 0.12.3
+- Show partial list hint
+- Delete command alias `rm`
+
 ### 0.12.2
 - Setup optional dependencies
 - Present only the name by default for CLI list command

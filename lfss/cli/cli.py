@@ -55,14 +55,18 @@ def print_path_list(
                 print("[F]", end=" ")
             case _:
                 print("[?]", end=" ")
-        print(decode_uri_components(r.url), end="")
-        if detailed:
-            if isinstance(r, FileRecord):
-                print(f" | {fmt_storage_size(r.file_size)}, permission={r.permission.name}, created={r.create_time}, accessed={r.access_time}")
+        # if not detailed, only print name
+        if not detailed:
+            if isinstance(r, DirectoryRecord):
+                assert r.url.endswith("/")
+                print(decode_uri_components(r.url).rstrip("/").split("/")[-1], end="/")
             else:
-                print()
+                print(decode_uri_components(r.url).split("/")[-1], end="")
         else:
-            print()
+            print(decode_uri_components(r.url), end="")
+            if isinstance(r, FileRecord):
+                print(f" :: {fmt_storage_size(r.file_size)} {r.permission.name}", end="")
+        print()
     
     for d in line_sep(dirs, end=False):
         print_ln(d)
@@ -117,7 +121,7 @@ def parse_arguments():
     sp_list.add_argument("path", help="Path to list", type=str)
     sp_list.add_argument("--offset", type=int, default=0, help="Offset of the list")
     sp_list.add_argument("--limit", type=int, default=100, help="Limit of the list")
-    sp_list.add_argument("-l", "--long", action="store_true", help="Detailed list, including all metadata")
+    sp_list.add_argument("-l", "--long", action="store_true", help="Detailed list")
     sp_list.add_argument("--order", "--order-by", type=str, help="Order of the list", default="", choices=typing.get_args(FileSortKey))
     sp_list.add_argument("--reverse", "--order-desc", action="store_true", help="Reverse the list order")
 
@@ -126,7 +130,7 @@ def parse_arguments():
     sp_list_d.add_argument("path", help="Path to list", type=str)
     sp_list_d.add_argument("--offset", type=int, default=0, help="Offset of the list")
     sp_list_d.add_argument("--limit", type=int, default=100, help="Limit of the list")
-    sp_list_d.add_argument("-l", "--long", action="store_true", help="Detailed list, including all metadata")
+    sp_list_d.add_argument("-l", "--long", action="store_true", help="Detailed list")
     sp_list_d.add_argument("--order", "--order-by", type=str, help="Order of the list", default="", choices=typing.get_args(DirSortKey))
     sp_list_d.add_argument("--reverse", "--order-desc", action="store_true", help="Reverse the list order")
 
@@ -136,7 +140,7 @@ def parse_arguments():
     sp_list_f.add_argument("--offset", type=int, default=0, help="Offset of the list")
     sp_list_f.add_argument("--limit", type=int, default=100, help="Limit of the list")
     sp_list_f.add_argument("-r", "--recursive", "--flat", action="store_true", help="List files recursively")
-    sp_list_f.add_argument("-l", "--long", action="store_true", help="Detailed list, including all metadata")
+    sp_list_f.add_argument("-l", "--long", action="store_true", help="Detailed list")
     sp_list_f.add_argument("--order", "--order-by", type=str, help="Order of the list", default="", choices=typing.get_args(FileSortKey))
     sp_list_f.add_argument("--reverse", "--order-desc", action="store_true", help="Reverse the list order")
 

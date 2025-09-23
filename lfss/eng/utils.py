@@ -3,7 +3,6 @@ import urllib.parse
 import pathlib
 import functools
 import hashlib
-import aiofiles
 import asyncio
 from asyncio import Lock
 from collections import OrderedDict
@@ -11,6 +10,11 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TypeVar, Callable, Awaitable
 from functools import wraps, partial
 from uuid import uuid4
+try:
+    # optional dependency for client-side
+    import aiofiles     
+except ImportError:
+    pass
 
 async def copy_file(source: str|pathlib.Path, destination: str|pathlib.Path):
     async with aiofiles.open(source, mode='rb') as src:

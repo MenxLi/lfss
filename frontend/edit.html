@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LFSS-Editor</title>
+    <link rel="stylesheet" href="./edit.css">
+    <link rel="stylesheet" href="./login.css">
+</head>
+<body>
+    
+    <div id="header">
+        <div class="left">
+            <span id='home-btn' class="unicode-btn">⬅️</span>
+            <label id="file-path-label"></label>
+        </div>
+        <div class="right">
+            <span id='save-hint' class="hint">Saved</span>
+            <span id='save-btn' class="unicode-btn">💾</span>
+        </div>
+    </div>
+
+    <div class="container content" id="view">
+        <textarea id="editor"></textarea>
+    </div>
+
+    <script src="./edit.js" type="module"></script>
+</body>
+</html>

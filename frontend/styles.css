@@ -1,40 +1,8 @@
+@import "./base.css"; 
 @import "./popup.css";
 @import "./info.css";
 @import "./thumb.css";
 @import "./login.css"; 
-
-html {
-    overflow: -moz-scrollbars-vertical;
-    overflow-y: scroll;
-}
-
-body{
-    font-family: Arial, sans-serif;
-    background-color: #f1f1f1;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-input[type=button], button{
-    background-color: #195f8b;
-    color: white;
-    padding: 0.8rem;
-    margin: 0;
-    border: none;
-    border-radius: 0.25rem;
-    cursor: pointer;
-}
-
-input[type=text], input[type=password]
-{
-    width: 100%;
-    padding: 0.75rem;
-    border: 1px solid #ccc;
-    border-radius: 0.25rem;
-    height: 1rem;
-}
-
 
 div.container.header, div.container.footer{
     position: fixed;

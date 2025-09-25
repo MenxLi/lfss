@@ -1,0 +1,88 @@
+@import url('./base.css');
+
+body{
+    font-family: Arial, sans-serif;
+    background-color: #f1f1f1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+}
+
+div#header {
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+
+
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+
+    background-color: white;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    padding-block: 0.5rem;
+    padding-inline: 1rem;
+    z-index: 1000;
+}
+
+div#header .left {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    flex-grow: 1;
+    padding-inline: 0.5rem;
+}
+
+div#header .right {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    padding-inline: 0.5rem;
+}
+
+span.unicode-btn{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    left: 1.5rem;
+    width: 1rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.5rem;
+    background-color: rgb(189, 203, 211);
+    cursor: pointer;
+}
+
+#file-path-label {
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+textarea#editor{
+    width: max(90vw, 500px);
+    height: 80vh;
+    margin-top: 1rem;
+    padding: 1rem;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 0.25rem;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    resize: none;
+    outline: none;
+}
+
+#save-hint{
+    font-size: 0.9rem;
+    color: white;
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+    background-color: green;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.5rem;
+}

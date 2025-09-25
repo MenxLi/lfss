@@ -59,11 +59,48 @@ async function fmtFailedResponse(res){
 export default class Connector {
 
     constructor(){
+        // get default endpoint from url
+        const url = new URL(window.location.href);
+        const defaultToken = url.searchParams.get('token') || '';
+        const defaultEndpoint = url.searchParams.get('endpoint') || 
+                        (url.origin == 'null' ? 'http://localhost:8000' : url.origin);
+
         /** @type {Config} */
         this.config = {
-            endpoint: 'http://localhost:8000',
-            token: ''
+            endpoint: defaultEndpoint,
+            token: defaultToken
         }
+    }
+
+    async getText(path){
+        if (path.startsWith('/')){ path = path.slice(1); }
+        const res = await fetch(this.config.endpoint + '/' + path, {
+            method: 'GET',
+            headers: {
+             "Authorization": 'Bearer ' + this.config.token
+            },
+        });
+        if (res.status != 200){
+            throw new Error(`Failed to get file, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
+        }
+        return await res.text();
+    }
+
+    /**
+     * @param {string} path - the path to the file (url)
+     * @param {string} text - the text content to upload
+     * @param {Object} [options] - Optional upload configuration.
+     * @param {'abort' | 'overwrite' | 'skip'} [options.conflict='abort'] - Conflict resolution strategy:  
+     * @param {string} [options.type='text/plain'] - The MIME type of the text file.
+    */
+    async putText(path, text, {
+        conflict = 'abort',
+        type = 'text/plain'
+    }){
+        const file = new Blob([text], { type: type });
+        return await this.put(path, file, {
+            conflict: conflict
+        });
     }
 
     /**

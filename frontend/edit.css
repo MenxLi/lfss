@@ -61,6 +61,20 @@ span.unicode-btn{
 #file-path-label {
     font-weight: bold;
     font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+#new-hint{
+    font-size: small;
+    font-weight: bold;
+    color: green;
+    margin-left: 0.25rem;
+    background-color: #e0ffe0;
+    border-radius: 0.25rem;
+    padding: 0.1rem 0.25rem;
+    user-select: none;
+    pointer-events: none;
 }
 
 textarea#editor{

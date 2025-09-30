@@ -60,10 +60,10 @@ export default class Connector {
 
     constructor(){
         // get default endpoint from url
-        const url = new URL(window.location.href);
-        const defaultToken = url.searchParams.get('token') || '';
-        const defaultEndpoint = url.searchParams.get('endpoint') || 
-                        (url.origin == 'null' ? 'http://localhost:8000' : url.origin);
+        const searchParams = (new URL(window.location.href)).searchParams;
+        const defaultToken = searchParams.get('lfss-token') || '';
+        const defaultEndpoint = searchParams.get('lfss-endpoint') || 
+                        (searchParams.origin == 'null' ? 'http://localhost:8000' : searchParams.origin);
 
         /** @type {Config} */
         this.config = {
@@ -92,6 +92,7 @@ export default class Connector {
      * @param {Object} [options] - Optional upload configuration.
      * @param {'abort' | 'overwrite' | 'skip'} [options.conflict='abort'] - Conflict resolution strategy:  
      * @param {string} [options.type='text/plain'] - The MIME type of the text file.
+     * NOTE: type is only a hint, the backend may ignore it...
     */
     async putText(path, text, {
         conflict = 'abort',

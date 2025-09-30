@@ -38,30 +38,32 @@ if (!filePath) {
 if (filePath.endsWith('/')) {
     raiseError('Path cannot be a directory');
 }
+
+async function loadContent() {
+    content = await store.conn.getText(filePath).catch((e) => {
+        raiseError(`Failed to read file "${filePath}": ${e.message}`);
+    });
+    textArea.value = content;
+    return content;
+}
+
 // check existence
 let ftype='';
+let content = '';
+
 const fmeta = await store.conn.getMetadata(filePath).catch((e) => {
     raiseError(`File "${filePath}" does not exist or cannot be accessed.`);
 });
 if (fmeta != null) {
     ftype = fmeta.mime_type || '';
     saveHint.style.opacity = 1;
+    content = await loadContent();
 }
-
-// get content
-let content = '';
-async function loadContent() {
-    content = await store.conn.getText(filePath).catch((e) => {
-        raiseError(`Failed to read file "${filePath}": ${e.message}`);
-    });
-    textArea.value = content;
-}
-await loadContent();
 
 async function saveFile() {
     const content = textArea.value;
     try {
-        await store.conn.putText(filePath, content, {conflict: 'overwrite'});
+        await store.conn.putText(filePath, content, {conflict: 'overwrite', type: ftype? ftype : 'text/plain'});
         saveHint.style.opacity = 1;
     }
     catch (e) {

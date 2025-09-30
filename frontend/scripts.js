@@ -117,11 +117,33 @@ randomizeFnameButton.addEventListener('click', () => {
     uploadFileNameInput.value = newName;
     onFileNameInpuChange();
 });
+function updateFileUploadButton(){
+    if (uploadFileSelector.files.length === 0){
+        uploadButton.innerHTML = 'New';
+        uploadButton.title = 'Create a new empty file with the specified name';
+    }
+    else {
+        uploadButton.innerHTML = 'Upload';
+        uploadButton.title = 'Upload the selected file';
+    }
+}
+updateFileUploadButton();
 uploadFileSelector.addEventListener('change', () => {
+    updateFileUploadButton();
     uploadFileNameInput.value = uploadFileSelector.files[0].name;
     onFileNameInpuChange();
 });
 uploadButton.addEventListener('click', () => {
+    // create new empty file
+    if (uploadFileSelector.files.length === 0){
+        const newUrl = ensurePathURI(store.dirpath + uploadFileNameInput.value);
+        const thisUrl = new URL(window.location.href);
+        thisUrl.pathname = thisUrl.pathname.replace(/\/[^\/]*$/, '/edit.html');
+        thisUrl.searchParams.set('path', newUrl);
+        window.location.href = thisUrl.href;
+        return;
+    }
+
     const file = uploadFileSelector.files[0];
     let path = store.dirpath;
     let fileName = uploadFileNameInput.value;

@@ -92,6 +92,7 @@ else {
     newHint.id = 'new-hint';
     newHint.textContent = 'new';
     filePathLabel.appendChild(newHint);
+    textArea.focus();
 }
 
 async function saveFile() {
@@ -111,7 +112,6 @@ async function saveFile() {
 // unfreeze elements
 saveBtn.disabled = false;
 textArea.disabled = false;
-textArea.focus();
 
 saveBtn.addEventListener('click', saveFile);
 textArea.addEventListener('input', () => {

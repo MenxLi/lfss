@@ -126,6 +126,10 @@ randomizeFnameButton.addEventListener('click', () => {
 });
 function updateFileUploadButton(){
     if (uploadFileSelector.files.length === 0){
+        // change background color to indicate new/edit
+        if (!uploadButton.classList.contains('toedit')){
+            uploadButton.classList.add('toedit');
+        }
         if (uploadFileNameInput.classList.contains('duplicate') && !uploadFileNameInput.value.endsWith('/')){
             uploadButton.innerHTML = 'Edit';
             uploadButton.title = 'Edit the existing file with the specified name';
@@ -136,6 +140,10 @@ function updateFileUploadButton(){
         }
     }
     else {
+        // change background color to indicate upload
+        if (uploadButton.classList.contains('toedit')){
+            uploadButton.classList.remove('toedit');
+        }
         uploadButton.innerHTML = 'Upload';
         uploadButton.title = 'Upload the selected file';
     }
@@ -203,6 +211,9 @@ uploadFileNameInput.addEventListener('input', debounce(onFileNameInpuChange, 500
             uploadFileSelector.files = e.dataTransfer.files;
             uploadFileNameInput.value = e.dataTransfer.files[0].name;
             uploadFileNameInput.focus();
+            // trigger change event
+            updateFileUploadButton();
+            onFileNameInpuChange();
             return;
         }
 

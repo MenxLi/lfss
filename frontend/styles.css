@@ -96,6 +96,11 @@ input#path{
     border-radius: 0.2rem;
     cursor: pointer;
 }
+#upload-btn.toedit{
+    background-color: white; 
+    color: #195f8b;
+    box-shadow: 2px 2px 10px #195f8b33;
+}
 
 div#top-bar{
     color: grey;

@@ -84,10 +84,11 @@ pathBackButton.addEventListener('click', () => {
 function onFileNameInpuChange(){
     const fileName = uploadFileNameInput.value;
     if (fileName.endsWith('/')){
-        uploadFileNameInput.classList.add('duplicate');
+        uploadFileNameInput.classList.add('red-bg');
         return;
     }
     if (fileName.length === 0){
+        uploadFileNameInput.classList.remove('red-bg');
         uploadFileNameInput.classList.remove('duplicate');
     }
     else {
@@ -95,9 +96,15 @@ function onFileNameInpuChange(){
         conn.getMetadata(p).then(
             (data) => {
                 console.log("Got file meta", data);
-                if (data===null) uploadFileNameInput.classList.remove('duplicate');
-                else if (data.url) uploadFileNameInput.classList.add('duplicate');
+                if (data===null) {
+                    uploadFileNameInput.classList.remove('red-bg');
+                    uploadFileNameInput.classList.remove('duplicate');
+                }
+                else if (data.url){
+                    uploadFileNameInput.classList.add('duplicate');
+                }
                 else throw new Error('Invalid response');
+                updateFileUploadButton();
             }
         );
     }
@@ -119,8 +126,14 @@ randomizeFnameButton.addEventListener('click', () => {
 });
 function updateFileUploadButton(){
     if (uploadFileSelector.files.length === 0){
-        uploadButton.innerHTML = 'New';
-        uploadButton.title = 'Create a new empty file with the specified name';
+        if (uploadFileNameInput.classList.contains('duplicate') && !uploadFileNameInput.value.endsWith('/')){
+            uploadButton.innerHTML = 'Edit';
+            uploadButton.title = 'Edit the existing file with the specified name';
+        }
+        else {
+            uploadButton.innerHTML = 'New';
+            uploadButton.title = 'Create a new empty file with the specified name';
+        }
     }
     else {
         uploadButton.innerHTML = 'Upload';
@@ -134,12 +147,13 @@ uploadFileSelector.addEventListener('change', () => {
     onFileNameInpuChange();
 });
 uploadButton.addEventListener('click', () => {
-    // create new empty file
+    // create new empty file or edit existing file
     if (uploadFileSelector.files.length === 0){
         const newUrl = ensurePathURI(store.dirpath + uploadFileNameInput.value);
         const thisUrl = new URL(window.location.href);
         thisUrl.pathname = thisUrl.pathname.replace(/\/[^\/]*$/, '/edit.html');
         thisUrl.searchParams.set('path', newUrl);
+        thisUrl.searchParams.set('from', window.location.href);
         window.location.href = thisUrl.href;
         return;
     }

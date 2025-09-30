@@ -24,6 +24,12 @@ saveBtn.disabled = true;
 textArea.disabled = true;
 
 backhomeBtn.addEventListener('click', () => {
+    const urlFrom = new URL(window.location.href);
+    if (urlFrom.searchParams.has('from')) {
+        const from = urlFrom.searchParams.get('from');
+        window.location.href = from;
+        return;
+    }
     window.location.href = './index.html';
 });
 

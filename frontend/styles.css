@@ -185,8 +185,11 @@ label#upload-file-prefix{
     width: 800px;
     text-align: right;
 }
-input#file-name.duplicate{
+input#file-name.red-bg{
     background-color: #ff001511
+}
+input#file-name.duplicate{
+    background-color: #ffcc0011;
 }
 
 .action-container{

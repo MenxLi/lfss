@@ -297,6 +297,12 @@ class FileConn(DBObjectBase):
         dirs = [await get_dir(url + d) for d in dirs_str]
         return dirs
     
+    async def is_dir_exist(self, url: str) -> bool:
+        if not url.endswith('/'): url += '/'
+        cursor = await self.cur.execute("SELECT 1 FROM fmeta WHERE url LIKE ? ESCAPE '\\' LIMIT 1", (self.escape_sqlike(url) + '%', ))
+        res = await cursor.fetchone()
+        return res is not None
+    
     async def count_dir_files(self, url: str, flat: bool = False):
         if not url.endswith('/'): url += '/'
         if url == '/': url = ''

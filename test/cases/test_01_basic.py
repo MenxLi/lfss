@@ -42,6 +42,14 @@ def test_upload(server):
     upload_basic('u1')
     upload_basic('u2')
 
+def test_exists(server):
+    c = get_conn('u0')
+    assert c.exists('u0/test1.txt'), "File does not exist"
+    assert c.exists('u0/a/'), "Directory does not exist"
+    assert not c.exists('u0/a'), "Directory without trailing slash should not exist"
+    assert not c.exists('u0/no-exists_dir/'), "Directory should not exist"
+    assert not c.exists('u0/no-exist.txt'), "File should not exist"
+
 def test_delete(server):
     c = get_conn('u0')
     c.delete('u0/test1.txt')

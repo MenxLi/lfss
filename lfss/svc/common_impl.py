@@ -150,7 +150,10 @@ async def _get_dir_impl(
     thumb: bool = False,
     is_head = False,
     ):
-    """ handle directory query, return file under the path as json """
+    """
+    handle directory query, return file under the path as json
+    TODO: will change the behavior at next (major) version update
+    """
     assert path.endswith("/")
     async with unique_cursor() as cur:
         fconn = FileConn(cur)
@@ -180,7 +183,7 @@ async def _get_dir_impl(
                 else:
                     raise HTTPException(status_code=404, detail="User not found")
             else:
-                if await FileConn(cur).count_dir_files(path, flat=True) > 0:
+                if await fconn.is_dir_exist(path):
                     return Response(status_code=200)
                 else:
                     raise HTTPException(status_code=404, detail="Path not found")

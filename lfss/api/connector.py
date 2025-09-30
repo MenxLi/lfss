@@ -77,7 +77,7 @@ class Connector:
         return self.Session(self, pool_size, **kwargs)
     
     def _fetch_factory(
-        self, method: Literal['GET', 'POST', 'PUT', 'DELETE'], 
+        self, method: Literal['GET', 'POST', 'PUT', 'DELETE', 'HEAD'], 
         path: str, search_params: dict = {}, extra_headers: dict = {}
     ):
         if path.startswith('/'):
@@ -103,6 +103,17 @@ class Connector:
                     response.raise_for_status()
             return response
         return f
+    
+    def exists(self, path: str) -> bool:
+        """Checks if a file/directory exists."""
+        path = _p(path)
+        try:
+            response = self._fetch_factory('HEAD', path)()
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                return False
+            raise e
+        return response.status_code == 200
 
     def put(self, path: str, file_data: bytes, permission: int | FileReadPermission = 0, conflict: Literal['overwrite', 'abort', 'skip', 'skip-ahead'] = 'abort'):
         """Uploads a file to the specified path."""

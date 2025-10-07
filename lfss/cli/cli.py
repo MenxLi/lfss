@@ -59,9 +59,9 @@ def print_path_list(
         if not detailed:
             if isinstance(r, DirectoryRecord):
                 assert r.url.endswith("/")
-                print(decode_uri_components(r.url).rstrip("/").split("/")[-1], end="/")
+                print(r.name(), end="/")
             else:
-                print(decode_uri_components(r.url).split("/")[-1], end="")
+                print(r.name(), end="")
         else:
             print(decode_uri_components(r.url), end="")
             if isinstance(r, FileRecord):

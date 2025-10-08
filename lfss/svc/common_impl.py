@@ -323,15 +323,13 @@ async def copy_impl(
     if copy_type == "file":
         async with unique_cursor() as cur:
             fconn = FileConn(cur)
-            dst_record = await fconn.get_file_record(dst_path)
-        if dst_record:
-            raise HTTPException(status_code=409, detail="Destination exists")
+            if await fconn.get_file_record(dst_path, throw=False) is not None:
+                raise HTTPException(status_code=409, detail="Destination exists")
         await db.copy_file(src_path, dst_path, op_user)
     else:
         async with unique_cursor() as cur:
             fconn = FileConn(cur)
-            dst_fcount = await fconn.count_dir_files(dst_path, flat=True)
-        if dst_fcount > 0:
-            raise HTTPException(status_code=409, detail="Destination exists")
+            if await fconn.is_dir_exist(dst_path):
+                raise HTTPException(status_code=409, detail="Destination exists")
         await db.copy_dir(src_path, dst_path, op_user)
     return Response(status_code=201, content="OK")

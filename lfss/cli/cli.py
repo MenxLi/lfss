@@ -107,6 +107,16 @@ def parse_arguments():
     sp_download.add_argument("--conflict", choices=["overwrite", "skip"], default="abort", help="Conflict resolution, only works with file download")
     sp_download.add_argument("--retries", type=int, default=0, help="Number of retries")
 
+    # move 
+    sp_move = sp.add_parser("move", help="Move or rename a file or directory", aliases=["mv"])
+    sp_move.add_argument("src", help="Source url path", type=str)
+    sp_move.add_argument("dst", help="Destination url path. If the destination exists, will raise an error. " , type=str)
+
+    # copy
+    sp_copy = sp.add_parser("copy", help="Copy a file or directory", aliases=["cp"])
+    sp_copy.add_argument("src", help="Source url path", type=str)
+    sp_copy.add_argument("dst", help="Destination url path. If the destination exists, will raise an error. ", type=str)
+
     # query
     sp_query = sp.add_parser("info", help="Query file or directories metadata from the server", aliases=["i"])
     sp_query.add_argument("path", help="Path to query", nargs="+", type=str)
@@ -231,6 +241,16 @@ def main():
             )
             if not success:
                 print("\033[91mFailed to download: \033[0m", msg, file=sys.stderr)
+    
+    elif args.command in ["move", "mv"]:
+        with catch_request_error(default_error_handler_dict(f"{args.src} -> {args.dst}")):
+            connector.move(args.src, args.dst)
+            print(f"\033[32mMoved\033[0m ({args.src} -> {args.dst})")
+    
+    elif args.command in ["copy", "cp"]:
+        with catch_request_error(default_error_handler_dict(f"{args.src} -> {args.dst}")):
+            connector.copy(args.src, args.dst)
+            print(f"\033[32mCopied\033[0m ({args.src} -> {args.dst})")
 
     elif args.command in ["delete", "del", "rm"]:
         if not args.yes:

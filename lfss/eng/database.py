@@ -85,14 +85,14 @@ class UserConn(DBObjectBase):
         max_storage: int = 1073741824, permission: FileReadPermission = FileReadPermission.UNSET
         ) -> int:
         def validate_username(username: str):
-            assert not set(username) & {'/', ':'}, "Invalid username"
-            assert not username.startswith('_'), "Error: reserved username"
-            assert not (len(username) > 255), "Username too long"
-            assert urllib.parse.quote(username) == username, "Invalid username, must be URL safe"
+            assert_or(not set(username) & {'/', ':'}, InvalidInputError("Invalid username"))
+            assert_or(not username.startswith('_'), InvalidInputError("Error: reserved username"))
+            assert_or(not (len(username) > 255), InvalidInputError("Username too long"))
+            assert_or(urllib.parse.quote(username) == username, InvalidInputError("Invalid username, must be URL safe"))
         validate_username(username)
         self.logger.debug(f"Creating user {username}")
         credential = hash_credential(username, password)
-        assert await self.get_user(username) is None, "Duplicate username"
+        assert_or(await self.get_user(username) is None, InvalidDataError(f"Duplicate username: {username}"))
         await self.cur.execute("INSERT INTO user (username, credential, is_admin, max_storage, permission) VALUES (?, ?, ?, ?, ?)", (username, credential, is_admin, max_storage, permission))
         self.logger.info(f"User {username} created")
         assert self.cur.lastrowid is not None
@@ -102,9 +102,9 @@ class UserConn(DBObjectBase):
         self, username: str, password: Optional[str] = None, is_admin: Optional[bool] = None, 
         max_storage: Optional[int] = None, permission: Optional[FileReadPermission] = None
         ):
-        assert not username.startswith('_'), "Error: reserved username"
-        assert not ('/' in username or len(username) > 255), "Invalid username"
-        assert urllib.parse.quote(username) == username, "Invalid username, must be URL safe"
+        assert_or(not username.startswith('_'), InvalidInputError("Error: reserved username"))
+        assert_or(not ('/' in username or len(username) > 255), InvalidInputError("Invalid username"))
+        assert_or(urllib.parse.quote(username) == username, InvalidInputError("Invalid username, must be URL safe"))
 
         current_record = await self.get_user(username)
         if current_record is None:
@@ -469,8 +469,8 @@ class FileConn(DBObjectBase):
         Copy all files under old_url to new_url, 
         if user_id is None, will not change the owner_id of the files. Otherwise, will change the owner_id to user_id.
         """
-        assert old_url.endswith('/'), "Old path must end with /"
-        assert new_url.endswith('/'), "New path must end with /"
+        assert_or(old_url.endswith('/'), InvalidInputError("Old path must end with /"))
+        assert_or(new_url.endswith('/'), InvalidInputError("New path must end with /"))
         cursor = await self.cur.execute(
             "SELECT * FROM fmeta WHERE url LIKE ? ESCAPE '\\'",
             (self.escape_sqlike(old_url) + '%', )
@@ -501,8 +501,8 @@ class FileConn(DBObjectBase):
         self.logger.info(f"Moved file {old_url} to {new_url}")
     
     async def move_dir(self, old_url: str, new_url: str, user_id: Optional[int] = None):
-        assert old_url.endswith('/'), "Old path must end with /"
-        assert new_url.endswith('/'), "New path must end with /"
+        assert_or(old_url.endswith('/'), InvalidInputError("Old path must end with /"))
+        assert_or(new_url.endswith('/'), InvalidInputError("New path must end with /"))
         if user_id is None:
             cursor = await self.cur.execute(
                 "SELECT * FROM fmeta WHERE url LIKE ? ESCAPE '\\'",
@@ -996,9 +996,9 @@ class Database:
             new_url = new_url[1:]
         if old_url.startswith('/'):
             old_url = old_url[1:]
-        assert old_url != new_url, "Old and new path must be different"
-        assert old_url.endswith('/'), "Old path must end with /"
-        assert new_url.endswith('/'), "New path must end with /"
+        assert_or(old_url != new_url, InvalidPathError("Old and new path must be different"))
+        assert_or(old_url.endswith('/'), InvalidPathError("Old path must end with /"))
+        assert_or(new_url.endswith('/'), InvalidPathError("New path must end with /"))
 
         async with unique_cursor() as cur:
             if not (
@@ -1019,9 +1019,9 @@ class Database:
             new_url = new_url[1:]
         if old_url.startswith('/'):
             old_url = old_url[1:]
-        assert old_url != new_url, "Old and new path must be different"
-        assert old_url.endswith('/'), "Old path must end with /"
-        assert new_url.endswith('/'), "New path must end with /"
+        assert_or(old_url != new_url, InvalidPathError("Old and new path must be different"))
+        assert_or(old_url.endswith('/'), InvalidPathError("Old path must end with /"))
+        assert_or(new_url.endswith('/'), InvalidPathError("New path must end with /"))
 
         async with unique_cursor() as cur:
             if not (

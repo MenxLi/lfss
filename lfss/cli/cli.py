@@ -10,6 +10,7 @@ from lfss.eng.utils import decode_uri_components, fmt_storage_size
 
 from . import catch_request_error, line_sep
 from .cli_lib import mimetype_unicode, stream_text
+from ..eng.bounded_pool import BoundedThreadPoolExecutor
 
 def parse_permission(s: str) -> FileReadPermission:
     for p in FileReadPermission:
@@ -120,6 +121,12 @@ def parse_arguments():
     # query
     sp_query = sp.add_parser("info", help="Query file or directories metadata from the server", aliases=["i"])
     sp_query.add_argument("path", help="Path to query", nargs="+", type=str)
+
+    # set permission
+    sp_permission = sp.add_parser("set-permission", help="Set file or directory permission", aliases=["perm"])
+    sp_permission.add_argument("path", help="Path to set permission", type=str, nargs="+")
+    sp_permission.add_argument("permission", help="New permission to set", choices=[p.name.lower() for p in FileReadPermission])
+    sp_permission.add_argument("-j", "--jobs", type=int, default=1, help="Number of concurrent permission setting")
 
     # delete
     sp_delete = sp.add_parser("delete", help="Delete files or directories", aliases=["del", "rm"])
@@ -274,6 +281,31 @@ def main():
                     print(f"\033[31mNot found\033[0m ({path})")
                 else:
                     print(res)
+    
+    elif args.command in ["set-permission", "perm"]:
+        flist = []
+        for path in args.path:
+            if not path.endswith("/"):
+                flist.append(path)
+            else:
+                batch_size = 10_000
+                with catch_request_error(default_error_handler_dict(path), cleanup_fn=lambda: flist.clear()):
+                    for offset in range(0, connector.count_files(path, flat=True), batch_size):
+                        files = connector.list_files(path, offset=offset, limit=batch_size, flat=True)
+                        flist.extend([f.url for f in files])
+        if len(flist)>1 and input(f"You are about to set permission of {len(flist)} files to {args.permission.upper()}. Are you sure? ([yes]/no): ").lower() not in ["", "y", "yes"]:
+            print("Aborted.")
+            exit(0)
+        with connector.session(args.jobs) as c, BoundedThreadPoolExecutor(args.jobs) as executor:
+            for f in flist:
+                executor.submit(
+                    lambda p: (
+                        c.set_file_permission(p, parse_permission(args.permission)),
+                        print(f"\033[32mSet permission\033[0m ({p}) to {args.permission.upper()}")
+                    ), f
+                )
+            executor.shutdown(wait=True)
+            
     
     elif args.command in ["ls", "list"]:
         with catch_request_error(default_error_handler_dict(args.path)):

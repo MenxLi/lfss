@@ -83,11 +83,10 @@ def upload_directory(
             ))[0]:
             faild_items.append((file_path, res[1]))
 
-    with connector.session(n_concurrent) as c:
-        with BoundedThreadPoolExecutor(n_concurrent) as executor:
-            for root, dirs, files in os.walk(directory):
-                for file in files:
-                    executor.submit(put_file, c, os.path.join(root, file))
+    with connector.session(n_concurrent) as c, BoundedThreadPoolExecutor(n_concurrent) as executor:
+        for root, dirs, files in os.walk(directory):
+            for file in files:
+                executor.submit(put_file, c, os.path.join(root, file))
 
     return faild_items
 
@@ -188,7 +187,7 @@ def download_directory(
         
     batch_size = 10_000
     file_list: list[FileRecord] = []
-    with connector.session(n_concurrent) as c:
+    with connector.session(n_concurrent) as c, BoundedThreadPoolExecutor(n_concurrent) as executor:
         file_count = c.count_files(src_path, flat=True)
         for offset in range(0, file_count, batch_size):
             if verbose:
@@ -197,7 +196,6 @@ def download_directory(
                 src_path, offset=offset, limit=batch_size, flat=True
             ))
 
-        with BoundedThreadPoolExecutor(n_concurrent) as executor:
-            for file in file_list:
-                executor.submit(get_file, c, file.url)
+        for file in file_list:
+            executor.submit(get_file, c, file.url)
     return failed_items

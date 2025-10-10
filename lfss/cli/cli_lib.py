@@ -1,5 +1,5 @@
 
-from ..api.connector import Connector
+from ..api.connector import Client
 from ..eng.datatype import DirectoryRecord, FileRecord
 
 def mimetype_unicode(r: DirectoryRecord | FileRecord):
@@ -37,7 +37,7 @@ def mimetype_unicode(r: DirectoryRecord | FileRecord):
     return "📄"
 
 def stream_text(
-    conn: Connector, 
+    conn: Client, 
     path: str,
     encoding="utf-8",
     chunk_size=1024 * 8,

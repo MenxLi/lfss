@@ -25,34 +25,34 @@ def _p(x: str) -> str:
         x = x[1:]
     return x
 
-class Connector:
+class Client:
     class Session:
         def __init__(
-            self, connector: Connector, pool_size: int = 10, 
+            self, client: Client, pool_size: int = 10, 
             retry: int = 1, backoff_factor: num_t = 0.5, status_forcelist: list[int] = [503]
             ):
-            self.connector = connector
+            self.client = client
             self.pool_size = pool_size
             self.retry_adapter = requests.adapters.Retry(
                 total=retry, backoff_factor=backoff_factor, status_forcelist=status_forcelist, 
             )
         def open(self):
             self.close()
-            if self.connector._session is None:
+            if self.client._session is None:
                 s = requests.Session()
                 adapter = requests.adapters.HTTPAdapter(pool_connections=self.pool_size, pool_maxsize=self.pool_size, max_retries=self.retry_adapter)
                 s.mount('http://', adapter)
                 s.mount('https://', adapter)
-                self.connector._session = s
+                self.client._session = s
         def close(self):
-            if self.connector._session is not None:
-                self.connector._session.close()
-            self.connector._session = None
+            if self.client._session is not None:
+                self.client._session.close()
+            self.client._session = None
         def __call__(self):
-            return self.connector
+            return self.client
         def __enter__(self):
             self.open()
-            return self.connector
+            return self.client
         def __exit__(self, exc_type, exc_value, traceback):
             self.close()
 

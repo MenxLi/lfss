@@ -1,7 +1,7 @@
 import subprocess, time
 from .config import SANDBOX_DIR, SERVER_PORT
 import requests
-from lfss.api import Connector
+from lfss.api import Client
 
 def start_server_thread(cwd, port):
     return subprocess.Popen(['lfss-serve', '--workers', '4', '--port', str(port)], cwd=cwd)
@@ -14,7 +14,7 @@ class Server:
         self._s = start_server_thread(cwd, port)
         print("[server] Server started")
         while True:
-            self._c = Connector(f"http://localhost:{SERVER_PORT}", token='_wrong_token_')
+            self._c = Client(f"http://localhost:{SERVER_PORT}", token='_wrong_token_')
             try:
                 self._c.whoami()
             except Exception as e:

@@ -2,9 +2,9 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 import argparse
 import time
-from lfss.api import Connector
+from lfss.api import Client
 
-c = Connector()
+c = Client()
 
 def read_single_file(url):
     global counter, batch_size_sum, batch_start_time

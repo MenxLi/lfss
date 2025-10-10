@@ -1,11 +1,11 @@
 from lfss.eng.utils import hash_credential
-from lfss.api import Connector
+from lfss.api import Client
 from ..config import SERVER_PORT, SANDBOX_DIR, clear_sandbox
 from ..start_server import Server
 import pytest, os
 
 def get_conn(username, password = 'test'):
-    return Connector(f"http://localhost:{SERVER_PORT}", token=hash_credential(username, password))
+    return Client(f"http://localhost:{SERVER_PORT}", token=hash_credential(username, password))
 
 def create_server_context():
     # clear environment variables

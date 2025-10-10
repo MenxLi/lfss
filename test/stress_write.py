@@ -5,10 +5,10 @@ from threading import Lock
 from multiprocessing.managers import ValueProxy
 from concurrent.futures import ProcessPoolExecutor
 
-from lfss.api import Connector
+from lfss.api import Client
 from lfss.eng.utils import parse_storage_size
 
-c = Connector()
+c = Client()
 
 def put_single_file(
     path: str, size: int, 

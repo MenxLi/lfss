@@ -2,7 +2,7 @@ import subprocess
 from ..config import SANDBOX_DIR
 from .common import get_conn, create_server_context
 import pytest
-from lfss.api import Connector
+from lfss.api import Client
 
 server = create_server_context()
 
@@ -16,7 +16,7 @@ def test_user_creation(server):
 
     subprocess.check_output(['lfss-user', 'add', 'u1', 'test'], cwd=SANDBOX_DIR)
 
-def _upload_random_files(c: Connector, dir_path, n):
+def _upload_random_files(c: Client, dir_path, n):
     import random
     import string
     if dir_path.endswith('/'):

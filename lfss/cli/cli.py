@@ -1,6 +1,6 @@
 from pathlib import Path
 import argparse, typing, sys
-from lfss.api import Connector, upload_directory, upload_file, download_file, download_directory
+from lfss.api import Client, upload_directory, upload_file, download_file, download_directory
 from lfss.eng.datatype import (
     FileReadPermission, AccessLevel, 
     FileSortKey, DirSortKey, 
@@ -169,7 +169,7 @@ def parse_arguments():
 
 def main():
     args = parse_arguments()
-    connector = Connector()
+    connector = Client()
     if args.command == "whoami":
         with catch_request_error():
             user = connector.whoami()

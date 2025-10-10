@@ -490,37 +490,37 @@ class FileConn(DBObjectBase):
             await self._user_size_inc(user_id, old_record.file_size)
         self.logger.info(f"Copied path {old_url} to {new_url}")
     
-    async def move_file(self, old_url: str, new_url: str):
+    async def move_file(self, old_url: str, new_url: str, transfer_to_user: Optional[int] = None):
         old = await self.get_file_record(old_url)
         if old is None:
             raise FileNotFoundError(f"File {old_url} not found")
         new_exists = await self.get_file_record(new_url)
         if new_exists is not None:
             raise FileExistsError(f"File {new_url} already exists")
-        await self.cur.execute("UPDATE fmeta SET url = ?, create_time = CURRENT_TIMESTAMP WHERE url = ?", (new_url, old_url))
+        await self.cur.execute(
+            "UPDATE fmeta SET url = ?, owner_id = ?, create_time = CURRENT_TIMESTAMP WHERE url = ?", 
+            (new_url, old.owner_id if transfer_to_user is None else transfer_to_user, old_url)
+        )
         self.logger.info(f"Moved file {old_url} to {new_url}")
     
-    async def move_dir(self, old_url: str, new_url: str, user_id: Optional[int] = None):
+    async def move_dir(self, old_url: str, new_url: str, transfer_to_user: Optional[int] = None):
         assert_or(old_url.endswith('/'), InvalidInputError("Old path must end with /"))
         assert_or(new_url.endswith('/'), InvalidInputError("New path must end with /"))
-        if user_id is None:
-            cursor = await self.cur.execute(
-                "SELECT * FROM fmeta WHERE url LIKE ? ESCAPE '\\'",
-                (self.escape_sqlike(old_url) + '%', )
-                )
-            res = await cursor.fetchall()
-        else:
-            cursor = await self.cur.execute(
-                "SELECT * FROM fmeta WHERE url LIKE ? ESCAPE '\\' AND owner_id = ?", 
-                (self.escape_sqlike(old_url) + '%', user_id)
-                )
-            res = await cursor.fetchall()
+        cursor = await self.cur.execute(
+            "SELECT url, owner_id FROM fmeta WHERE url LIKE ? ESCAPE '\\'",
+            (self.escape_sqlike(old_url) + '%', )
+            )
+        res = await cursor.fetchall()
         for r in res:
-            new_r = new_url + r[0][len(old_url):]
-            if await (await self.cur.execute("SELECT url FROM fmeta WHERE url = ?", (new_r, ))).fetchone():
-                self.logger.error(f"File {new_r} already exists on move path: {old_url} -> {new_url}")
-                raise FileDuplicateError(f"File {new_r} already exists")
-            await self.cur.execute("UPDATE fmeta SET url = ?, create_time = CURRENT_TIMESTAMP WHERE url = ?", (new_r, r[0]))
+            r_url, r_user = r
+            new_url_full = new_url + r_url[len(old_url):]
+            if await (await self.cur.execute("SELECT url FROM fmeta WHERE url = ?", (new_url_full, ))).fetchone():
+                self.logger.error(f"File {new_url_full} already exists on move path: {old_url} -> {new_url}")
+                raise FileDuplicateError(f"File {new_url_full} already exists")
+            await self.cur.execute(
+                "UPDATE fmeta SET url = ?, owner_id = ?, create_time = CURRENT_TIMESTAMP WHERE url = ?", 
+                (new_url_full, r_user if transfer_to_user is None else transfer_to_user, r_url)
+                )
     
     async def log_access(self, url: str):
         await self.cur.execute("UPDATE fmeta SET access_time = CURRENT_TIMESTAMP WHERE url = ?", (url, ))
@@ -965,7 +965,7 @@ class Database:
                     raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot move file {old_url}")
                 if await check_path_permission(new_url, op_user, cursor=cur) < AccessLevel.WRITE:
                     raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot move file to {new_url}")
-            await fconn.move_file(old_url, new_url)
+            await fconn.move_file(old_url, new_url, transfer_to_user=op_user.id if op_user is not None else None)
 
             new_mime, _ = mimetypes.guess_type(new_url)
             if not new_mime is None:

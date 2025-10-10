@@ -33,6 +33,10 @@ class UserRecord:
     def __str__(self):
         return  f"User {self.username} (id={self.id}, admin={self.is_admin}, created at {self.create_time}, last active at {self.last_active}, " + \
                 f"storage={fmt_storage_size(self.max_storage)}, permission={self.permission.name})"
+    
+    def desensitize(self):
+        self.credential = "__HIDDEN__"
+        return self
 
 @dataclasses.dataclass
 class FileRecord:

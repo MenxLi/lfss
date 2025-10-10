@@ -93,3 +93,33 @@ def test_move_transfer(server):
     c0.move('u1/move_test/', 'u1/move_test_moved2/')
     f1 = c0.list_files('u1/move_test_moved2/', flat=True)[0]
     assert f1.owner_id == c0.whoami().id
+
+def test_reject_move(server):
+    c0 = get_conn('u0')
+
+    c0.put('u0/reject_move/test.txt', b'hello')
+    c0.put('u0/reject_move/test1.txt', b'hello')
+
+    c0.put('u0/reject_move_dir1/test.txt', b'hello')
+    with pytest.raises(Exception, match='409'):
+        c0.move('u0/reject_move/', 'u0/reject_move_dir1/')
+    
+    c0.put('u0/reject_move_dir2/test_else.txt', b'hello')
+    c0.move('u0/reject_move/', 'u0/reject_move_dir2/')
+    # this should be fine, will merge directories
+    assert not c0.exists('u0/reject_move/')
+    assert c0.count_files('u0/reject_move_dir2/') == 3
+
+def test_final_size_check(server):
+    c0 = get_conn('u0')
+    c1 = get_conn('u1')
+
+    c0_storage = c0.storage_used()
+    c1_storage = c1.storage_used()
+
+    all_files = c0.list_files('u0/', flat=True) + c0.list_files('u1/', flat=True)
+    total_size_u0 = sum([f.file_size for f in all_files if f.owner_id == c0.whoami().id])
+    total_size_u1 = sum([f.file_size for f in all_files if f.owner_id == c1.whoami().id])
+    
+    assert c0_storage == total_size_u0, f"User u0 storage used mismatch: {c0_storage} vs {total_size_u0}"
+    assert c1_storage == total_size_u1, f"User u1 storage used mismatch: {c1_storage} vs {total_size_u1}"

@@ -402,9 +402,19 @@ class Connector:
         """Gets information about the current user."""
         response = self._fetch_factory('GET', '_api/whoami')()
         return UserRecord(**response.json())
+    
+    def storage_used(self) -> int:
+        """Gets the storage used by the current user, in bytes."""
+        response = self._fetch_factory('GET', '_api/user/storage')()
+        return response.json()['used']
 
     def list_peers(self, level: AccessLevel = AccessLevel.READ, incoming: bool = False) -> list[UserRecord]:
-        """List all users that have at least the given access level to the current user."""
+        """
+        if incoming is False (default): 
+            list all users that the current user has at least the given access level to, 
+        if incoming is True: 
+            list all users that have at least the given access level to the current user
+        """
         response = self._fetch_factory('GET', '_api/list-peers', {'level': int(level), 'incoming': incoming})()
         users = [UserRecord(**u) for u in response.json()]
         return users

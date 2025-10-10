@@ -312,8 +312,17 @@ async def get_multiple_files(
 @router_api.get("/whoami")
 @handle_exception
 async def whoami(user: UserRecord = Depends(registered_user)):
-    user.credential = "__HIDDEN__"
-    return user
+    return user.desensitize()
+
+@router_api.get("/user/storage")
+@handle_exception
+async def user_storage(user: UserRecord = Depends(registered_user)):
+    async with unique_cursor() as conn:
+        fconn = FileConn(conn)
+        return {
+            "quota": user.max_storage,
+            "used": await fconn.user_size(user.id)
+        }
 
 __all__ = [
     "app", "router_api", "router_fs"

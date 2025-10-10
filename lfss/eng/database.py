@@ -501,18 +501,21 @@ class FileConn(DBObjectBase):
             "UPDATE fmeta SET url = ?, owner_id = ?, create_time = CURRENT_TIMESTAMP WHERE url = ?", 
             (new_url, old.owner_id if transfer_to_user is None else transfer_to_user, old_url)
         )
+        if transfer_to_user is not None and transfer_to_user != old.owner_id:
+            await self._user_size_dec(old.owner_id, old.file_size)
+            await self._user_size_inc(transfer_to_user, old.file_size)
         self.logger.info(f"Moved file {old_url} to {new_url}")
     
     async def move_dir(self, old_url: str, new_url: str, transfer_to_user: Optional[int] = None):
         assert_or(old_url.endswith('/'), InvalidInputError("Old path must end with /"))
         assert_or(new_url.endswith('/'), InvalidInputError("New path must end with /"))
         cursor = await self.cur.execute(
-            "SELECT url, owner_id FROM fmeta WHERE url LIKE ? ESCAPE '\\'",
+            "SELECT url, owner_id, file_size FROM fmeta WHERE url LIKE ? ESCAPE '\\'",
             (self.escape_sqlike(old_url) + '%', )
             )
         res = await cursor.fetchall()
         for r in res:
-            r_url, r_user = r
+            r_url, r_user, r_size = r
             new_url_full = new_url + r_url[len(old_url):]
             if await (await self.cur.execute("SELECT url FROM fmeta WHERE url = ?", (new_url_full, ))).fetchone():
                 self.logger.error(f"File {new_url_full} already exists on move path: {old_url} -> {new_url}")
@@ -521,6 +524,9 @@ class FileConn(DBObjectBase):
                 "UPDATE fmeta SET url = ?, owner_id = ?, create_time = CURRENT_TIMESTAMP WHERE url = ?", 
                 (new_url_full, r_user if transfer_to_user is None else transfer_to_user, r_url)
                 )
+            if transfer_to_user is not None and transfer_to_user != r_user:
+                await self._user_size_dec(r_user, r_size)
+                await self._user_size_inc(transfer_to_user, r_size)
     
     async def log_access(self, url: str):
         await self.cur.execute("UPDATE fmeta SET access_time = CURRENT_TIMESTAMP WHERE url = ?", (url, ))

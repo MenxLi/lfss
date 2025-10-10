@@ -277,10 +277,7 @@ def main():
         for path in args.path:
             with catch_request_error(default_error_handler_dict(path)):
                 res = connector.get_meta(path)
-                if res is None:
-                    print(f"\033[31mNot found\033[0m ({path})")
-                else:
-                    print(res)
+                print(res)
     
     elif args.command in ["set-permission", "perm"]:
         flist = []

@@ -33,7 +33,7 @@ def put_get_delete(username: str, path: str, byte_size):
     c.put(path, content)
     assert c.get(path) == content, "Put get failed"
     c.delete(path)
-    assert c.get(path) is None, "Delete failed"
+    assert not c.exists(path), "Delete failed"
 
 def test_fname(server):
     # use some wired characters...

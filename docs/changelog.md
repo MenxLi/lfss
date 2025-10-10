@@ -1,3 +1,18 @@
+
+## 0.13
+
+### 0.13.0-pre
+- Break: Py client GET API not handle 404 as None. 
+- Break & Fix: Move will transfer ownership.
+- In favor of `Client` instead of `Connector` for API client class.
+- Add `/move` and `/set-perm` api for moving files and setting file permission.
+- Add `/user` prefix for user related api.
+- Add CLI command `mv`, `cp`, and `perm`. 
+- Add `name` method for record classes. 
+- Improve assertion error handling. 
+- Add user storage query api and query exists api.
+- Frontend add editor page for text files.
+
 ## 0.12
 
 ### 0.12.3

@@ -51,8 +51,6 @@ def stream_text(
     """
     MAX_TEXT_SIZE = 100 * 1024 * 1024  # 100 MB
     r = conn.get_fmeta(path)
-    if r is None:
-        raise FileNotFoundError(f"File not found: {path}")
     if r.file_size > MAX_TEXT_SIZE:
         raise ValueError(f"File size {r.file_size} exceeds maximum text size {MAX_TEXT_SIZE}")
     ss = conn.get_stream(r.url, chunk_size=chunk_size)

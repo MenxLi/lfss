@@ -46,7 +46,7 @@ def test_move0(server):
     c = get_conn('u0')
     c.move('u0/a/test2.txt', 'u0/a/test2.json')
     assert c.get('u0/a/test2.json') == b'hello world 2'
-    assert c.get('u0/a/test2.txt') is None
+    assert not c.exists('u0/a/test2.txt')
     with pytest.raises(Exception, match='409'):
         c.move('u0/a/test2.json', 'u0/a/test3.txt')
     c.move('u0/a/test2.json', 'u1/_a/test2.json')
@@ -63,7 +63,7 @@ def test_move1(server):
     c = get_conn('u1')
     c.move('u1/a/test2.txt', 'u1/a/test2.json')
     assert c.get('u1/a/test2.json') == b'hello world 2'
-    assert c.get('u1/a/test2.txt') is None
+    assert not c.exists('u1/a/test2.txt')
     with pytest.raises(Exception, match='409'):
         c.move('u1/a/test2.json', 'u1/a/test3.txt')
     with pytest.raises(Exception, match='403'):

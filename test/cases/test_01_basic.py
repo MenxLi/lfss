@@ -97,10 +97,10 @@ def test_put_get_perm(server):
 
 def test_meta_perm(server):
     c0 = get_conn('u0')
-    assert c0.get_meta('u2/test1_from_u0.txt') is not None, "Get metadata failed, should have admin permission"
-    assert c0.get_meta('u2/non-exists.txt') is None, "Get metadata failed, should return None"
-    assert c0.get_meta('u2/') is not None, "Get metadata failed, should have admin permission"
-    assert c0.get_meta('u2/non-exists-dir/') is None, "Get metadata failed, should not exist"
+    assert c0.exists('u2/test1_from_u0.txt'), "Get metadata failed, should have admin permission"
+    assert not c0.exists('u2/non-exists.txt'), "Get metadata failed, should not exist"
+    assert c0.exists('u2/'), "Get metadata failed, should have admin permission"
+    assert not c0.exists('u2/non-exists-dir/'), "Get metadata failed, should not exist"
 
     c1 = get_conn('u1')
     assert c1.get_meta('u2/test1_from_u0.txt') is not None, "Get metadata failed, should have permission"
@@ -124,7 +124,7 @@ def test_user_deletion(server):
         c.whoami()
     
     c0 = get_conn('u0')
-    assert c0.get('u2/test1_from_u0.txt') is None
+    assert not c0.exists('u2/test1_from_u0.txt')
 
 def test_post(server):
     c = get_conn('u0')
@@ -187,7 +187,7 @@ def test_path_deletion(server):
     c1 = get_conn('u1')
     c1.delete('u1/')
 
-    assert c.get('u1/upload_by_u0.txt') == None
+    assert not c.exists('u1/upload_by_u0.txt'), "File deletion failed"
 
 def test_invalid_path(server):
     c = get_conn('u0')

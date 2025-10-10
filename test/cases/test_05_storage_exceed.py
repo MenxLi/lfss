@@ -20,4 +20,4 @@ def test_upload(server):
     blob = os.urandom(1024 + 1)
     with pytest.raises(Exception, match='413'):
         c.put('u0/test-max-upload.bin', blob)
-    assert c.get_meta('u0/test-max-upload.bin') is None
+    assert not c.exists('u0/test-max-upload.bin')

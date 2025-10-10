@@ -7,7 +7,6 @@ import requests.adapters
 import urllib.parse
 from tempfile import SpooledTemporaryFile
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from lfss.eng.error import PathNotFoundError
 from lfss.eng.datatype import (
     FileReadPermission, FileRecord, DirectoryRecord, UserRecord, PathContents, AccessLevel, 
     FileSortKey, DirSortKey
@@ -195,23 +194,16 @@ class Client:
         )
         return response.json()
     
-    def _get(self, path: str, stream: bool = False) -> Optional[requests.Response]:
-        try:
-            response = self._fetch_factory('GET', path)(stream=stream)
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 404:
-                return None
-            raise e
-        return response
+    def _get(self, path: str, stream: bool = False) -> requests.Response:
+        return self._fetch_factory('GET', path)(stream=stream)
 
-    def get(self, path: str) -> Optional[bytes]:
+    def get(self, path: str) -> bytes:
         """Downloads a file from the specified path."""
         path = _p(path)
         response = self._get(path)
-        if response is None: return None
         return response.content
 
-    def get_partial(self, path: str, range_start: int = -1, range_end: int = -1) -> Optional[bytes]:
+    def get_partial(self, path: str, range_start: int = -1, range_end: int = -1) -> bytes:
         """
         Downloads a partial file from the specified path.
         start and end are the byte offsets, both inclusive.
@@ -220,20 +212,16 @@ class Client:
         response = self._fetch_factory('GET', path, extra_headers={
             'Range': f"bytes={range_start if range_start >= 0 else ''}-{range_end if range_end >= 0 else ''}"
         })()
-        if response is None: return None
         return response.content
     
     def get_stream(self, path: str, chunk_size = 1024) -> Iterator[bytes]:
         """Downloads a file from the specified path, will raise PathNotFoundError if path not found."""
         path = _p(path)
-        response = self._get(path, stream=True)
-        if response is None: raise PathNotFoundError("Path not found: " + path)
-        return response.iter_content(chunk_size)
+        return self._get(path, stream=True).iter_content(chunk_size)
 
-    def get_json(self, path: str) -> Optional[dict]:
+    def get_json(self, path: str) -> dict:
         path = _p(path)
         response = self._get(path)
-        if response is None: return None
         assert response.headers['Content-Type'] == 'application/json'
         return response.json()
     
@@ -253,23 +241,18 @@ class Client:
         path = _p(path)
         self._fetch_factory('DELETE', path)()
     
-    def get_meta(self, path: str) -> Optional[FileRecord | DirectoryRecord]:
+    def get_meta(self, path: str) -> FileRecord | DirectoryRecord:
         """Gets the metadata for the file at the specified path."""
         path = _p(path)
-        try:
-            response = self._fetch_factory('GET', '_api/meta', {'path': path})()
-            if path.endswith('/'):
-                return DirectoryRecord(**response.json())
-            else:
-                return FileRecord(**response.json())
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 404:
-                return None
-            raise e
+        response = self._fetch_factory('GET', '_api/meta', {'path': path})()
+        if path.endswith('/'):
+            return DirectoryRecord(**response.json())
+        else:
+            return FileRecord(**response.json())
     # shorthand methods for type constraints
-    def get_fmeta(self, path: str) -> Optional[FileRecord]: assert (f:=self.get_meta(path)) is None or isinstance(f, FileRecord); return f 
-    def get_dmeta(self, path: str) -> Optional[DirectoryRecord]: assert (d:=self.get_meta(path)) is None or isinstance(d, DirectoryRecord); return d
-    
+    def get_fmeta(self, path: str) -> FileRecord: assert (f:=self.get_meta(path)) is None or isinstance(f, FileRecord); return f
+    def get_dmeta(self, path: str) -> DirectoryRecord: assert (d:=self.get_meta(path)) is None or isinstance(d, DirectoryRecord); return d
+
     def count_files(self, path: str, flat: bool = False) -> int:
         assert path.endswith('/')
         path = _p(path)

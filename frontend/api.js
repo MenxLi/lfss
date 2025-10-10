@@ -431,7 +431,7 @@ export default class Connector {
      * @returns {Promise<UserRecord>} - the promise of the request
      */
     async whoami(){
-        const res = await fetch(this.config.endpoint + '/_api/whoami', {
+        const res = await fetch(this.config.endpoint + '/_api/user/whoami', {
             method: 'GET',
             headers: {
                 'Authorization': 'Bearer ' + this.config.token

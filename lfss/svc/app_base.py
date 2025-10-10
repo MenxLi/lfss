@@ -147,12 +147,16 @@ async def registered_user(user: UserRecord = Depends(get_current_user)):
     return user
 
 router_api = APIRouter(prefix="/_api")
+router_user = APIRouter(prefix="/_api/user")
 router_dav = APIRouter(prefix="")
 router_fs = APIRouter(prefix="")
 
 __all__ = [
     "app", "db", "logger", 
     "handle_exception", "skip_request_log", 
-    "router_api", "router_fs", "router_dav", 
-    "get_current_user", "registered_user"
+    "get_current_user", "registered_user", 
+    "router_api", 
+    "router_user", 
+    "router_fs", 
+    "router_dav", 
     ]

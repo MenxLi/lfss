@@ -169,7 +169,8 @@ class UserConn(DBObjectBase):
             List all users that user can do [AliasLevel] to, with level >= level, 
         else:
             List all users that can do [AliasLevel] to user, with level >= level
-        Note: the returned list does not include user and is not apporiate for admin (who has all permissions for all users)
+
+        Note: the returned list does not include the user and is not apporiate for admin (who has all permissions for all users)
         """
         assert int(level) > AccessLevel.NONE, f"Invalid level, {level}"
         aim_field = 'src_user_id' if incoming else 'dst_user_id'

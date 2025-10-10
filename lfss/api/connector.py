@@ -400,7 +400,7 @@ class Connector:
         
     def whoami(self) -> UserRecord:
         """Gets information about the current user."""
-        response = self._fetch_factory('GET', '_api/whoami')()
+        response = self._fetch_factory('GET', '_api/user/whoami')()
         return UserRecord(**response.json())
     
     def storage_used(self) -> int:

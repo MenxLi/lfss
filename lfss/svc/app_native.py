@@ -2,7 +2,7 @@ from typing import Optional, Literal, Annotated
 from collections import OrderedDict
 
 from fastapi import Depends, Request, Response, UploadFile, Query
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, RedirectResponse
 from fastapi.exceptions import HTTPException 
 
 from ..eng.utils import ensure_uri_components
@@ -204,16 +204,6 @@ async def set_permission(
     )
     return Response(status_code=200, content="OK")
 
-@router_api.get("/list-peers")
-@handle_exception
-async def list_peers(user: UserRecord = Depends(registered_user), level: AccessLevel = AccessLevel.READ, incoming: bool = False):
-    async with unique_cursor() as conn:
-        uconn = UserConn(conn)
-        peer_users = await uconn.list_peer_users(user.id, level, incoming=incoming)
-    for u in peer_users:
-        u.credential = "__HIDDEN__"
-    return peer_users
-
 async def validate_path_read_permission(path: str, user: UserRecord):
     if not path.endswith("/"):
         raise HTTPException(status_code=400, detail="Path must end with /")
@@ -308,21 +298,17 @@ async def get_multiple_files(
         status_code = 206 if partial_content else 200
     )
     
-    
+
+# --------- Backward compatibility API ---------
 @router_api.get("/whoami")
 @handle_exception
-async def whoami(user: UserRecord = Depends(registered_user)):
-    return user.desensitize()
+async def whoami(r: Request):
+    return RedirectResponse(url=f"/_api/user/whoami?{r.url.query}")
 
-@router_api.get("/user/storage")
+@router_api.get("/list-peers")
 @handle_exception
-async def user_storage(user: UserRecord = Depends(registered_user)):
-    async with unique_cursor() as conn:
-        fconn = FileConn(conn)
-        return {
-            "quota": user.max_storage,
-            "used": await fconn.user_size(user.id)
-        }
+async def list_peers(r: Request):
+    return RedirectResponse(url=f"/_api/user/list-peers?{r.url.query}")
 
 __all__ = [
     "app", "router_api", "router_fs"

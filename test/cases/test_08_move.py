@@ -2,6 +2,7 @@ import subprocess
 from ..config import SANDBOX_DIR
 from .common import get_conn, create_server_context
 import pytest
+from lfss.api import Connector
 
 server = create_server_context()
 
@@ -14,6 +15,19 @@ def test_user_creation(server):
     assert c.whoami().id == 1, "User id is not correct"
 
     subprocess.check_output(['lfss-user', 'add', 'u1', 'test'], cwd=SANDBOX_DIR)
+
+def _upload_random_files(c: Connector, dir_path, n):
+    import random
+    import string
+    if dir_path.endswith('/'):
+        dir_path = dir_path[:-1]
+    for i in range(n):
+        if random.random() < 0.2: # nest directory
+            dir_path += '/' + ''.join(random.choices(string.ascii_lowercase + string.digits, k=5))
+        fname = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10)) + '.txt'
+        fpath = dir_path + '/' + fname
+        content = ''.join(random.choices(string.ascii_lowercase + string.digits, k=20)).encode()
+        c.put(fpath, content)
 
 def test_basic_upload(server):
     c = get_conn('u0')
@@ -63,3 +77,19 @@ def test_move1(server):
     with pytest.raises(Exception, match='403'):
         c.move('u1/c/', 'u0/x/')
 
+def test_move_transfer(server):
+    c1 = get_conn('u1')
+    _upload_random_files(c1, 'u1/move_test/', 20)
+
+    c0 = get_conn('u0')
+    f0 = c0.list_files('u1/move_test/', flat=True, limit=1)[0]
+    assert f0.owner_id == c1.whoami().id
+    f0_mv_pth = 'u1/move_test_moved/' + f0.name()
+    c0.move(f0.url, f0_mv_pth)
+    f0_mv = c0.get_fmeta(f0_mv_pth)
+    assert f0_mv is not None
+    assert f0_mv.owner_id == c0.whoami().id
+
+    c0.move('u1/move_test/', 'u1/move_test_moved2/')
+    f1 = c0.list_files('u1/move_test_moved2/', flat=True)[0]
+    assert f1.owner_id == c0.whoami().id

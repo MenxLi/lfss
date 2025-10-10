@@ -22,5 +22,6 @@ def create_server_context():
         import time; time.sleep(1)
         yield s
         s.stop()
+        time.sleep(1)
         clear_sandbox()
     return server

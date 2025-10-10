@@ -16,7 +16,7 @@ from ..eng.datatype import (
 from ..eng.error import InvalidPathError
 
 from .app_base import *
-from .common_impl import get_impl, put_file_impl, post_file_impl, delete_impl, copy_impl
+from .common_impl import get_impl, put_file_impl, post_file_impl, delete_impl, copy_impl, move_impl
 
 @router_fs.get("/{path:path}")
 @handle_exception
@@ -139,6 +139,7 @@ async def get_file_meta(path: str, user: UserRecord = Depends(registered_user)):
             record = await fconn.get_dir_record(path)
     return record
 
+# TODO: will remove in next major version, use /move and /set-perm instead
 @router_api.post("/meta")
 @handle_exception
 async def update_file_meta(
@@ -147,6 +148,7 @@ async def update_file_meta(
     new_path: Optional[str] = None,
     user: UserRecord = Depends(registered_user)
     ):
+    logger.warning("POST /meta is deprecated and will be removed in next major version")
     path = ensure_uri_components(path)
     if path.startswith("/"):
         path = path[1:]
@@ -162,18 +164,13 @@ async def update_file_meta(
             )
     
         if new_path is not None:
-            new_path = ensure_uri_components(new_path)
-            logger.info(f"Update path of {path} to {new_path}")
-            await db.move_file(path, new_path, user)
+            return await move_impl(user, path, new_path)
     
     # directory
     else:
         assert perm is None, "Permission is not supported for directory"
         if new_path is not None:
-            new_path = ensure_uri_components(new_path)
-            logger.info(f"Update path of {path} to {new_path}")
-            # will raise duplicate path error if same name path exists in the new path
-            await db.move_dir(path, new_path, user)
+            return await move_impl(user, path, new_path)
 
     return Response(status_code=200, content="OK")
 
@@ -184,6 +181,28 @@ async def copy_file(
     user: UserRecord = Depends(registered_user)
     ):
     return await copy_impl(src_path = src, dst_path = dst, op_user = user)
+
+@router_api.post("/move")
+@handle_exception
+async def move_file(
+    src: str, dst: str, 
+    user: UserRecord = Depends(registered_user)
+    ):
+    return await move_impl(src_path = src, dst_path = dst, op_user = user)
+
+@router_api.post("/set-perm")
+@handle_exception
+async def set_permission(
+    path: str, perm: int, user: UserRecord = Depends(registered_user)
+):
+    if path.endswith("/"):
+        raise HTTPException(status_code=400, detail="Path must not end with /")
+    await db.update_file_record(
+        url = ensure_uri_components(path), 
+        permission = FileReadPermission(perm), 
+        op_user = user,
+    )
+    return Response(status_code=200, content="OK")
 
 @router_api.get("/list-peers")
 @handle_exception

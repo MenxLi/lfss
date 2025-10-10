@@ -449,7 +449,7 @@ export default class Connector {
      */
     async setFilePermission(path, permission){
         if (path.startsWith('/')){ path = path.slice(1); }
-        const dst = new URL(this.config.endpoint + '/_api/meta');
+        const dst = new URL(this.config.endpoint + '/_api/set-perm');
         dst.searchParams.append('path', path);
         dst.searchParams.append('perm', permission);
         const res = await fetch(dst.toString(), {
@@ -470,9 +470,9 @@ export default class Connector {
     async move(path, newPath){
         if (path.startsWith('/')){ path = path.slice(1); }
         if (newPath.startsWith('/')){ newPath = newPath.slice(1); }
-        const dst = new URL(this.config.endpoint + '/_api/meta');
-        dst.searchParams.append('path', path);
-        dst.searchParams.append('new_path', newPath);
+        const dst = new URL(this.config.endpoint + '/_api/move');
+        dst.searchParams.append('src', path);
+        dst.searchParams.append('dst', newPath);
         const res = await fetch(dst.toString(), {
             method: 'POST',
             headers: {

@@ -333,3 +333,23 @@ async def copy_impl(
                 raise HTTPException(status_code=409, detail="Destination exists")
         await db.copy_dir(src_path, dst_path, op_user)
     return Response(status_code=201, content="OK")
+
+async def move_impl(
+    op_user: UserRecord, src_path: str, dst_path: str,
+):
+    src_path = ensure_uri_components(src_path)
+    dst_path = ensure_uri_components(dst_path)
+
+    is_file = not src_path.endswith("/")
+    if (src_path[-1] == "/") != (dst_path[-1] == "/"):
+        raise HTTPException(status_code=400, detail="Source and destination must be same type")
+
+    if src_path == dst_path:
+        raise HTTPException(status_code=400, detail="Source and destination are the same")
+    
+    logger.info(f"Move {src_path} to {dst_path}, user: {op_user.username}")
+    if is_file:
+        await db.move_file(src_path, dst_path, op_user)
+    else:
+        await db.move_dir(src_path, dst_path, op_user)
+    return Response(status_code=200, content="OK")

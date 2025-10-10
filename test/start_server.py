@@ -4,7 +4,7 @@ import requests
 from lfss.api import Connector
 
 def start_server_thread(cwd, port):
-    return subprocess.Popen(['lfss-serve', '--workers', '1', '--port', str(port)], cwd=cwd)
+    return subprocess.Popen(['lfss-serve', '--workers', '4', '--port', str(port)], cwd=cwd)
 
 class Server:
     def __init__(self):

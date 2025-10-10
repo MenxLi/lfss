@@ -371,14 +371,14 @@ class Connector:
     def set_file_permission(self, path: str, permission: int | FileReadPermission):
         """Sets the file permission for the specified path."""
         path = _p(path)
-        self._fetch_factory('POST', '_api/meta', {'path': path, 'perm': int(permission)})(
+        self._fetch_factory('POST', '_api/set-perm', {'path': path, 'perm': int(permission)})(
             headers={'Content-Type': 'application/www-form-urlencoded'}
         )
         
     def move(self, path: str, new_path: str):
         """Move file or directory to a new path."""
         path = _p(path); new_path = _p(new_path)
-        self._fetch_factory('POST', '_api/meta', {'path': path, 'new_path': new_path})(
+        self._fetch_factory('POST', '_api/move', {'src': path, 'dst': new_path})(
             headers = {'Content-Type': 'application/www-form-urlencoded'}
         )
     

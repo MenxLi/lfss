@@ -107,12 +107,12 @@ class Client:
         """Checks if a file/directory exists."""
         path = _p(path)
         try:
-            response = self._fetch_factory('HEAD', path)()
+            self._fetch_factory('HEAD', path)()
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
                 return False
             raise e
-        return response.status_code == 200
+        return True
 
     def put(self, path: str, file_data: bytes, permission: int | FileReadPermission = 0, conflict: Literal['overwrite', 'abort', 'skip', 'skip-ahead'] = 'abort'):
         """Uploads a file to the specified path."""

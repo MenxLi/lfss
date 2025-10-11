@@ -191,7 +191,7 @@ def test_path_deletion(server):
 
 def test_invalid_path(server):
     c = get_conn('u0')
-    with pytest.raises(Exception, match='400'):
+    with pytest.raises(Exception, match='404'):
         c.put('u_non_exists/test1.txt', b'hello world 1')
 
 def test_invalid_char(server):

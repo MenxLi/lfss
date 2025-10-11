@@ -507,6 +507,17 @@ class FileConn(DBObjectBase):
             await self._user_size_inc(transfer_to_user, old.file_size)
         self.logger.info(f"Moved file {old_url} to {new_url}")
     
+    async def transfer_ownership(self, url: str, new_owner: int):
+        old = await self.get_file_record(url)
+        if old is None:
+            raise FileNotFoundError(f"File {url} not found")
+        if new_owner == old.owner_id:
+            return
+        await self.cur.execute("UPDATE fmeta SET owner_id = ? WHERE url = ?", (new_owner, url))
+        await self._user_size_dec(old.owner_id, old.file_size)
+        await self._user_size_inc(new_owner, old.file_size)
+        self.logger.info(f"Transferred ownership of file {url} from user {old.owner_id} to user {new_owner}")
+    
     async def move_dir(self, old_url: str, new_url: str, transfer_to_user: Optional[int] = None):
         assert_or(old_url.endswith('/'), InvalidInputError("Old path must end with /"))
         assert_or(new_url.endswith('/'), InvalidInputError("New path must end with /"))
@@ -542,17 +553,13 @@ class FileConn(DBObjectBase):
         self.logger.info(f"Deleted fmeta {url}")
         return file_record
     
-    async def delete_user_file_records(self, owner_id: int) -> list[FileRecord]:
-        """ Delete all records with owner_id """
+    async def list_user_file_records(self, owner_id: int) -> list[FileRecord]:
+        """ list all records with owner_id """
         cursor = await self.cur.execute("SELECT * FROM fmeta WHERE owner_id = ?", (owner_id, ))
         res = await cursor.fetchall()
-        await self.cur.execute("DELETE FROM usize WHERE user_id = ?", (owner_id, ))
-        res = await self.cur.execute("DELETE FROM fmeta WHERE owner_id = ? RETURNING *", (owner_id, ))
-        ret = [self.parse_record(r) for r in await res.fetchall()]
-        self.logger.info(f"Deleted {len(ret)} file records for user {owner_id}") # type: ignore
-        return ret
-    
-    async def delete_records_by_prefix(self, path: str, under_owner_id: Optional[int] = None) -> list[FileRecord]:
+        return [self.parse_record(r) for r in res]
+
+    async def delete_records_by_prefix(self, path: str) -> list[FileRecord]:
         """Delete all records with url starting with path"""
         # update user size
         cursor = await self.cur.execute(
@@ -572,10 +579,7 @@ class FileConn(DBObjectBase):
         # if any new records are created here, the size update may be inconsistent
         # but it's not a big deal... we should have only one writer
         
-        if under_owner_id is None:
-            res = await self.cur.execute("DELETE FROM fmeta WHERE url LIKE ? ESCAPE '\\' RETURNING *", (self.escape_sqlike(path) + '%', ))
-        else:
-            res = await self.cur.execute("DELETE FROM fmeta WHERE url LIKE ? ESCAPE '\\' AND owner_id = ? RETURNING *", (self.escape_sqlike(path) + '%', under_owner_id))
+        res = await self.cur.execute("DELETE FROM fmeta WHERE url LIKE ? ESCAPE '\\' RETURNING *", (self.escape_sqlike(path) + '%', ))
         all_f_rec = await res.fetchall()
         self.logger.info(f"Deleted {len(all_f_rec)} file(s) for path {path}") # type: ignore
         return [self.parse_record(r) for r in all_f_rec]
@@ -974,6 +978,12 @@ class Database:
                     raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot move file to {new_url}")
             await fconn.move_file(old_url, new_url, transfer_to_user=op_user.id if op_user is not None else None)
 
+            # check user size limit if transferring ownership
+            if op_user is not None:
+                user_size_used = await fconn.user_size(op_user.id)
+                if user_size_used > op_user.max_storage:
+                    raise StorageExceededError(f"Unable to move file, user size limit exceeded: {user_size_used} > {op_user.max_storage}")
+
             new_mime, _ = mimetypes.guess_type(new_url)
             if not new_mime is None:
                 await fconn.update_file_record(new_url, mime_type=new_mime)
@@ -994,6 +1004,12 @@ class Database:
                 if await check_path_permission(new_url, op_user, cursor=cur) < AccessLevel.WRITE:
                     raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot copy file to {new_url}")
             await fconn.copy_file(old_url, new_url, user_id=op_user.id if op_user is not None else None)
+
+            # check user size limit if transferring ownership
+            if op_user is not None:
+                user_size_used = await fconn.user_size(op_user.id)
+                if user_size_used > op_user.max_storage:
+                    raise StorageExceededError(f"Unable to copy file, user size limit exceeded: {user_size_used} > {op_user.max_storage}")
     
     async def move_dir(self, old_url: str, new_url: str, op_user: UserRecord):
         validate_url(old_url, 'dir')
@@ -1017,6 +1033,12 @@ class Database:
         async with transaction() as cur:
             fconn = FileConn(cur)
             await fconn.move_dir(old_url, new_url, op_user.id)
+
+            # check user size limit
+            user_size_used = await fconn.user_size(op_user.id)
+            if user_size_used > op_user.max_storage:
+                raise StorageExceededError(f"Unable to move path, user size limit exceeded: {user_size_used} > {op_user.max_storage}")
+                
     
     async def copy_dir(self, old_url: str, new_url: str, op_user: UserRecord):
         validate_url(old_url, 'dir')
@@ -1041,7 +1063,12 @@ class Database:
             fconn = FileConn(cur)
             await fconn.copy_dir(old_url, new_url, op_user.id)
 
-    async def __batch_delete_file_blobs(self, fconn: FileConn, file_records: list[FileRecord], batch_size: int = 512):
+            # check user size limit
+            user_size_used = await fconn.user_size(op_user.id)
+            if user_size_used > op_user.max_storage:
+                raise StorageExceededError(f"Unable to copy path, user size limit exceeded: {user_size_used} > {op_user.max_storage}")
+
+    async def __batch_unlink_file_blobs(self, fconn: FileConn, file_records: list[FileRecord], batch_size: int = 512):
         # https://github.com/langchain-ai/langchain/issues/10321
         internal_ids = []
         external_ids = []
@@ -1062,14 +1089,16 @@ class Database:
 
     async def delete_dir(self, url: str, op_user: Optional[UserRecord] = None) -> Optional[list[FileRecord]]:
         validate_url(url, 'dir')
-        from_owner_id = op_user.id if op_user is not None and not (op_user.is_admin or await check_path_permission(url, op_user) >= AccessLevel.WRITE) else None
+        if op_user is not None:
+            if await check_path_permission(url, op_user) < AccessLevel.WRITE:
+                raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot delete path {url}")
 
         async with transaction() as cur:
             fconn = FileConn(cur)
-            records = await fconn.delete_records_by_prefix(url, from_owner_id)
+            records = await fconn.delete_records_by_prefix(url)
             if not records:
                 return None
-            await self.__batch_delete_file_blobs(fconn, records)
+            await self.__batch_unlink_file_blobs(fconn, records)
             return records
     
     async def delete_user(self, u: str | int):
@@ -1083,14 +1112,33 @@ class Database:
             await uconn.delete_user(user.username)
 
             fconn = FileConn(cur)
-            records = await fconn.delete_user_file_records(user.id)
-            self.logger.debug("Deleting files...")
-            await self.__batch_delete_file_blobs(fconn, records)
-            self.logger.info(f"Deleted {len(records)} file(s) for user {user.username}")
 
             # make sure the user's directory is deleted, 
-            # may contain admin's files, but delete them all
-            await fconn.delete_records_by_prefix(user.username + '/')
+            to_del_records = await fconn.delete_records_by_prefix(user.username + '/')
+
+            # transfer ownership of files outside the user's directory
+            to_transfer_records = await fconn.list_user_file_records(user.id)
+            __user_map: dict[str, UserRecord] = {}
+            for r in to_transfer_records:
+                r_username = r.url.split('/')[0]
+                if not r_username in __user_map:
+                    r_user = await uconn.get_user(r_username)
+                    assert r_user is not None, f"User {r_username} not found"
+                    __user_map[r_username] = r_user
+                r_user = __user_map[r_username]
+                await fconn.transfer_ownership(r.url, r_user.id)
+
+            # check user size limit
+            for r_user in __user_map.values():
+                user_size_used = await fconn.user_size(r_user.id)
+                if user_size_used > r_user.max_storage:
+                    raise StorageExceededError(f"Unable to transfer files, user size limit exceeded for {r_user.username}: {user_size_used} > {r_user.max_storage}")
+
+            self.logger.info(f"Transferred ownership of {len(to_transfer_records)} file(s) outside user {user.username}'s directory")
+
+            # release file blobs finally
+            await self.__batch_unlink_file_blobs(fconn, to_del_records)
+            self.logger.info(f"Deleted user {user.username} and {len(to_del_records)} file(s) under the user's directory")
     
     async def iter_dir(self, top_url: str, urls: Optional[list[str]]) -> AsyncIterable[tuple[FileRecord, bytes | AsyncIterable[bytes]]]:
         validate_url(top_url, 'dir')
@@ -1172,7 +1220,7 @@ async def _get_path_owner(cur: aiosqlite.Cursor, path: str) -> UserRecord:
     uconn = UserConn(cur)
     path_user = await uconn.get_user(path_username)
     if path_user is None:
-        raise InvalidPathError(f"Invalid path: {path_username} is not a valid username")
+        raise PathNotFoundError(f"Path not found: {path_username} is not a valid username")
     return path_user
 
 async def check_file_read_permission(user: UserRecord, file: FileRecord, cursor: Optional[aiosqlite.Cursor] = None) -> tuple[bool, str]:

@@ -444,6 +444,29 @@ export default class Connector {
     };
 
     /**
+     * List peer users
+     * @param {Object} [options] - Optional configuration.
+     * @param {number} [options.level=1] - The level of users to list. 1 for at leaset read permission
+     * @param {boolean} [options.incoming=false] - Whether to list incoming users (can access me) or outgoing users (I can access)
+     * @returns {Promise<UserRecord[]>} - the promise of the request
+     */
+    async listPeers({ level = 1, incoming = false } = {}){
+        const dst = new URL(this.config.endpoint + '/_api/user/list-peers');
+        dst.searchParams.append('level', level);
+        dst.searchParams.append('incoming', incoming);
+        const res = await fetch(dst.toString(), {
+            method: 'GET',
+            headers: {
+                'Authorization': 'Bearer ' + this.config.token
+            },
+        });
+        if (res.status != 200){
+            throw new Error('Failed to list peer users, status code: ' + res.status);
+        }
+        return await res.json();
+    }
+
+    /**
      * @param {string} path - file path(url)
      * @param {number} permission - please refer to the permMap
      */
@@ -534,8 +557,28 @@ export async function listPath(conn, path, {
 } = {}){
 
     if (path === '/' || path === ''){
-        // this handles separate case for the root directory... please refer to the backend implementation
-        return [await conn.listPath(''), {dirs: 0, files: 0}];
+        // this handles separate case for the root directory
+        const dirnames = [
+            (await conn.whoami()).username + '/'
+        ].concat(
+            (await conn.listPeers({ level: 1, incoming: false })).map(u => u.username + '/')
+        )
+        return [
+            {
+                dirs: dirnames.map(dirname => ({
+                    url: dirname,
+                    size: -1,
+                    create_time: '',
+                    update_time: '',
+                    access_time: '',
+                    n_files: -1
+                })),
+                files: []
+            }, {
+                dirs: dirnames.length,
+                files: 0
+            }
+        ]
     }
 
     orderBy = orderBy == 'none' ? '' : orderBy;

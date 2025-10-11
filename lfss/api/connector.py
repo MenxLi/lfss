@@ -301,11 +301,11 @@ class Client:
         path = _p(path)
         if path == '/':
             # handle root path separately
-            # TODO: change later
-            response = self._fetch_factory('GET', path)()
-            dirs = [DirectoryRecord(**d) for d in response.json()['dirs']]
-            files = [FileRecord(**f) for f in response.json()['files']]
-            return PathContents(dirs=dirs, files=files)
+            dirnames = [f'{self.whoami().username}/'] + [f'{p.username}/' for p in self.list_peers(AccessLevel.READ)]
+            return PathContents(
+                dirs = [DirectoryRecord(url = d) for d in dirnames], 
+                files = []
+            )
 
         dirs: list[DirectoryRecord] = []
         files: list[FileRecord] = []

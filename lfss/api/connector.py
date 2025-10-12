@@ -1,4 +1,5 @@
 from __future__ import annotations
+import dataclasses
 from typing import Optional, Literal
 from collections.abc import Iterator
 import os
@@ -23,6 +24,15 @@ def _p(x: str) -> str:
     if x.startswith('/'):
         x = x[1:]
     return x
+
+@dataclasses.dataclass
+class ClientConfig:
+    endpoint: str
+    token: str
+
+    # backward compatibility
+    def __getitem__(self, key):
+        return getattr(self, key)
 
 class Client:
     class Session:
@@ -63,16 +73,31 @@ class Client:
         - verify: either a boolean or a string, to control SSL verification. Default to True, refer to requests.Session.request.
         """
         assert token, "No token provided. Please set LFSS_TOKEN environment variable."
-        self.config = {
-            "endpoint": endpoint,
-            "token": token
-        }
+        self._config = ClientConfig(
+            endpoint=endpoint,
+            token=token
+        )
         self._session: Optional[requests.Session] = None
         self.timeout = timeout
         self.verify = verify
     
+    @property
+    def config(self): 
+        return self._config
+    
     def session( self, pool_size: int = 10, **kwargs):
-        """ avoid creating a new session for each request.  """
+        """ 
+        Creates a session context manager for making multiple requests with connection pooling.
+        This also provides automatic retries on failed requests. 
+        Typical usage:
+        ```python
+        with client.session(pool_size=20, retry=3) as c, ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [executor.submit(c.get, f"/path/to/file_{i}.txt") for i in range(100)]
+            for future in as_completed(futures):
+                ...
+        ```
+        Please refer to `Client.Session` for the parameters.
+        """
         return self.Session(self, pool_size, **kwargs)
     
     def _fetch_factory(
@@ -87,10 +112,10 @@ class Client:
                 (k, str(v).lower() if isinstance(v, bool) else v)
                 for k, v in search_params.items()
             ]   # tuple form
-            url = f"{self.config['endpoint']}/{path}" + "?" + urllib.parse.urlencode(search_params_t, doseq=True)
+            url = f"{self.config.endpoint}/{path}" + "?" + urllib.parse.urlencode(search_params_t, doseq=True)
             headers: dict = kwargs.pop('headers', {})
             headers.update({
-                'Authorization': f"Bearer {self.config['token']}",
+                'Authorization': f"Bearer {self.config.token}",
             })
             headers.update(extra_headers)
             if self._session is not None:
@@ -138,6 +163,7 @@ class Client:
     
     def post(self, path, file: str | bytes, permission: int | FileReadPermission = 0, conflict: Literal['overwrite', 'abort', 'skip', 'skip-ahead'] = 'abort'):
         """
+        **This method is generally preferred for large files**  
         Uploads a file to the specified path, 
         using the POST method, with form-data/multipart.
         file can be a path to a file on disk, or bytes.

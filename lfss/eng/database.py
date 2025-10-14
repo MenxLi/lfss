@@ -13,7 +13,7 @@ import aiosqlite, aiofiles
 import aiofiles.os
 import mimetypes, mimesniff
 
-from .connection_pool import execute_sql, unique_cursor, transaction
+from .connection_pool import execute_sql, unique_cursor, transaction, TransactionContextManager
 from .datatype import (
     UserRecord, AccessLevel, 
     FileReadPermission, FileRecord, DirectoryRecord, PathContents, 
@@ -42,6 +42,31 @@ class DBObjectBase(ABC):
         if not hasattr(self, '_cur'):
             raise ValueError("Connection not set")
         return self._cur
+
+async def _default_blob_deletion_fn(file_id: str):
+    if (LARGE_BLOB_DIR / file_id).exists():
+        await aiofiles.os.remove(LARGE_BLOB_DIR / file_id)
+
+class DeferredFileTrash(TransactionContextManager):
+    def __init__(self):
+        self._schedule_deletion = set()
+    
+    async def schedule(self, file_id: str):
+        self._schedule_deletion.add(file_id)
+    
+    async def run_deletion(self):
+        async def ensure_deletion(file_id: str):
+            try:
+                await _default_blob_deletion_fn(file_id)
+            except Exception as e:
+                get_logger('database', global_instance=True).error(f"Error deleting blob {file_id}: {e}")
+        await asyncio.gather(*[ensure_deletion(f_id) for f_id in self._schedule_deletion])
+
+    async def on_rollback(self):
+        self._schedule_deletion.clear()
+    
+    async def on_commit(self):
+        await self.run_deletion()
 
 DECOY_USER = UserRecord(0, 'decoy', 'decoy', False, '2021-01-01 00:00:00', '2021-01-01 00:00:00', 0, FileReadPermission.PRIVATE)
 class UserConn(DBObjectBase):
@@ -645,7 +670,7 @@ class FileConn(DBObjectBase):
                     if not chunk: break
                     yield chunk
     
-    async def unlink_file_blob_external(self, file_id: str):
+    async def unlink_file_blob_external(self, file_id: str, blob_del_fn = _default_blob_deletion_fn):
         # first check if the file has duplication
         cursor = await self.cur.execute("SELECT count FROM dupcount WHERE file_id = ?", (file_id, ))
         res = await cursor.fetchone()
@@ -654,8 +679,7 @@ class FileConn(DBObjectBase):
             return
 
         # finally delete the file and the duplication count
-        if (LARGE_BLOB_DIR / file_id).exists():
-            await aiofiles.os.remove(LARGE_BLOB_DIR / file_id)
+        await blob_del_fn(file_id)
         await self.cur.execute("DELETE FROM dupcount WHERE file_id = ?", (file_id, ))
     
     async def unlink_file_blob(self, file_id: str):
@@ -704,14 +728,11 @@ class FileConn(DBObjectBase):
             # decrease duplication count
             await self.cur.execute("UPDATE dupcount SET count = count - 1 WHERE file_id IN ({})".format(','.join(['?'] * len(to_dec_ids))), to_dec_ids)
     
-    async def unlink_file_blobs_external(self, file_ids: list[str]):
-        async def del_file(file_id: str):
-            if (LARGE_BLOB_DIR / file_id).exists():
-                await aiofiles.os.remove(LARGE_BLOB_DIR / file_id)
+    async def unlink_file_blobs_external(self, file_ids: list[str], blob_del_fn = _default_blob_deletion_fn):
         async for (to_del_ids, to_dec_ids) in self._group_del(file_ids):
             # delete the only copy
             await asyncio.gather(*(
-                [del_file(file_id) for file_id in to_del_ids] + 
+                [blob_del_fn(file_id) for file_id in to_del_ids] + 
                 [self.cur.execute("DELETE FROM dupcount WHERE file_id = ?", (file_id, )) for file_id in to_del_ids]
                 ))
             # decrease duplication count
@@ -953,7 +974,7 @@ class Database:
     async def delete_file(self, url: str, op_user: Optional[UserRecord] = None) -> Optional[FileRecord]:
         validate_url(url)
 
-        async with transaction() as cur:
+        async with transaction(DeferredFileTrash) as (cur, del_man):
             fconn = FileConn(cur)
             r = await fconn.delete_file_record(url)
             if r is None:
@@ -965,7 +986,7 @@ class Database:
                     raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot delete file {url}")
             f_id = r.file_id
             if r.external:
-                await fconn.unlink_file_blob_external(f_id)
+                await fconn.unlink_file_blob_external(f_id, blob_del_fn = del_man.schedule)
             else:
                 await fconn.unlink_file_blob(f_id)
             return r
@@ -1076,7 +1097,10 @@ class Database:
             if user_size_used > op_user.max_storage:
                 raise StorageExceededError(f"Unable to copy path, user size limit exceeded: {user_size_used} > {op_user.max_storage}")
 
-    async def __batch_unlink_file_blobs(self, fconn: FileConn, file_records: list[FileRecord], batch_size: int = 512):
+    async def __batch_unlink_file_blobs(
+        self, fconn: FileConn, file_records: list[FileRecord], batch_size: int = 512,
+        blob_del_fn = _default_blob_deletion_fn
+    ):
         # https://github.com/langchain-ai/langchain/issues/10321
         internal_ids = []
         external_ids = []
@@ -1091,7 +1115,7 @@ class Database:
                 await fconn.unlink_file_blobs([r for r in internal_ids[i:i+batch_size]])
         async def del_external():
             for i in range(0, len(external_ids), batch_size):
-                await fconn.unlink_file_blobs_external([r for r in external_ids[i:i+batch_size]])
+                await fconn.unlink_file_blobs_external([r for r in external_ids[i:i+batch_size]], blob_del_fn=blob_del_fn)
         await del_internal()
         await del_external()
 
@@ -1101,16 +1125,16 @@ class Database:
             if await check_path_permission(url, op_user) < AccessLevel.WRITE:
                 raise PermissionDeniedError(f"Permission denied: {op_user.username} cannot delete path {url}")
 
-        async with transaction() as cur:
+        async with transaction(DeferredFileTrash) as (cur, del_man):
             fconn = FileConn(cur)
             records = await fconn.delete_records_by_prefix(url)
             if not records:
                 return None
-            await self.__batch_unlink_file_blobs(fconn, records)
+            await self.__batch_unlink_file_blobs(fconn, records, blob_del_fn = del_man.schedule)
             return records
     
     async def delete_user(self, u: str | int):
-        async with transaction() as cur:
+        async with transaction(DeferredFileTrash) as (cur, del_man):
             user = await get_user(cur, u)
             if user is None:
                 return
@@ -1145,7 +1169,7 @@ class Database:
             self.logger.info(f"Transferred ownership of {len(to_transfer_records)} file(s) outside user {user.username}'s directory")
 
             # release file blobs finally
-            await self.__batch_unlink_file_blobs(fconn, to_del_records)
+            await self.__batch_unlink_file_blobs(fconn, to_del_records, blob_del_fn=del_man.schedule)
             self.logger.info(f"Deleted user {user.username} and {len(to_del_records)} file(s) under the user's directory")
     
     async def iter_dir(self, top_url: str, urls: Optional[list[str]]) -> AsyncIterable[tuple[FileRecord, bytes | AsyncIterable[bytes]]]:

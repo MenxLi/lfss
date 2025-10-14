@@ -5,7 +5,8 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from asyncio import Semaphore, Lock
 from functools import wraps
-from typing import Callable, Awaitable
+from typing import Callable, Awaitable, Optional, overload, TypeVar, Type
+from abc import ABC, abstractmethod
 
 from .log import get_logger
 from .error import DatabaseLockedError, DatabaseTransactionError
@@ -176,14 +177,33 @@ async def unique_cursor(is_write: bool = False):
             finally:
                 await g_pool.release(connection_obj)
 
+from contextlib import _AsyncGeneratorContextManager
+class TransactionContextManager(ABC):
+    @abstractmethod
+    async def on_commit(self): ...
+    @abstractmethod
+    async def on_rollback(self): ...
+TCM_T = TypeVar('TCM_T', bound=TransactionContextManager)
+@overload
+def transaction(tcm_cls: None = None, **kwargs) -> _AsyncGeneratorContextManager[aiosqlite.Cursor]: ...
+@overload
+def transaction(tcm_cls: Type[TCM_T], **kwargs) -> _AsyncGeneratorContextManager[tuple[aiosqlite.Cursor, TCM_T]]: ...
 @asynccontextmanager
-async def transaction():
+async def transaction(tcm_cls: Optional[Type[TCM_T]] = None, **kwargs):
+    tcm = tcm_cls(**kwargs) if tcm_cls else None
     async with unique_cursor(is_write=True) as cur:
         try:
             await cur.execute('BEGIN')
-            yield cur
+            if tcm is None:
+                yield cur
+            else:
+                yield cur, tcm
             await cur.execute('COMMIT')
+            if tcm is not None:
+                await tcm.on_commit()
         except Exception as e:
             get_logger('database', global_instance=True).error(f"Error in transaction: {e}, rollback.")
             await cur.execute('ROLLBACK')
+            if tcm is not None:
+                await tcm.on_rollback()
             raise e

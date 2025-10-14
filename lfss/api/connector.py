@@ -30,6 +30,9 @@ class ClientConfig:
     endpoint: str
     token: str
 
+    verify: Optional[bool | str]
+    timeout: Optional[num_t | tuple[num_t, num_t]]
+
     # backward compatibility
     def __getitem__(self, key):
         return getattr(self, key)
@@ -65,27 +68,31 @@ class Client:
         def __exit__(self, exc_type, exc_value, traceback):
             self.close()
 
-    def __init__(self, endpoint=_default_endpoint, token=_default_token, timeout: Optional[num_t | tuple[num_t, num_t]]=None, verify: Optional[bool | str] = None):
+    def __init__(
+        self, endpoint=_default_endpoint, token=_default_token, 
+        timeout: Optional[num_t | tuple[num_t, num_t]]=None, 
+        verify: Optional[bool | str] = None
+        ):
         """
         - endpoint: the URL of the LFSS server. Default to $LFSS_ENDPOINT or http://localhost:8000.
         - token: the access token. Default to $LFSS_TOKEN.
-        - timeout: the timeout for each request, can be either a single value or a tuple of two values (connect, read), refer to requests.Session.request.
-        - verify: either a boolean or a string, to control SSL verification. Default to True, refer to requests.Session.request.
+        - timeout: the timeout for each request, can be either a single value or a tuple of two values (connect, read), refer to `requests.Session.request`.
+        - verify: either a boolean or a string, to control SSL verification. Default to True, refer to `requests.Session.request`.
         """
         assert token, "No token provided. Please set LFSS_TOKEN environment variable."
         self._config = ClientConfig(
             endpoint=endpoint,
-            token=token
+            token=token, 
+            timeout=timeout,
+            verify=verify
         )
         self._session: Optional[requests.Session] = None
-        self.timeout = timeout
-        self.verify = verify
     
     @property
     def config(self): 
         return self._config
     
-    def session( self, pool_size: int = 10, **kwargs):
+    def session(self, pool_size: int = 10, **kwargs):
         """ 
         Creates a session context manager for making multiple requests with connection pooling.
         This also provides automatic retries on failed requests. 
@@ -119,11 +126,19 @@ class Client:
             })
             headers.update(extra_headers)
             if self._session is not None:
-                response = self._session.request(method, url, headers=headers, timeout=self.timeout, verify=self.verify, **kwargs)
+                response = self._session.request(
+                    method, url, headers=headers, 
+                    timeout=self.config.timeout, verify=self.config.verify, 
+                    **kwargs
+                    )
                 response.raise_for_status()
             else:
                 with requests.Session() as s:
-                    response = s.request(method, url, headers=headers, timeout=self.timeout, verify=self.verify, **kwargs)
+                    response = s.request(
+                        method, url, headers=headers, 
+                        timeout=self.config.timeout, verify=self.config.verify, 
+                        **kwargs
+                    )
                     response.raise_for_status()
             return response
         return f
@@ -140,7 +155,7 @@ class Client:
         return True
 
     def put(self, path: str, file_data: bytes, permission: int | FileReadPermission = 0, conflict: Literal['overwrite', 'abort', 'skip', 'skip-ahead'] = 'abort'):
-        """Uploads a file to the specified path."""
+        """Upload a file to the specified path."""
         assert isinstance(file_data, bytes), "file_data must be bytes"
         path = _p(path)
 
@@ -163,10 +178,9 @@ class Client:
     
     def post(self, path, file: str | bytes, permission: int | FileReadPermission = 0, conflict: Literal['overwrite', 'abort', 'skip', 'skip-ahead'] = 'abort'):
         """
-        **This method is generally preferred for large files**  
-        Uploads a file to the specified path, 
-        using the POST method, with form-data/multipart.
-        file can be a path to a file on disk, or bytes.
+        **This method is preferred for large files**  
+        Upload a file to the specified path, using the POST method with form-data/multipart.  
+        File can be a path to a file on disk, or bytes.
         """
         path = _p(path)
 
@@ -198,7 +212,7 @@ class Client:
         return response.json()
     
     def put_json(self, path: str, data: dict, permission: int | FileReadPermission = 0, conflict: Literal['overwrite', 'abort', 'skip', 'skip-ahead'] = 'abort'):
-        """Uploads a JSON file to the specified path."""
+        """Upload a JSON file to the specified path."""
         assert path.endswith('.json'), "Path must end with .json"
         assert isinstance(data, dict), "data must be a dict"
         path = _p(path)
@@ -224,14 +238,14 @@ class Client:
         return self._fetch_factory('GET', path)(stream=stream)
 
     def get(self, path: str) -> bytes:
-        """Downloads a file from the specified path."""
+        """Download a file from the specified path."""
         path = _p(path)
         response = self._get(path)
         return response.content
 
     def get_partial(self, path: str, range_start: int = -1, range_end: int = -1) -> bytes:
         """
-        Downloads a partial file from the specified path.
+        Download a partial file from the specified path.
         start and end are the byte offsets, both inclusive.
         """
         path = _p(path)
@@ -241,20 +255,27 @@ class Client:
         return response.content
     
     def get_stream(self, path: str, chunk_size = 1024) -> Iterator[bytes]:
-        """Downloads a file from the specified path, will raise PathNotFoundError if path not found."""
+        """Download a file from the specified path, as a stream of bytes."""
         path = _p(path)
         return self._get(path, stream=True).iter_content(chunk_size)
 
     def get_json(self, path: str) -> dict:
+        """ Get the JSON content of a file at the specified path. """
         path = _p(path)
         response = self._get(path)
-        assert response.headers['Content-Type'] == 'application/json'
         return response.json()
+    
+    def get_text(self, path: str) -> str:
+        """ Get the text content of a file at the specified path. """
+        path = _p(path)
+        response = self._get(path)
+        return response.text
     
     def get_multiple_text(self, *paths: str, skip_content = False) -> dict[str, Optional[str]]:
         """ 
-        Gets text contents of multiple files at once. Non-existing files will return None. 
+        Get text contents of multiple files at once. Non-existing files will return None. 
         - skip_content: if True, the file contents will not be fetched, always be empty string ''.
+        If some of the files do not exist, they will be returned as None.  
         """
         response = self._fetch_factory(
             'GET', '_api/get-multiple', 
@@ -263,12 +284,12 @@ class Client:
         return response.json()
     
     def delete(self, path: str):
-        """Deletes the file at the specified path."""
+        """Delete the file or directory at the specified path."""
         path = _p(path)
         self._fetch_factory('DELETE', path)()
     
     def get_meta(self, path: str) -> FileRecord | DirectoryRecord:
-        """Gets the metadata for the file at the specified path."""
+        """Get the metadata for the file at the specified path."""
         path = _p(path)
         response = self._fetch_factory('GET', '_api/meta', {'path': path})()
         if path.endswith('/'):
@@ -280,6 +301,10 @@ class Client:
     def get_dmeta(self, path: str) -> DirectoryRecord: assert (d:=self.get_meta(path)) is None or isinstance(d, DirectoryRecord); return d
 
     def count_files(self, path: str, flat: bool = False) -> int:
+        """
+        Count files under the given path.   
+        If flat is True, count all files under the path recursively.
+        """
         assert path.endswith('/')
         path = _p(path)
         response = self._fetch_factory('GET', '_api/count-files', {'path': path, 'flat': flat})()
@@ -290,6 +315,10 @@ class Client:
         order_by: FileSortKey = '', order_desc: bool = False, 
         flat: bool = False
     ) -> list[FileRecord]:
+        """
+        List files under the given path.   
+        If flat is True, list all files under the path recursively.
+        """
         assert path.endswith('/')
         path = _p(path)
         response = self._fetch_factory('GET', "_api/list-files", {
@@ -299,6 +328,7 @@ class Client:
         return [FileRecord(**f) for f in response.json()]
     
     def count_dirs(self, path: str) -> int:
+        """ Count directories under the given path."""
         assert path.endswith('/')
         path = _p(path)
         response = self._fetch_factory('GET', '_api/count-dirs', {'path': path})()
@@ -309,6 +339,10 @@ class Client:
         order_by: DirSortKey = '', order_desc: bool = False, 
         skim: bool = True
     ) -> list[DirectoryRecord]:
+        """
+        List directories under the given path.
+        If skim is True, only fetch basic information -- url.
+        """
         assert path.endswith('/')
         path = _p(path)
         response = self._fetch_factory('GET', "_api/list-dirs", {
@@ -378,7 +412,7 @@ class Client:
         return PathContents(dirs=dirs, files=files)
 
     def set_file_permission(self, path: str, permission: int | FileReadPermission):
-        """Sets the file permission for the specified path."""
+        """Set the file permission for the specified path."""
         path = _p(path)
         self._fetch_factory('POST', '_api/set-perm', {'path': path, 'perm': int(permission)})(
             headers={'Content-Type': 'application/www-form-urlencoded'}
@@ -392,14 +426,14 @@ class Client:
         )
     
     def copy(self, src: str, dst: str):
-        """Copy file from src to dst."""
+        """Copy file or directory from src to dst."""
         src = _p(src); dst = _p(dst)
         self._fetch_factory('POST', '_api/copy', {'src': src, 'dst': dst})(
             headers = {'Content-Type': 'application/www-form-urlencoded'}
         )
     
     def bundle(self, path: str) -> Iterator[bytes]:
-        """Bundle a path into a zip file."""
+        """Bundle a directory into a zip file."""
         path = _p(path)
         response = self._fetch_factory('GET', '_api/bundle', {'path': path})(
             headers = {'Content-Type': 'application/www-form-urlencoded'}, 
@@ -408,12 +442,12 @@ class Client:
         return response.iter_content(chunk_size=1024)
         
     def whoami(self) -> UserRecord:
-        """Gets information about the current user."""
+        """Get information about the current user."""
         response = self._fetch_factory('GET', '_api/user/whoami')()
         return UserRecord(**response.json())
     
     def storage_used(self) -> int:
-        """Gets the storage used by the current user, in bytes."""
+        """Get the storage used by the current user, in bytes."""
         response = self._fetch_factory('GET', '_api/user/storage')()
         return response.json()['used']
 

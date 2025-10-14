@@ -1,6 +1,10 @@
 
 ## 0.13
 
+### 0.13.1
+- Include admin by default in `list_peers`. 
+- Py client `config` as `dataclass` property.  
+
 ### 0.13.0
 - Break: Py client GET API not handle 404 as None. 
 - Break & Fix: Move will transfer ownership.

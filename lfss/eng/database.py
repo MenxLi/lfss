@@ -163,6 +163,14 @@ class UserConn(DBObjectBase):
             return AccessLevel.NONE
         return AccessLevel(res[0])
     
+    async def list_all_users(self) -> list[UserRecord]:
+        return [u async for u in self.all()]
+    
+    async def list_admin_users(self) -> list[UserRecord]:
+        await self.cur.execute("SELECT * FROM user WHERE is_admin = 1")
+        res = await self.cur.fetchall()
+        return [self.parse_record(r) for r in res]
+    
     async def list_peer_users(self, user: int | str, level: AccessLevel, incoming = False) -> list[UserRecord]:
         """
         if not incoming:

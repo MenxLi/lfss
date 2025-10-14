@@ -15,19 +15,29 @@ def test_user_creation(server):
 
     subprocess.check_output(['lfss-user', 'add', 'u1', 'test'], cwd=SANDBOX_DIR)
     subprocess.check_output(['lfss-user', 'add', 'u2', 'test'], cwd=SANDBOX_DIR)
+    subprocess.check_output(['lfss-user', 'add', 'u3', 'test', '--admin'], cwd=SANDBOX_DIR)
 
     s = subprocess.check_output(['lfss-user', 'set-peer', 'u0', 'u2', '--level', 'write'], cwd=SANDBOX_DIR)
     s = subprocess.check_output(['lfss-user', 'set-peer', 'u1', 'u2', '--level', 'read'], cwd=SANDBOX_DIR)
 
 def test_list_peers(server):
     c0 = get_conn('u0')
-    peers0 = c0.list_peers()
+    peers0 = c0.list_peers(admin=False)
     assert len(peers0) == 1, "Peer count is not correct"
     assert peers0[0].username == 'u2', "Peer username is not correct"
 
+    assert c0.list_peers(incoming=True, admin=False) == [], "Incoming peer count is not correct"
+    assert c0.list_peers(incoming=True, admin=True)[0].username == 'u3', "Incoming peer username is not correct"
+
     c2 = get_conn('u2')
-    peers2 = c2.list_peers(incoming=True)
+    peers2 = c2.list_peers(incoming=True, admin=False)
     assert len(peers2) == 2, "Peer count is not correct"
+
+    c3 = get_conn('u3')
+    peers3 = c3.list_peers(admin=True)
+    assert len(peers3) == 3, "Peer count is not correct"
+    peers3_in = c3.list_peers(incoming=True)
+    assert len(peers3_in) == 0, "Incoming peer count is not correct"
 
 def test_u2_upload(server):
     c2 = get_conn('u2')

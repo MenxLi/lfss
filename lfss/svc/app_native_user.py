@@ -21,8 +21,24 @@ async def user_storage(user: UserRecord = Depends(registered_user)):
 
 @router_user.get("/list-peers")
 @handle_exception
-async def list_peers(user: UserRecord = Depends(registered_user), level: AccessLevel = AccessLevel.READ, incoming: bool = False):
+async def list_peers(
+    user: UserRecord = Depends(registered_user), 
+    level: AccessLevel = AccessLevel.READ, 
+    incoming: bool = False, 
+    admin: bool = True
+    ):
     async with unique_cursor() as conn:
         uconn = UserConn(conn)
-        peer_users = await uconn.list_peer_users(user.id, level, incoming=incoming)
+        peer_users = set(await uconn.list_peer_users(user.id, level, incoming=incoming))
+    
+        if admin and incoming:
+            admin_users = set(await uconn.list_admin_users())
+            peer_users.update(admin_users)
+        
+        if admin and not incoming and user.is_admin:
+            all_users = set(await uconn.list_all_users())
+            peer_users.update(all_users)
+
+        peer_users.discard(user)  # remove self if present
+    
     return [u.desensitize() for u in peer_users]

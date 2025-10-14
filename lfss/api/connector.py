@@ -451,13 +451,23 @@ class Client:
         response = self._fetch_factory('GET', '_api/user/storage')()
         return response.json()['used']
 
-    def list_peers(self, level: AccessLevel = AccessLevel.READ, incoming: bool = False) -> list[UserRecord]:
+    def list_peers(
+        self, 
+        level: AccessLevel = AccessLevel.READ, 
+        incoming: bool = False, 
+        admin: bool = True
+        ) -> list[UserRecord]:
         """
         if incoming is False (default): 
             list all users that the current user has at least the given access level to, 
         if incoming is True: 
             list all users that have at least the given access level to the current user
+        
+        if admin is True (default):
+            include admin users in the result / list all users if the current user is admin.
         """
-        response = self._fetch_factory('GET', '_api/list-peers', {'level': int(level), 'incoming': incoming})()
+        response = self._fetch_factory('GET', '_api/list-peers', {
+            'level': int(level), 'incoming': incoming, 'admin': admin
+            })()
         users = [UserRecord(**u) for u in response.json()]
         return users

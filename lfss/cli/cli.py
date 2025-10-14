@@ -86,6 +86,7 @@ def parse_arguments():
     sp_peers = sp.add_parser("peers", help="Query users that you have access to or users that have access to you")
     sp_peers.add_argument('-l', "--level", type=parse_access_level, default=AccessLevel.READ, help="Access level filter")
     sp_peers.add_argument('-i', '--incoming', action='store_true', help="List users that have access to you (rather than you have access to them")
+    sp_peers.add_argument('--no-admin', action='store_false', dest='admin', help="Do not include admin privilege")
 
     # upload
     sp_upload = sp.add_parser("upload", help="Upload a file or directory", aliases=["up"])
@@ -183,7 +184,7 @@ def main():
     
     elif args.command == "peers":
         with catch_request_error():
-            users = connector.list_peers(level=args.level, incoming=args.incoming)
+            users = connector.list_peers(level=args.level, incoming=args.incoming, admin=args.admin)
             if not args.incoming:
                 print(f"Peers that you have {args.level.name} access to:")
             else:

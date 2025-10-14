@@ -34,6 +34,9 @@ class UserRecord:
         return  f"User {self.username} (id={self.id}, admin={self.is_admin}, created at {self.create_time}, last active at {self.last_active}, " + \
                 f"storage={fmt_storage_size(self.max_storage)}, permission={self.permission.name})"
     
+    def __hash__(self):
+        return hash(self.id)
+    
     def desensitize(self):
         self.credential = "__HIDDEN__"
         return self

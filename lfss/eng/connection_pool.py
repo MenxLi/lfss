@@ -177,7 +177,7 @@ async def unique_cursor(is_write: bool = False):
             finally:
                 await g_pool.release(connection_obj)
 
-from contextlib import _AsyncGeneratorContextManager
+from contextlib import AbstractAsyncContextManager
 class TransactionContextManager(ABC):
     @abstractmethod
     async def on_commit(self): ...
@@ -185,12 +185,17 @@ class TransactionContextManager(ABC):
     async def on_rollback(self): ...
 TCM_T = TypeVar('TCM_T', bound=TransactionContextManager)
 @overload
-def transaction(tcm_cls: None = None, **kwargs) -> _AsyncGeneratorContextManager[aiosqlite.Cursor]: ...
+def transaction(tcm_cls: None = None, args: tuple = ..., kwargs: dict = ...) \
+    -> AbstractAsyncContextManager[aiosqlite.Cursor]: ...
 @overload
-def transaction(tcm_cls: Type[TCM_T], **kwargs) -> _AsyncGeneratorContextManager[tuple[aiosqlite.Cursor, TCM_T]]: ...
+def transaction(tcm_cls: Type[TCM_T] | TCM_T, args: tuple = ..., kwargs: dict = ...) \
+    -> AbstractAsyncContextManager[tuple[aiosqlite.Cursor, TCM_T]]: ...
 @asynccontextmanager
-async def transaction(tcm_cls: Optional[Type[TCM_T]] = None, **kwargs):
-    tcm = tcm_cls(**kwargs) if tcm_cls else None
+async def transaction(tcm_cls: Optional[Type[TCM_T] | TCM_T] = None, args: Optional[tuple] = None, kwargs: Optional[dict] = None):
+    args = args or ()
+    kwargs = kwargs or {}
+    tcm = tcm_cls if isinstance(tcm_cls, TransactionContextManager) \
+        else (tcm_cls(*args, **kwargs) if tcm_cls else None)
     async with unique_cursor(is_write=True) as cur:
         try:
             await cur.execute('BEGIN')
@@ -205,5 +210,7 @@ async def transaction(tcm_cls: Optional[Type[TCM_T]] = None, **kwargs):
             get_logger('database', global_instance=True).error(f"Error in transaction: {e}, rollback.")
             await cur.execute('ROLLBACK')
             if tcm is not None:
-                await tcm.on_rollback()
-            raise e
+                try: await tcm.on_rollback()
+                except Exception as e2: 
+                    get_logger('database', global_instance=True).error(f"Error in on_rollback: {e2}")
+            raise

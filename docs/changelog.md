@@ -1,6 +1,9 @@
 
 ## 0.13
 
+### 0.13.2
+- Deferred external blob deletion.
+
 ### 0.13.1
 - Include admin by default in `list_peers`. 
 - Py client `config` as `dataclass` property.  

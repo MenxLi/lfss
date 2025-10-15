@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import asyncio, threading
 import aiosqlite, aiofiles
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -52,19 +53,16 @@ class SqlConnectionPool:
     def __init__(self):
         self._readers: list[SqlConnection] = []
         self._writer: None | SqlConnection = None
-        self._lock = Lock()
+        self.t_lock = threading.Lock()
     
     async def init(self, n_read: int):
-        await self.close()
-        self._readers = []
-
         self._writer = SqlConnection(await get_connection(read_only=False))
-        self._w_sem = Lock()
-        # self._w_sem = Semaphore(1)
+        self._readers = [
+            SqlConnection(await get_connection(read_only=True)) 
+            for _ in range(n_read)
+        ]
 
-        for _ in range(n_read):
-            conn = await get_connection(read_only=True)
-            self._readers.append(SqlConnection(conn))
+        self._w_sem = Lock()
         self._r_sem = Semaphore(n_read)
     
     def status(self):   # debug
@@ -88,11 +86,8 @@ class SqlConnectionPool:
     def w_sem(self):
         return self._w_sem
     
-    async def get(self, w: bool = False) -> SqlConnection:
-        if len(self._readers) == 0:
-            raise Exception("No available connections, please init the pool first")
-        
-        async with self._lock:
+    def get(self, w: bool = False) -> SqlConnection:
+        with self.t_lock:
             if w:
                 assert self._writer
                 if self._writer.is_available:
@@ -105,23 +100,18 @@ class SqlConnectionPool:
                     if c.is_available:
                         c.is_available = False
                         return c
-        raise Exception("No available connections, impossible?")
+                raise Exception("No available connections, impossible?")
     
-    async def release(self, conn: SqlConnection):
-        async with self._lock:
-            if conn == self._writer:
-                conn.is_available = True
-                return
-
-            if not conn in self._readers:
-                raise Exception("Connection not in pool")
+    def release(self, conn: SqlConnection):
+        assert conn == self._writer or conn in self._readers
+        with self.t_lock:
             conn.is_available = True
     
     async def close(self):
-        for c in self._readers:
-            await c.conn.close()
-        if self._writer:
-            await self._writer.conn.close()
+        asyncio.gather(*(
+            [c.conn.close() for c in self._readers] 
+            + ([self._writer.conn.close()] if self._writer else [])
+        ))
 
 # these two functions shold be called before and after the event loop
 g_pool = SqlConnectionPool()
@@ -160,22 +150,22 @@ def handle_sqlite_error(e: Exception):
 async def unique_cursor(is_write: bool = False):
     if not is_write:
         async with g_pool.r_sem:
-            connection_obj = await g_pool.get()
+            connection_obj = g_pool.get()
             try:
                 yield await connection_obj.conn.cursor()
             except Exception as e:
                 handle_sqlite_error(e)
             finally:
-                await g_pool.release(connection_obj)
+                g_pool.release(connection_obj)
     else:
         async with g_pool.w_sem:
-            connection_obj = await g_pool.get(w=True)
+            connection_obj = g_pool.get(w=True)
             try:
                 yield await connection_obj.conn.cursor()
             except Exception as e:
                 handle_sqlite_error(e)
             finally:
-                await g_pool.release(connection_obj)
+                g_pool.release(connection_obj)
 
 from contextlib import AbstractAsyncContextManager
 class TransactionContextManager(ABC):

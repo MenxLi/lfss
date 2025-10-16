@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from asyncio import Semaphore, Lock
 from functools import wraps
 from typing import Callable, Awaitable, Optional, overload, TypeVar, Type
-from abc import ABC, abstractmethod
+from contextlib import AbstractAsyncContextManager
 
 from .log import get_logger
 from .error import DatabaseLockedError, DatabaseTransactionError
@@ -128,6 +128,10 @@ async def global_connection(n_read: int = 1):
         yield g_pool
     finally:
         await global_connection_close()
+        # stackoverflow/a/68629884
+        # Wait for all other tasks to finish other than the current task i.e. main().
+        # Prevent async task leaks, e.g. from deferred TransactionHooks
+        await asyncio.gather(*asyncio.all_tasks() - {asyncio.current_task()})
 
 def global_entrance(n_read: int = 1):
     def decorator(func: Callable[..., Awaitable]):
@@ -167,13 +171,18 @@ async def unique_cursor(is_write: bool = False):
             finally:
                 g_pool.release(connection_obj)
 
-from contextlib import AbstractAsyncContextManager
-class TransactionHooks(ABC):
+class DeferrableMeta(type):
+    deferred: bool
+    def __new__(mcls, name, bases, namespace, **kwargs):
+        cls = super().__new__(mcls, name, bases, namespace)
+        cls.deferred = kwargs.get('deferred', False)
+        return cls
+class TransactionHookBase(metaclass=DeferrableMeta):
+    deferred = False
     async def on_before_commit(self): ...   # exception here will rollback the transaction
-    async def on_commit(self): ...          # this runs after commit, should not raise exception
-    async def on_rollback(self): ...        # this runs after rollback, should not raise exception
-class EmptyTransactionHooks(TransactionHooks):...
-TH_T = TypeVar('TH_T', bound=TransactionHooks)
+    async def on_commit(self): ...          # this runs after commit (may be deferred), no exception
+    async def on_rollback(self): ...        # this runs after rollback, no exception
+TH_T = TypeVar('TH_T', bound=TransactionHookBase)
 @overload
 def transaction() \
     -> AbstractAsyncContextManager[aiosqlite.Cursor]: ...
@@ -184,8 +193,8 @@ def transaction(hook_cls: Type[TH_T] | TH_T, args: tuple = ..., kwargs: dict = .
 async def transaction(hook_cls: Optional[Type[TH_T] | TH_T] = None, args = None, kwargs = None):
     args = args or ()
     kwargs = kwargs or {}
-    hook = hook_cls if isinstance(hook_cls, TransactionHooks) \
-        else (hook_cls(*args, **kwargs) if hook_cls else EmptyTransactionHooks())
+    hook = hook_cls if isinstance(hook_cls, TransactionHookBase) \
+        else (hook_cls(*args, **kwargs) if hook_cls else TransactionHookBase())
     async def safe_hook_call(fn: Callable[[], Awaitable[None]]):
         try: await fn()
         except Exception as e:
@@ -200,7 +209,8 @@ async def transaction(hook_cls: Optional[Type[TH_T] | TH_T] = None, args = None,
                 yield cur, hook
             await hook.on_before_commit()
             await cur.execute('COMMIT')
-            await safe_hook_call(hook.on_commit)
+            if hook.deferred: asyncio.create_task(safe_hook_call(hook.on_commit))
+            else: await safe_hook_call(hook.on_commit)
         except Exception as e:
             logger = get_logger('database', global_instance=True)
             logger.error(f"Error in transaction: {e}, rollback.")

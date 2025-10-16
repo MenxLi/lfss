@@ -14,7 +14,7 @@ import aiofiles.os
 import mimetypes, mimesniff
 
 from .typing_helpers import override
-from .connection_pool import execute_sql, unique_cursor, transaction, TransactionHooks
+from .connection_pool import execute_sql, unique_cursor, transaction, TransactionHookBase
 from .datatype import (
     UserRecord, AccessLevel, 
     FileReadPermission, FileRecord, DirectoryRecord, PathContents, 
@@ -48,7 +48,7 @@ async def remove_external_blob(file_id: str):
     if (LARGE_BLOB_DIR / file_id).exists():
         await aiofiles.os.remove(LARGE_BLOB_DIR / file_id)
 
-class DeferredFileTrash(TransactionHooks):
+class DeferredFileTrash(TransactionHookBase, deferred = True):
     def __init__(self):
         self._schedule_deletion = set()
     
@@ -66,7 +66,6 @@ class DeferredFileTrash(TransactionHooks):
     @override
     async def on_rollback(self):
         self._schedule_deletion.clear()
-    
     @override
     async def on_commit(self):
         await self.run_deletion()

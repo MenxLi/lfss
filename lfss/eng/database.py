@@ -13,7 +13,8 @@ import aiosqlite, aiofiles
 import aiofiles.os
 import mimetypes, mimesniff
 
-from .connection_pool import execute_sql, unique_cursor, transaction, TransactionContextManager
+from .typing_helpers import override
+from .connection_pool import execute_sql, unique_cursor, transaction, TransactionHooks
 from .datatype import (
     UserRecord, AccessLevel, 
     FileReadPermission, FileRecord, DirectoryRecord, PathContents, 
@@ -43,11 +44,11 @@ class DBObjectBase(ABC):
             raise ValueError("Connection not set")
         return self._cur
 
-async def _default_blob_deletion_fn(file_id: str):
+async def remove_external_blob(file_id: str):
     if (LARGE_BLOB_DIR / file_id).exists():
         await aiofiles.os.remove(LARGE_BLOB_DIR / file_id)
 
-class DeferredFileTrash(TransactionContextManager):
+class DeferredFileTrash(TransactionHooks):
     def __init__(self):
         self._schedule_deletion = set()
     
@@ -57,14 +58,16 @@ class DeferredFileTrash(TransactionContextManager):
     async def run_deletion(self):
         async def ensure_deletion(file_id: str):
             try:
-                await _default_blob_deletion_fn(file_id)
+                await remove_external_blob(file_id)
             except Exception as e:
                 get_logger('database', global_instance=True).error(f"Error deleting blob {file_id}: {e}")
         await asyncio.gather(*[ensure_deletion(f_id) for f_id in self._schedule_deletion])
 
+    @override
     async def on_rollback(self):
         self._schedule_deletion.clear()
     
+    @override
     async def on_commit(self):
         await self.run_deletion()
 
@@ -670,7 +673,7 @@ class FileConn(DBObjectBase):
                     if not chunk: break
                     yield chunk
     
-    async def unlink_file_blob_external(self, file_id: str, blob_del_fn = _default_blob_deletion_fn):
+    async def unlink_file_blob_external(self, file_id: str, blob_del_fn = remove_external_blob):
         # first check if the file has duplication
         cursor = await self.cur.execute("SELECT count FROM dupcount WHERE file_id = ?", (file_id, ))
         res = await cursor.fetchone()
@@ -728,7 +731,7 @@ class FileConn(DBObjectBase):
             # decrease duplication count
             await self.cur.execute("UPDATE dupcount SET count = count - 1 WHERE file_id IN ({})".format(','.join(['?'] * len(to_dec_ids))), to_dec_ids)
     
-    async def unlink_file_blobs_external(self, file_ids: list[str], blob_del_fn = _default_blob_deletion_fn):
+    async def unlink_file_blobs_external(self, file_ids: list[str], blob_del_fn = remove_external_blob):
         async for (to_del_ids, to_dec_ids) in self._group_del(file_ids):
             # delete the only copy
             await asyncio.gather(*(
@@ -1099,7 +1102,7 @@ class Database:
 
     async def __batch_unlink_file_blobs(
         self, fconn: FileConn, file_records: list[FileRecord], batch_size: int = 512,
-        blob_del_fn = _default_blob_deletion_fn
+        blob_del_fn = remove_external_blob
     ):
         # https://github.com/langchain-ai/langchain/issues/10321
         internal_ids = []

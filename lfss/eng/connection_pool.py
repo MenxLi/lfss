@@ -168,39 +168,42 @@ async def unique_cursor(is_write: bool = False):
                 g_pool.release(connection_obj)
 
 from contextlib import AbstractAsyncContextManager
-class TransactionContextManager(ABC):
-    @abstractmethod
-    async def on_commit(self): ...
-    @abstractmethod
-    async def on_rollback(self): ...
-TCM_T = TypeVar('TCM_T', bound=TransactionContextManager)
+class TransactionHooks(ABC):
+    async def on_before_commit(self): ...   # exception here will rollback the transaction
+    async def on_commit(self): ...          # this runs after commit, should not raise exception
+    async def on_rollback(self): ...        # this runs after rollback, should not raise exception
+class EmptyTransactionHooks(TransactionHooks):...
+TH_T = TypeVar('TH_T', bound=TransactionHooks)
 @overload
-def transaction(tcm_cls: None = None, args: tuple = ..., kwargs: dict = ...) \
+def transaction() \
     -> AbstractAsyncContextManager[aiosqlite.Cursor]: ...
 @overload
-def transaction(tcm_cls: Type[TCM_T] | TCM_T, args: tuple = ..., kwargs: dict = ...) \
-    -> AbstractAsyncContextManager[tuple[aiosqlite.Cursor, TCM_T]]: ...
+def transaction(hook_cls: Type[TH_T] | TH_T, args: tuple = ..., kwargs: dict = ...) \
+    -> AbstractAsyncContextManager[tuple[aiosqlite.Cursor, TH_T]]: ...
 @asynccontextmanager
-async def transaction(tcm_cls: Optional[Type[TCM_T] | TCM_T] = None, args: Optional[tuple] = None, kwargs: Optional[dict] = None):
+async def transaction(hook_cls: Optional[Type[TH_T] | TH_T] = None, args = None, kwargs = None):
     args = args or ()
     kwargs = kwargs or {}
-    tcm = tcm_cls if isinstance(tcm_cls, TransactionContextManager) \
-        else (tcm_cls(*args, **kwargs) if tcm_cls else None)
+    hook = hook_cls if isinstance(hook_cls, TransactionHooks) \
+        else (hook_cls(*args, **kwargs) if hook_cls else EmptyTransactionHooks())
+    async def safe_hook_call(fn: Callable[[], Awaitable[None]]):
+        try: await fn()
+        except Exception as e:
+            logger = get_logger('database', global_instance=True)
+            logger.error(f"Error in transaction hook ({fn.__name__}): {e}")
     async with unique_cursor(is_write=True) as cur:
         try:
             await cur.execute('BEGIN')
-            if tcm is None:
+            if hook_cls is None:
                 yield cur
             else:
-                yield cur, tcm
+                yield cur, hook
+            await hook.on_before_commit()
             await cur.execute('COMMIT')
-            if tcm is not None:
-                await tcm.on_commit()
+            await safe_hook_call(hook.on_commit)
         except Exception as e:
-            get_logger('database', global_instance=True).error(f"Error in transaction: {e}, rollback.")
+            logger = get_logger('database', global_instance=True)
+            logger.error(f"Error in transaction: {e}, rollback.")
             await cur.execute('ROLLBACK')
-            if tcm is not None:
-                try: await tcm.on_rollback()
-                except Exception as e2: 
-                    get_logger('database', global_instance=True).error(f"Error in on_rollback: {e2}")
+            await safe_hook_call(hook.on_rollback)
             raise

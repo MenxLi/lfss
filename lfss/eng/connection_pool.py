@@ -122,22 +122,22 @@ async def global_connection_close():
     await g_pool.close()
 
 @asynccontextmanager
-async def global_connection(n_read: int = 1):
+async def global_connection(n_read: int = 1, await_tasks: bool = True):
     await global_connection_init(n_read)
     try:
         yield g_pool
     finally:
         await global_connection_close()
-        # stackoverflow/a/68629884
-        # Wait for all other tasks to finish other than the current task i.e. main().
-        # Prevent async task leaks, e.g. from deferred TransactionHooks
-        await asyncio.gather(*asyncio.all_tasks() - {asyncio.current_task()})
+        if await_tasks:
+            # sf/a/68629884. Prevent async task leaks
+            # Wait for all other tasks to finish other than the current task i.e. main().
+            await asyncio.gather(*asyncio.all_tasks() - {asyncio.current_task()})
 
-def global_entrance(n_read: int = 1):
+def global_entrance(n_read: int = 1, await_tasks: bool = True):
     def decorator(func: Callable[..., Awaitable]):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            async with global_connection(n_read):
+            async with global_connection(n_read, await_tasks):
                 return await func(*args, **kwargs)
         return wrapper
     return decorator
@@ -171,16 +171,9 @@ async def unique_cursor(is_write: bool = False):
             finally:
                 g_pool.release(connection_obj)
 
-class DeferrableMeta(type):
-    deferred: bool
-    def __new__(mcls, name, bases, namespace, **kwargs):
-        cls = super().__new__(mcls, name, bases, namespace)
-        cls.deferred = kwargs.get('deferred', False)
-        return cls
-class TransactionHookBase(metaclass=DeferrableMeta):
-    deferred = False
+class TransactionHookBase():
     async def on_before_commit(self): ...   # exception here will rollback the transaction
-    async def on_commit(self): ...          # this runs after commit (may be deferred), no exception
+    async def on_commit(self): ...          # this runs after commit, no exception
     async def on_rollback(self): ...        # this runs after rollback, no exception
 TH_T = TypeVar('TH_T', bound=TransactionHookBase)
 @overload
@@ -209,8 +202,7 @@ async def transaction(hook_cls: Optional[Type[TH_T] | TH_T] = None, args = None,
                 yield cur, hook
             await hook.on_before_commit()
             await cur.execute('COMMIT')
-            if hook.deferred: asyncio.create_task(safe_hook_call(hook.on_commit))
-            else: await safe_hook_call(hook.on_commit)
+            await safe_hook_call(hook.on_commit)
         except Exception as e:
             logger = get_logger('database', global_instance=True)
             logger.error(f"Error in transaction: {e}, rollback.")

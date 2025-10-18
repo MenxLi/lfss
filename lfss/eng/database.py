@@ -48,7 +48,7 @@ async def remove_external_blob(file_id: str):
     if (LARGE_BLOB_DIR / file_id).exists():
         await aiofiles.os.remove(LARGE_BLOB_DIR / file_id)
 
-class DeferredFileTrash(TransactionHookBase, deferred = True):
+class DeferredFileTrash(TransactionHookBase):
     def __init__(self):
         self._schedule_deletion = set()
     
@@ -66,9 +66,10 @@ class DeferredFileTrash(TransactionHookBase, deferred = True):
     @override
     async def on_rollback(self):
         self._schedule_deletion.clear()
+
     @override
-    async def on_commit(self):
-        await self.run_deletion()
+    async def on_commit(self):  # defer deletion to not block the transaction
+        asyncio.create_task(self.run_deletion())
 
 DECOY_USER = UserRecord(0, 'decoy', 'decoy', False, '2021-01-01 00:00:00', '2021-01-01 00:00:00', 0, FileReadPermission.PRIVATE)
 class UserConn(DBObjectBase):

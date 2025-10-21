@@ -262,7 +262,7 @@ async def list_dirs(
 @router_api.get("/get-multiple")
 @handle_exception
 async def get_multiple_files(
-    path: Annotated[list[str], Query()], 
+    path: Annotated[list[str], Query()] = [], 
     skip_content: bool = False,
     user: UserRecord = Depends(registered_user)
     ):

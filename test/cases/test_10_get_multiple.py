@@ -47,11 +47,16 @@ def test_get_perm(server):
     r1 = c.get_multiple_text('u0/a/test2.txt')
     assert r1['u0/a/test2.txt'] == 'hello world 2', "File content is not correct"
 
-def test_get_empty(server):
+def test_get_empty_file(server):
     c = get_conn('u0')
     r = c.get_multiple_text('u0/test1.txt', 'u0/a/test2.txt', 'u0/a/test3.json', 'u0/non-exist.txt', skip_content=True)
     assert len(r) == 4, "File count is not correct"
     assert r['u0/test1.txt'] == '', "File content is not correct"
+
+def test_get_empty_list(server):
+    c = get_conn('u0')
+    r = c.get_multiple_text()
+    assert len(r) == 0, "File count is not correct"
 
 def test_nameparse(server):
     c = get_conn('u0')

@@ -297,8 +297,8 @@ class Client:
         else:
             return FileRecord(**response.json())
     # shorthand methods for type constraints
-    def get_fmeta(self, path: str) -> FileRecord: assert (f:=self.get_meta(path)) is None or isinstance(f, FileRecord); return f
-    def get_dmeta(self, path: str) -> DirectoryRecord: assert (d:=self.get_meta(path)) is None or isinstance(d, DirectoryRecord); return d
+    def get_fmeta(self, path: str) -> FileRecord: assert isinstance(f:=self.get_meta(path), FileRecord); return f
+    def get_dmeta(self, path: str) -> DirectoryRecord: assert isinstance(d:=self.get_meta(path), DirectoryRecord); return d
 
     def count_files(self, path: str, flat: bool = False) -> int:
         """

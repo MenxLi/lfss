@@ -1,5 +1,9 @@
 
 ## 0.13
+### 0.13.3
+- Get multiple files can receive blank file list.
+- Javascript api add `exists` method.
+- Defer external blob deletion.
 
 ### 0.13.2
 - Deferred external blob deletion.

@@ -25,7 +25,7 @@
  * Partially complete...
  * @typedef {Object} DirectoryRecord
  * @property {string} url - the url of the directory
- * @property {string} size - the size of the directory, in bytes
+ * @property {number} size - the size of the directory, in bytes
  * @property {string} create_time - the time the directory was created
  * @property {string} access_time - the time the directory was last accessed
  * @property {number} n_files - the number of total files in the directory, including subdirectories
@@ -69,6 +69,23 @@ export default class Connector {
         this.config = {
             endpoint: defaultEndpoint,
             token: defaultToken
+        }
+    }
+
+    async exists(path){
+        if (path.startsWith('/')){ path = path.slice(1); }
+        const res = await fetch(this.config.endpoint + '/' + path, {
+            method: 'HEAD',
+            headers: {
+             "Authorization": 'Bearer ' + this.config.token
+            },
+        });
+        if (res.ok){
+            return true;
+        } else if (res.status == 404){
+            return false;
+        } else {
+            throw new Error(`Failed to check file existence, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
         }
     }
 

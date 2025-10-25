@@ -80,6 +80,14 @@ class Client:
         - verify: either a boolean or a string, to control SSL verification. Default to True, refer to `requests.Session.request`.
         """
         assert token, "No token provided. Please set LFSS_TOKEN environment variable."
+        if verify is None and (v:= os.environ.get('LFSS_CLIENT_VERIFY', None)) is not None:
+            if v in ['0', 'false', 'False']:
+                verify = False
+            elif v in ['1', 'true', 'True']:
+                verify = True
+            else:
+                verify = v    # path to CA bundle
+
         self._config = ClientConfig(
             endpoint=endpoint,
             token=token, 

@@ -7,10 +7,9 @@ import argparse, time, itertools
 from functools import wraps
 from asyncio import Semaphore
 import aiosqlite
-import aiofiles, asyncio
-import aiofiles.os
+import asyncio
 from contextlib import contextmanager
-from lfss.eng.database import transaction, unique_cursor
+from lfss.eng.database import transaction, unique_cursor, DeferredFileTrash
 from lfss.svc.request_log import RequestDB
 from lfss.eng.utils import now_stamp
 from lfss.eng.connection_pool import global_entrance
@@ -39,26 +38,29 @@ async def vacuum_main(index: bool = False, blobs: bool = False, thumbs: bool = F
     # check if any file in the Large Blob directory is not in the database
     # the reverse operation is not necessary, because by design, the database should be the source of truth...
     # we allow un-referenced files in the Large Blob directory on failure, but not the other way around (unless manually deleted)
-    async def ensure_external_consistency(f_id: str):
+    async def ensure_external_consistency(f_id: str, f_trash: DeferredFileTrash):
         @barriered
         async def fn():
             async with unique_cursor() as c:
                 cursor = await c.execute("SELECT file_id FROM fmeta WHERE file_id = ?", (f_id,))
                 if not await cursor.fetchone():
-                    print(f"File {f_id} not found in database, removing from external storage.")
-                    await aiofiles.os.remove(f)
-        await asyncio.create_task(fn())
+                    print(f"File {f_id} not found in database, will remove from external storage.")
+                    await f_trash.schedule(f_id)
+        return asyncio.create_task(fn())
 
     # create a temporary index to speed up the process...
     with indicator("Clearing un-referenced files in external storage"):
+        tasks = []
         try:
-            async with transaction() as c:
+            async with transaction(DeferredFileTrash) as (c, f_trash):
                 await c.execute("CREATE INDEX IF NOT EXISTS fmeta_file_id ON fmeta (file_id)")
-            for i, f in enumerate(LARGE_BLOB_DIR.iterdir()):
-                f_id = f.name
-                await ensure_external_consistency(f_id)
-                if (i+1) % 1_000 == 0:
-                    print(f"Checked {(i+1)//1000}k files in external storage.", end='\r')
+                for i, f in enumerate(LARGE_BLOB_DIR.iterdir()):
+                    f_id = f.name
+                    tsk = await ensure_external_consistency(f_id, f_trash)
+                    tasks.append(tsk)
+                    if (i+1) % 1_000 == 0:
+                        print(f"Checked {(i+1)//1000}k files in external storage.", end='\r')
+                await asyncio.gather(*tasks)
         finally:
             async with transaction() as c:
                 await c.execute("DROP INDEX IF EXISTS fmeta_file_id")
@@ -122,7 +124,7 @@ async def vacuum_requests():
             
 def main():
     global sem
-    parser = argparse.ArgumentParser(description="Balance the storage by ensuring that large file thresholds are met.")
+    parser = argparse.ArgumentParser(description="Delete un-referenced files in external storage and vacuum the database.")
     parser.add_argument("--all", action="store_true", help="Vacuum all")
     parser.add_argument("-j", "--jobs", type=int, default=2, help="Number of concurrent jobs")
     parser.add_argument("-m", "--metadata", action="store_true", help="Vacuum metadata")

@@ -454,28 +454,110 @@ class Client:
         response = self._fetch_factory('GET', '_api/user/whoami')()
         return UserRecord(**response.json())
     
-    def storage_used(self) -> int:
+    # ========================== Quasi-Admin APIs ==========================
+
+    def storage_used(self, as_user: Optional[str] = None) -> int:
         """Get the storage used by the current user, in bytes."""
-        response = self._fetch_factory('GET', '_api/user/storage')()
+        response = self._fetch_factory(
+            'GET', '_api/user/storage', {'as_user': as_user} if as_user else {}
+            )()
         return response.json()['used']
 
     def list_peers(
         self, 
         level: AccessLevel = AccessLevel.READ, 
         incoming: bool = False, 
-        admin: bool = True
+        admin: bool = True, 
+        as_user: Optional[str] = None
         ) -> list[UserRecord]:
         """
         if incoming is False (default): 
             list all users that the current user has at least the given access level to, 
         if incoming is True: 
             list all users that have at least the given access level to the current user
-        
         if admin is True (default):
             include admin users in the result / list all users if the current user is admin.
+
+        - as_user: if provided, perform the operation as the specified user (caller must be admin).
         """
-        response = self._fetch_factory('GET', '_api/list-peers', {
-            'level': int(level), 'incoming': incoming, 'admin': admin
-            })()
+        params = { 'level': int(level), 'incoming': incoming, 'admin': admin }
+        if as_user is not None:
+            params['as_user'] = as_user
+        response = self._fetch_factory('GET', '_api/list-peers', params)()
         users = [UserRecord(**u) for u in response.json()]
         return users
+    
+    def query_user(self, u: int | str) -> UserRecord:
+        """ 
+        Query user information by username or userid. 
+        If the current user is admin, the returned UserRecord is not desensitized.
+        """
+        params = {}
+        if isinstance(u, int):
+            params['userid'] = u
+        else:
+            params['username'] = u
+        response = self._fetch_factory('GET', '_api/user/query', params)()
+        return UserRecord(**response.json())
+
+    # ========================== Admin APIs ==========================
+    def add_user(
+        self, 
+        username: str, 
+        password: Optional[str] = None, 
+        admin: bool = False, 
+        max_storage: int | str = '100G', 
+        permission: FileReadPermission | str = 'unset'
+        ) -> UserRecord:
+        """ Admin API: Add a new user to the system. """
+        data = {
+            'username': username,
+            'admin': admin,
+            'max_storage': str(max_storage),
+            'permission': str(permission).upper()
+        }
+        if password is not None:
+            data['password'] = password
+        response = self._fetch_factory('POST', '_api/user/add', search_params=data)()
+        return UserRecord(**response.json())
+    
+    def update_user(
+        self, 
+        username: str, 
+        password: Optional[str] = None, 
+        admin: Optional[bool] = None, 
+        max_storage: Optional[int | str] = None, 
+        permission: Optional[FileReadPermission | str] = None
+        ) -> UserRecord:
+        """ Admin API: Update user information. """
+        data = {}
+        data['username'] = username
+        if password is not None:
+            data['password'] = password
+        if admin is not None:
+            data['admin'] = admin
+        if max_storage is not None:
+            data['max_storage'] = str(max_storage)
+        if permission is not None:
+            data['permission'] = permission.name \
+                if isinstance(permission, FileReadPermission) else permission
+        response = self._fetch_factory('POST', '_api/user/update', search_params=data)()
+        return UserRecord(**response.json())
+    
+    def delete_user(self, username: str) -> UserRecord:
+        """ Admin API: Delete a user from the system. """
+        response = self._fetch_factory('POST', '_api/user/delete', {'username': username})()
+        return UserRecord(**response.json())
+    
+    def set_peer(
+        self, 
+        src_username: str, 
+        dst_username: str, 
+        level: AccessLevel | str = AccessLevel.READ
+        ):
+        """ Admin API: Set peer access level between two users. """
+        self._fetch_factory('POST', '_api/user/set-peer', {
+            'src_username': src_username,
+            'dst_username': dst_username,
+            'level': level.name if isinstance(level, AccessLevel) else level
+        })()

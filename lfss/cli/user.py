@@ -55,7 +55,7 @@ async def _main():
         user = await UserCtl.add(
             username=args.username, 
             password=args.password, 
-            is_admin=args.admin, 
+            admin=args.admin, 
             max_storage=args.max_storage, 
             permission=args.permission
         )

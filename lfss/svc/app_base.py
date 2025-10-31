@@ -52,6 +52,7 @@ def handle_exception(fn):
             if isinstance(e, FileNotFoundError): raise HTTPException(status_code=404, detail=str(e))
             if isinstance(e, FileDuplicateError): raise HTTPException(status_code=409, detail=str(e))
             if isinstance(e, FileExistsError): raise HTTPException(status_code=409, detail=str(e))
+            if isinstance(e, UserNotFoundError): raise HTTPException(status_code=404, detail=str(e))
             if isinstance(e, TooManyItemsError): raise HTTPException(status_code=400, detail=str(e))
             if isinstance(e, DatabaseLockedError): raise HTTPException(status_code=503, detail=str(e))
             if isinstance(e, DatabaseTransactionError): raise HTTPException(status_code=503, detail=str(e))
@@ -145,6 +146,10 @@ async def registered_user(user: UserRecord = Depends(get_current_user)):
     if user.id == 0:
         raise HTTPException(status_code=401, detail="Permission denied", headers={"WWW-Authenticate": "Basic" if ENABLE_WEBDAV else "Bearer"})
     return user
+async def admin_user(user: UserRecord = Depends(get_current_user)):
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin permission required")
+    return user
 
 router_api = APIRouter(prefix="/_api")
 router_user = APIRouter(prefix="/_api/user")
@@ -154,7 +159,7 @@ router_fs = APIRouter(prefix="")
 __all__ = [
     "app", "db", "logger", 
     "handle_exception", "skip_request_log", 
-    "get_current_user", "registered_user", 
+    "get_current_user", "registered_user", "admin_user",
     "router_api", 
     "router_user", 
     "router_fs", 

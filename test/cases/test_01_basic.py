@@ -42,6 +42,30 @@ def test_upload(server):
     upload_basic('u1')
     upload_basic('u2')
 
+def test_parents(server):
+    c = get_conn('u0')
+    fmeta = c.get_meta('u0/a/b/test4.txt')
+    assert fmeta is not None, "Get file meta failed"
+    parent1 = fmeta.parent()
+    assert parent1.url == 'u0/a/b/', "Parent directory is not correct"
+    parent2 = parent1.parent()
+    assert parent2.url == 'u0/a/', "Parent directory is not correct"
+    parent3 = parent2.parent()
+    assert parent3.url == 'u0/', "Parent directory is not correct"
+    parent4 = parent3.parent()
+    assert parent4.url == '/', "Parent directory is not correct"
+    with pytest.raises(RuntimeError):
+        parent4.parent()
+
+def test_name(server):
+    c = get_conn('u0')
+    fmeta = c.get_meta('u0/a/b/test4.txt')
+    assert fmeta is not None, "Get file meta failed"
+    assert fmeta.name() == 'test4.txt', "File name is not correct"
+    dmeta = c.get_dmeta('u0/a/b/')
+    assert dmeta is not None, "Get directory meta failed"
+    assert dmeta.name() == 'b', "Directory name is not correct"
+
 def test_exists(server):
     c = get_conn('u0')
     assert c.exists('u0/test1.txt'), "File does not exist"

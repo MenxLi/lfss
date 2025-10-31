@@ -56,6 +56,14 @@ class FileRecord:
     def name(self, raw: bool = False):
         name = self.url.rsplit('/', 1)[-1]
         return name if raw else urllib.parse.unquote(name)
+    
+    def parent(self):
+        if '/' not in self.url:
+            return DirectoryRecord(url='/')
+        parent_url = self.url.rsplit('/', 1)[0]
+        if not parent_url.endswith('/'):
+            parent_url += '/'
+        return DirectoryRecord(url=parent_url)
 
     def __post_init__(self):
         assert not self.url.endswith('/'), "File URL should not end with '/'"
@@ -79,6 +87,16 @@ class DirectoryRecord:
             return ""
         name = self.url.rstrip('/').rsplit('/', 1)[-1]
         return name if raw else urllib.parse.unquote(name)
+    
+    def parent(self):
+        if self.url in ('/', ''):
+            raise RuntimeError("Root directory has no parent")
+        if '/' not in (rsp:=self.url.rstrip('/')):
+            return DirectoryRecord(url='/')
+        parent_url = rsp.rsplit('/', 1)[0]
+        if not parent_url.endswith('/'):
+            parent_url += '/'
+        return DirectoryRecord(url=parent_url)
 
     def __post_init__(self):
         assert self.url.endswith('/'), "Directory URL should end with '/'"

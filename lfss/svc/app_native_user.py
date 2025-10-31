@@ -39,6 +39,4 @@ async def list_peers(
             all_users = set(await uconn.list_all_users())
             peer_users.update(all_users)
 
-        peer_users.discard(user)  # remove self if present
-    
-    return [u.desensitize() for u in peer_users]
+    return [u.desensitize() for u in peer_users if u.id != user.id]     # exclude self

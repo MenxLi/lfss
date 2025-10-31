@@ -97,7 +97,7 @@ class UserConn(DBObjectBase):
         await self.cur.execute("SELECT * FROM user WHERE id = ?", (user_id, ))
         res = await self.cur.fetchone()
         if res is None:
-            if throw: raise ValueError(f"User {user_id} not found")
+            if throw: raise UserNotFoundError(f"User {user_id} not found")
             return None
         return self.parse_record(res)
     
@@ -136,7 +136,7 @@ class UserConn(DBObjectBase):
 
         current_record = await self.get_user(username)
         if current_record is None:
-            raise ValueError(f"User {username} not found")
+            raise UserNotFoundError(f"User {username} not found")
 
         if password is not None:
             credential = hash_credential(username, password)
@@ -1140,7 +1140,7 @@ class Database:
         async with transaction(DeferredFileTrash) as (cur, del_man):
             user = await get_user(cur, u)
             if user is None:
-                return
+                raise UserNotFoundError(f"User {u} not found")
 
             # no new files can be added since profile deletion
             uconn = UserConn(cur)
@@ -1174,6 +1174,7 @@ class Database:
             # release file blobs finally
             await self.__batch_unlink_file_blobs(fconn, to_del_records, blob_del_fn=del_man.schedule)
             self.logger.info(f"Deleted user {user.username} and {len(to_del_records)} file(s) under the user's directory")
+        return user
     
     async def iter_dir(self, top_url: str, urls: Optional[list[str]]) -> AsyncIterable[tuple[FileRecord, bytes | AsyncIterable[bytes]]]:
         validate_url(top_url, 'dir')

@@ -1,16 +1,11 @@
-import argparse, asyncio, os, secrets
+import argparse, asyncio, os
 from contextlib import asynccontextmanager
 from .cli import parse_permission, FileReadPermission
 from ..eng.utils import parse_storage_size, fmt_storage_size
 from ..eng.datatype import AccessLevel
 from ..eng.database import Database, FileReadPermission, transaction, UserConn, unique_cursor, FileConn
 from ..eng.connection_pool import global_entrance
-
-def parse_access_level(s: str) -> AccessLevel:
-    for p in AccessLevel:
-        if p.name.lower() == s.lower():
-            return p
-    raise ValueError(f"Invalid access level {s}")
+from ..eng.userman import UserCtl, parse_access_level
 
 @global_entrance(1)
 async def _main():
@@ -57,45 +52,32 @@ async def _main():
             yield UserConn(conn)
     
     if args.subparser_name == 'add':
-        async with get_uconn() as uconn:
-            if args.password is None:
-                passwd = secrets.token_urlsafe(16)
-                args.password = passwd
-            await uconn.create_user(args.username, args.password, args.admin, max_storage=args.max_storage, permission=args.permission)
-            user = await uconn.get_user(args.username)
-            assert user is not None
-            print('User created, credential:', user.credential)
+        user = await UserCtl.add(
+            username=args.username, 
+            password=args.password, 
+            is_admin=args.admin, 
+            max_storage=args.max_storage, 
+            permission=args.permission
+        )
+        print('User created, credential:', user.credential)
     
     if args.subparser_name == 'delete':
-        async with get_uconn() as uconn:
-            user = await uconn.get_user(args.username)
-        if user is None:
-            print('User not found')
-            exit(1)
-        else:
-            await db.delete_user(user.id)
+        user = await UserCtl.delete(args.username)
         print('User deleted')
     
     if args.subparser_name == 'set':
-        async with get_uconn() as uconn:
-            user = await uconn.get_user(args.username)
-            if user is None:
-                print('User not found')
-                exit(1)
-            await uconn.update_user(user.username, args.password, args.admin, max_storage=args.max_storage, permission=args.permission)
-            user = await uconn.get_user(args.username)
-            assert user is not None
-            print('User updated, credential:', user.credential)
+        user = await UserCtl.update(
+            username=args.username,
+            password=args.password,
+            admin=args.admin,
+            max_storage=args.max_storage,
+            permission=args.permission
+        )
+        print('User updated, credential:', user.credential)
     
     if args.subparser_name == 'set-peer':
-        async with get_uconn() as uconn:
-            src_user = await uconn.get_user(args.src_username)
-            dst_user = await uconn.get_user(args.dst_username)
-            if src_user is None or dst_user is None:
-                print('User not found')
-                exit(1)
-            await uconn.set_peer_level(src_user.id, dst_user.id, args.level)
-            print(f"Peer set: [{src_user.username}] now have [{args.level.name}] access to [{dst_user.username}]")
+        await UserCtl.set_peer(args.src_username, args.dst_username, args.level)
+        print(f"Peer set: [{args.src_username}] now have [{args.level.name}] access to [{args.dst_username}]")
     
     if args.subparser_name == 'list':
         async with get_uconn() as uconn:

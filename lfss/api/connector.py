@@ -509,7 +509,7 @@ class Client:
         users = [UserRecord(**u) for u in response.json()]
         return users
     
-    def user_query(self, u: int | str) -> UserRecord:
+    def query_user(self, u: int | str) -> UserRecord:
         """ 
         Query user information by username or userid. 
         If the current user is admin, the returned UserRecord is not desensitized.
@@ -523,7 +523,7 @@ class Client:
         return UserRecord(**response.json())
 
     # ========================== Admin APIs ==========================
-    def user_add(
+    def add_user(
         self, 
         username: str, 
         password: Optional[str] = None, 
@@ -543,7 +543,7 @@ class Client:
         response = self._fetch_factory('POST', '_api/user/add', search_params=data)()
         return UserRecord(**response.json())
     
-    def user_update(
+    def set_user(
         self, 
         username: str, 
         password: Optional[str] = None, 
@@ -566,7 +566,7 @@ class Client:
         response = self._fetch_factory('POST', '_api/user/update', search_params=data)()
         return UserRecord(**response.json())
     
-    def user_delete(self, username: str) -> UserRecord:
+    def delete_user(self, username: str) -> UserRecord:
         """ Admin API: Delete a user from the system. """
         response = self._fetch_factory('POST', '_api/user/delete', {'username': username})()
         return UserRecord(**response.json())

@@ -11,9 +11,9 @@ def test_init_user_creation(server):
     subprocess.check_output(['lfss-user', 'add', 'u0', 'test', "--admin"], cwd=SANDBOX_DIR)
 
     u0 = get_conn('u0')
-    u0.user_add('u1', 'test', permission='public')
-    u0.user_add('u2', 'test')
-    u0.user_add('u3', 'test')
+    u0.add_user('u1', 'test', permission='public')
+    u0.add_user('u2', 'test')
+    u0.add_user('u3', 'test')
 
 def test_index_file_creation(server):
     u1 = get_conn('u1')
@@ -41,7 +41,7 @@ def test_index_file_access(server):
     assert resp['message'] == 'Hello from index file!', "Index file access failed for u3"
 
     # now change u1 permission to private
-    get_conn("u0").user_update('u1', permission='private')
+    get_conn("u0").set_user('u1', permission='private')
     # u2 should still be able to access index file
     resp = u2.get_json('u1/test/')
     assert resp['message'] == 'Hello from index file!', "Index file access failed for u2 after permission change"

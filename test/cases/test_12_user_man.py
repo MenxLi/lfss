@@ -12,41 +12,41 @@ def test_init_user_creation(server):
 
 def test_user1_creation(server):
     c0 = get_conn('u0')
-    c0.user_add('u1', 'test', max_storage='500M')
-    assert c0.user_query('u1').username == 'u1', "User u1 creation failed"
-    assert c0.user_query('u1').max_storage == 500*1024*1024, "User u1 max storage is not correct"
+    c0.add_user('u1', 'test', max_storage='500M')
+    assert c0.query_user('u1').username == 'u1', "User u1 creation failed"
+    assert c0.query_user('u1').max_storage == 500*1024*1024, "User u1 max storage is not correct"
 
     c1 = get_conn('u1')
-    assert c0.user_query('u1').credential == c1.config.token
+    assert c0.query_user('u1').credential == c1.config.token
 
 def test_user1_update(server):
     c0 = get_conn('u0')
-    c0.user_update('u1', admin=True, max_storage='2G', permission=FileReadPermission.PROTECTED)
-    u1_info = c0.user_query('u1')
+    c0.set_user('u1', admin=True, max_storage='2G', permission=FileReadPermission.PROTECTED)
+    u1_info = c0.query_user('u1')
     assert u1_info.is_admin, "User u1 should be admin now"
     assert u1_info.max_storage == 2*1024*1024*1024, "User u1 max storage is not correct"
     assert u1_info.permission == FileReadPermission.PROTECTED, "User u1 permission is not correct"
 
-    c0.user_update('u1', admin=False, permission='public')
-    u1_info = c0.user_query('u1')
+    c0.set_user('u1', admin=False, permission='public')
+    u1_info = c0.query_user('u1')
     assert not u1_info.is_admin, "User u1 should not be admin now"
     assert u1_info.permission == FileReadPermission.PUBLIC, "User u1 permission is not correct"
 
 def test_nonadmin_user_creation_failure(server):
     c1 = get_conn('u1')
     with pytest.raises(Exception, match="403"):
-        c1.user_add('u2', 'test')
+        c1.add_user('u2', 'test')
 
 def test_user_deletion(server):
     c0 = get_conn('u0')
-    c0.user_delete('u1')
+    c0.delete_user('u1')
     with pytest.raises(Exception, match="404"):
-        c0.user_query('u1')
+        c0.query_user('u1')
 
 def test_set_peer_access(server):
     c0 = get_conn('u0')
-    c0.user_add('u2', 'test')
-    c0.user_add('u3', 'test')
+    c0.add_user('u2', 'test')
+    c0.add_user('u3', 'test')
 
     c0.set_peer('u2', 'u3', 'READ')
 

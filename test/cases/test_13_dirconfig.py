@@ -1,6 +1,7 @@
 
 import subprocess
 import pytest
+from lfss.api import AccessLevel, DirConfig
 from .common import create_server_context, get_conn
 from ..config import SANDBOX_DIR
 
@@ -16,13 +17,13 @@ def test_init_user_creation(server):
 
 def test_index_file_creation(server):
     u1 = get_conn('u1')
-    u1.put_json('u1/test/.lfss-dir.json', {
-        'index': 'index.json', 
-        'access-control': {
-            'u2': 'write',
-            'u3': 'none'
-        }
-    })
+    u1.set_dir_config(
+        'u1/test/', 
+        DirConfig().
+            set_index('index.json').
+            set_access('u2', AccessLevel.WRITE).
+            set_access('u3', AccessLevel.NONE)
+        )
 
 def test_index_file_access(server):
     u1 = get_conn('u1')
@@ -102,13 +103,7 @@ def test_copy_in_attack(server):
     u1.delete('u1/test/')                   # clean up first
 
     u2 = get_conn('u2')
-    # u2 tries to make a copy of the config file and copy back to override access control
-    u2.put_json('u2/test/.lfss-dir.json', {
-        'index': 'index.json',
-        'access-control': {
-            'u3': 'write'
-        }
-    })
+    u2.set_dir_config('u2/test/', DirConfig().set_index('index.json').set_access('u3', AccessLevel.WRITE))
     u2.put_json('u2/test/index.json', {'message': 'Hacked by u2'})
     u2.copy('u2/test/', 'u1/test/')
 

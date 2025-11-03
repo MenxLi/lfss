@@ -1,6 +1,8 @@
 from enum import IntEnum
 import dataclasses, typing
 import urllib.parse
+from typing import Optional
+import json
 from .utils import fmt_storage_size
 
 class FileReadPermission(IntEnum):
@@ -108,6 +110,49 @@ class DirectoryRecord:
 class PathContents:
     dirs: list[DirectoryRecord] = dataclasses.field(default_factory=list)
     files: list[FileRecord] = dataclasses.field(default_factory=list)
+
+@dataclasses.dataclass
+class DirConfig:
+    index: Optional[str] = None
+    access_control: Optional[dict[str, AccessLevel]] = None
+
+    def set_index(self, index_fname: str):
+        self.index = index_fname
+        return self
+
+    def set_access(self, username: str, level: AccessLevel):
+        if self.access_control is None:
+            self.access_control = {}
+        self.access_control[username] = level
+        return self
+
+    def remove_access(self, username: str):
+        if self.access_control and username in self.access_control:
+            del self.access_control[username]
+        return self
+    
+    def to_json_str(self) -> str:
+        return json.dumps(self.to_json(), indent=4)
+    
+    def to_json(self) -> dict:
+        obj = {}
+        if self.index is not None:
+            obj['index'] = self.index
+        if self.access_control is not None:
+            obj['access-control'] = {k: v.name for k, v in self.access_control.items()}
+        return obj
+
+    @staticmethod
+    def from_json(config_json: dict) -> 'DirConfig':
+        config = DirConfig()
+        if 'index' in config_json:
+            config.index = config_json['index']
+        if 'access-control' in config_json:
+            config.access_control = {}
+            for k, v in config_json['access-control'].items():
+                config.access_control[k] = parse_access_level(v)
+        return config
+
 
 def parse_read_permission(s: str | int) -> FileReadPermission:
     if isinstance(s, int):

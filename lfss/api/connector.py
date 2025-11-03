@@ -8,9 +8,10 @@ import requests.adapters
 import urllib.parse
 from tempfile import SpooledTemporaryFile
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from lfss.eng.config import DIR_CONFIG_FNAME
 from lfss.eng.datatype import (
     FileReadPermission, FileRecord, DirectoryRecord, UserRecord, PathContents, AccessLevel, 
-    FileSortKey, DirSortKey
+    DirConfig, FileSortKey, DirSortKey
     )
 from lfss.eng.utils import ensure_uri_components
 
@@ -456,6 +457,26 @@ class Client:
     
     # ========================== Quasi-Admin APIs ==========================
 
+    # only admin/owner access
+    def query_dir_config(self, dir_path: str) -> DirConfig:
+        assert dir_path.endswith('/'), "Path must be a directory (end with '/')"
+        cpath = _p(dir_path + DIR_CONFIG_FNAME)
+        if not self.exists(cpath):
+            return DirConfig()
+        json_obj = self.get_json(cpath)
+        return DirConfig.from_json(json_obj)
+
+    # only admin/owner access
+    def set_dir_config(self, dir_path: str, config: DirConfig):
+        assert dir_path.endswith('/'), "Path must be a directory (end with '/')"
+        return self.put(
+            _p(dir_path + DIR_CONFIG_FNAME),
+            config.to_json_str().encode('utf-8'),
+            permission=FileReadPermission.PRIVATE, 
+            conflict='overwrite'
+        )
+
+    # only admin access if as_user is provided
     def storage_used(self, as_user: Optional[str] = None) -> int:
         """Get the storage used by the current user, in bytes."""
         response = self._fetch_factory(
@@ -463,6 +484,7 @@ class Client:
             )()
         return response.json()['used']
 
+    # only admin access if as_user is provided
     def peers(
         self, 
         level: AccessLevel = AccessLevel.READ, 

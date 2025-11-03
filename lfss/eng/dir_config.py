@@ -5,16 +5,11 @@ from contextlib import asynccontextmanager
 import aiosqlite
 
 from .log import get_logger
-from .datatype import AccessLevel, parse_access_level
+from .datatype import DirConfig
 from .connection_pool import unique_cursor
 from .database_conn import FileConn
 from .utils import ensure_uri_components
 from .config import DIR_CONFIG_FNAME
-
-@dataclass
-class DirConfig:
-    index: Optional[str] = None
-    access_control: Optional[dict[str, AccessLevel]] = None
 
 async def load_dir_config(path: str, cur: Optional[aiosqlite.Cursor] = None) -> DirConfig:
     @asynccontextmanager
@@ -41,14 +36,7 @@ async def load_dir_config(path: str, cur: Optional[aiosqlite.Cursor] = None) -> 
             blob = b''.join([chunk async for chunk in blob_iter])
         else:
             blob = await fconn.get_file_blob(dir_config_file.file_id)
-
-            config_json = json.loads(blob.decode('utf-8'))
-            if 'index' in config_json:
-                config.index = config_json['index']
-            if 'access-control' in config_json:
-                config.access_control = {}
-                for k, v in config_json['access-control'].items():
-                    config.access_control[k] = parse_access_level(v)
+            config = DirConfig.from_json(json.loads(blob.decode('utf-8')))
         return config
 
     # main logic

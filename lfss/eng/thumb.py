@@ -1,5 +1,5 @@
 from lfss.eng.config import THUMB_DB, THUMB_SIZE
-from lfss.eng.database import FileConn
+from lfss.eng.database_conn import FileConn
 from lfss.eng.error import *
 from lfss.eng.connection_pool import unique_cursor
 from typing import Optional

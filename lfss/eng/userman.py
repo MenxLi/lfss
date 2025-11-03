@@ -5,7 +5,9 @@ High level user-management API.
 from typing import Optional
 from .utils import parse_storage_size
 from .datatype import UserRecord, FileReadPermission, AccessLevel
-from .database import Database, UserConn, transaction, unique_cursor
+from .connection_pool import transaction, unique_cursor
+from .database_conn import UserConn
+from .database import Database
 from .error import *
 
 async def _ensure_user_exists(u: str | int) -> UserRecord:

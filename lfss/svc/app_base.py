@@ -10,7 +10,9 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, HTTPBasic
 from ..eng.log import get_logger
 from ..eng.datatype import UserRecord
 from ..eng.connection_pool import unique_cursor
-from ..eng.database import Database, UserConn, delayed_log_activity, DECOY_USER
+from ..eng.datatype import DECOY_USER
+from ..eng.database_conn import delayed_log_activity, UserConn
+from ..eng.database import Database
 from ..eng.connection_pool import global_connection_init, global_connection_close
 from ..eng.utils import wait_for_debounce_tasks, now_stamp, hash_credential
 from ..eng.error import *

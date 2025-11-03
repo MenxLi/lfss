@@ -4,7 +4,8 @@ from fastapi.responses import StreamingResponse
 from typing import Optional, Literal
 from ..eng.connection_pool import unique_cursor
 from ..eng.datatype import UserRecord, FileRecord, PathContents, AccessLevel, FileReadPermission
-from ..eng.database import FileConn, UserConn, delayed_log_access, check_file_read_permission, check_path_permission
+from ..eng.database_conn import delayed_log_access, FileConn, UserConn
+from ..eng.database import check_file_read_permission, check_path_permission
 from ..eng.thumb import get_thumb
 from ..eng.utils import format_last_modified, ensure_uri_components
 from ..eng.config import CHUNK_SIZE, DEBUG_MODE

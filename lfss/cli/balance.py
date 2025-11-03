@@ -7,9 +7,7 @@ import argparse, time, itertools
 from functools import wraps
 from asyncio import Semaphore
 import aiofiles, asyncio
-import aiofiles.os
-from lfss.eng.database import transaction, unique_cursor
-from lfss.eng.connection_pool import global_entrance
+from lfss.eng.connection_pool import global_entrance, transaction, unique_cursor
 
 sem: Semaphore
 

@@ -8,7 +8,8 @@ from fastapi.exceptions import HTTPException
 from ..eng.utils import ensure_uri_components
 from ..eng.config import MAX_MEM_FILE_BYTES
 from ..eng.connection_pool import unique_cursor
-from ..eng.database import check_file_read_permission, check_path_permission, FileConn, delayed_log_access, UserConn
+from ..eng.database_conn import delayed_log_access, FileConn
+from ..eng.database import check_file_read_permission, check_path_permission
 from ..eng.datatype import (
     FileReadPermission, UserRecord, AccessLevel, 
     FileSortKey, DirSortKey

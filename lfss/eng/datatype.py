@@ -109,6 +109,7 @@ class PathContents:
     dirs: list[DirectoryRecord] = dataclasses.field(default_factory=list)
     files: list[FileRecord] = dataclasses.field(default_factory=list)
     
+DECOY_USER = UserRecord(0, 'decoy', 'decoy', False, '2021-01-01 00:00:00', '2021-01-01 00:00:00', 0, FileReadPermission.PRIVATE)
 FileSortKey = typing.Literal['', 'url', 'file_size', 'create_time', 'access_time', 'mime_type']
 isValidFileSortKey = lambda x: x in typing.get_args(FileSortKey)
 DirSortKey = typing.Literal['', 'dirname']

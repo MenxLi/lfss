@@ -67,7 +67,6 @@ class SQLiteFileHandler(logging.FileHandler):
         self._flush_interval = 10
         self._last_flush = time.time()
         conn = sqlite3.connect(self._db_file, check_same_thread=False)
-        conn.execute('PRAGMA journal_mode=WAL')
         conn.execute('''
             CREATE TABLE IF NOT EXISTS log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

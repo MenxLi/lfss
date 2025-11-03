@@ -114,7 +114,7 @@ class PathContents:
 @dataclasses.dataclass
 class DirConfig:
     index: Optional[str] = None
-    access_control: Optional[dict[str, AccessLevel]] = None
+    access_control: dict[str, AccessLevel] = dataclasses.field(default_factory=dict)
 
     def set_index(self, index_fname: str):
         self.index = index_fname
@@ -136,10 +136,8 @@ class DirConfig:
     
     def to_json(self) -> dict:
         obj = {}
-        if self.index is not None:
-            obj['index'] = self.index
-        if self.access_control is not None:
-            obj['access-control'] = {k: v.name for k, v in self.access_control.items()}
+        obj['index'] = self.index
+        obj['access-control'] = {k: v.name for k, v in self.access_control.items()}
         return obj
 
     @staticmethod

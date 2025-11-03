@@ -113,9 +113,8 @@ async def check_path_permission(path: str, user: UserRecord, cursor: Optional[ai
     # check directory config access control
     async with this_cur() as cur:
         dir_cfg = await load_dir_config(path, cur)
-    if dir_cfg.access_control is not None:
-        if user.username in dir_cfg.access_control:
-            return dir_cfg.access_control[user.username]
+    if user.username in dir_cfg.access_control:
+        return dir_cfg.access_control[user.username]
     
     # check alias level
     async with this_cur() as cur:

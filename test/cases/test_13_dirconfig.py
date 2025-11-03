@@ -36,9 +36,9 @@ def test_index_file_access(server):
     resp = u2.get_json('u1/test/')
     assert resp['message'] == 'Hello from index file!', "Index file access failed for u2"
 
-    # u3 should not be able to access index file
-    with pytest.raises(Exception, match="403"):
-        resp = u3.get_json('u1/test/')
+    # u3 should be able to access index file, because at this point the file has public permission
+    resp = u3.get_json('u1/test/')
+    assert resp['message'] == 'Hello from index file!', "Index file access failed for u3"
 
     # now change u1 permission to private
     get_conn("u0").set_user('u1', permission='private')

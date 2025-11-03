@@ -159,10 +159,7 @@ async def _get_dir_impl(
     """
     assert path.endswith("/")
 
-    if not await check_path_permission(path, user) >= AccessLevel.READ:
-        raise HTTPException(status_code=403 if user.id != 0 else 401, detail="Permission denied")
-
-    # for webdav HEAD request
+    # for webdav HEAD request, exist path return 200
     if is_head:
         if path == "/":
             return Response(status_code=200)
@@ -177,16 +174,13 @@ async def _get_dir_impl(
                     raise HTTPException(status_code=404, detail="User not found")
             else:
                 fconn = FileConn(cur)
-                if await fconn.is_dir_exist(path):
-                    return Response(status_code=200)
-                else:
+                if not await fconn.is_dir_exist(path):
                     raise HTTPException(status_code=404, detail="Path not found")
-        raise Exception("unreachable")
 
     async with unique_cursor() as cur:
         dir_cfg = await load_dir_config(path, cur)
         if not dir_cfg.index:
-            return Response(status_code=204)
+            return Response(status_code=200, content="No index file specified")
 
         index_path = path + ensure_uri_components(dir_cfg.index)
         fr = await FileConn(cur).get_file_record(index_path, throw=False)

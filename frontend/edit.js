@@ -1,6 +1,11 @@
 import { store } from './state.js';
 import { maybeShowLoginPanel } from './login.js';
 
+const defaultDirConfig = {
+    'index': null, 
+    'access-control': {}, 
+}
+
 const MAX_FILE_SIZE_MB = 5;
 
 {
@@ -93,6 +98,12 @@ else {
     newHint.textContent = 'new';
     filePathLabel.appendChild(newHint);
     textArea.focus();
+
+    // check if is directory config file
+    if (filePath.endsWith('/.lfss-dir.json')) {
+        content = JSON.stringify(defaultDirConfig, null, 4);
+        textArea.value = content;
+    }
 }
 
 async function saveFile() {

@@ -1,3 +1,11 @@
+## 0.14
+### 0.14.0-pre
+- Break: Remove `GET` directory path to list content. 
+- Add directory config to control single directory permission and behavior.
+- Add `parent` method to path record classes.
+- Add http apis for user management. 
+- Refactors on engine file structure.
+- Fix list peers may include self. 
 
 ## 0.13
 ### 0.13.3

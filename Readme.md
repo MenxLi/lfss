@@ -9,7 +9,7 @@ My experiment on a lightweight and high-performance file/object storage service.
 - Pagination and sorted file listing for vast number of files.  
 - High performance: high concurrency, near-native speed on stress tests.
 - Support range requests, so you can stream large files / resume download.
-- WebDAV compatible ([NOTE](./docs/Webdav.md)).
+- WebDAV compatible ([NOTE](./docs/webdav.md)).
 
 It stores small files and metadata in sqlite, large files in the filesystem.  
 Tested on 2 million files, and it is still fast.
@@ -40,6 +40,6 @@ You can refer to `frontend` as an application example, `lfss/api/connector.py` f
 
 By default, the service exposes all files to the public for `GET` requests, 
 but file-listing is restricted to the user's own files.  
-Please refer to [docs/Permission.md](./docs/Permission.md) for more details on the permission system. 
+Please refer to [docs/Permission.md](./docs/permission.md) for more details on the permission system. 
 
 More can be found in the [docs](./docs) directory.

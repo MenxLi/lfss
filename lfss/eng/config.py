@@ -28,4 +28,4 @@ DEBUG_MODE = os.environ.get('LFSS_DEBUG', '0') == '1'
 THUMB_DB = DATA_HOME / 'thumbs.v0-11.db'
 THUMB_SIZE = (64, 64)
 
-DIR_CONFIG_FNAME = '.lfss-dir.json'
+DIR_CONFIG_FNAME = '.lfssdir.json'

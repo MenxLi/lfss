@@ -1,4 +1,7 @@
 ## 0.14
+### 0.14.1
+- Break: Change `.lfss-dir.json` to `.lfssdir.json` for directory config file (Yank previous release).
+
 ### 0.14.0
 - Break: Remove `GET` directory path to list content. 
 - Add directory config to control single directory permission and behavior.

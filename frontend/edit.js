@@ -1,6 +1,7 @@
 import { store } from './state.js';
 import { maybeShowLoginPanel } from './login.js';
 
+const dirConfigFilename = '.lfssdir.json';
 const defaultDirConfig = {
     'index': null, 
     'access-control': {}, 
@@ -100,7 +101,7 @@ else {
     textArea.focus();
 
     // check if is directory config file
-    if (filePath.endsWith('/.lfss-dir.json')) {
+    if (filePath.endsWith(`/${dirConfigFilename}`)) {
         content = JSON.stringify(defaultDirConfig, null, 4);
         textArea.value = content;
     }

@@ -66,9 +66,9 @@ def test_config_override_forbidden(server):
     u2 = get_conn('u2')
     # u2 should not be able read or write the config file
     with pytest.raises(Exception, match="403"):
-        u2.get_json('u1/test/.lfss-dir.json')
+        u2.get_json('u1/test/.lfssdir.json')
     with pytest.raises(Exception, match="403"):
-        u2.put_json('u1/test/.lfss-dir.json', {'index': 'new_index.json'})
+        u2.put_json('u1/test/.lfssdir.json', {'index': 'new_index.json'})
 
 def test_alias_override(server):
     u0 = get_conn('u0')
@@ -80,7 +80,7 @@ def test_alias_override(server):
         resp = u3.get_json('u1/test/')
 
     with pytest.raises(Exception, match="403"):
-        u3.get_json('u1/test/.lfss-dir.json')
+        u3.get_json('u1/test/.lfssdir.json')
 
     with pytest.raises(Exception, match="403"):
         u3.put_json('u1/test/data_from_u3.json', {'data': 'This is from u3 after alias override'})
@@ -89,7 +89,7 @@ def test_copy_out_attack(server):
     u2 = get_conn('u2')
     # u2 tries to make a copy of the config file by copy whole directory out
     u2.copy('u1/test/', 'u2/test_copy/')
-    assert not u2.exists('u2/test_copy/.lfss-dir.json'), "Directory config file copy attack should have been prevented"
+    assert not u2.exists('u2/test_copy/.lfssdir.json'), "Directory config file copy attack should have been prevented"
 
 def test_copy_in_attack(server):
     u0 = get_conn('u0')
@@ -104,7 +104,7 @@ def test_copy_in_attack(server):
     u2.put_json('u2/test/index.json', {'message': 'Hacked by u2'})
     u2.copy('u2/test/', 'u1/test/')
 
-    assert not u2.exists('u1/test/.lfss-dir.json'), "Directory config file copy attack should have been prevented"
+    assert not u2.exists('u1/test/.lfssdir.json'), "Directory config file copy attack should have been prevented"
 
     u3 = get_conn('u3')
     # u3 should still NOT be able to access the directory

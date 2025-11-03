@@ -17,11 +17,14 @@ from .datatype import (
     FileReadPermission, FileRecord, DirectoryRecord, PathContents, 
     FileSortKey, DirSortKey, isValidFileSortKey, isValidDirSortKey
     )
-from .config import LARGE_BLOB_DIR, CHUNK_SIZE
+from .config import LARGE_BLOB_DIR, CHUNK_SIZE, DIR_CONFIG_FNAME
 from .log import get_logger
 from .utils import hash_credential, debounce_async, static_vars
 from .error import *
 
+ENCODE_DIR_CONFIG_FNAME = urllib.parse.quote(DIR_CONFIG_FNAME)
+
+# define here to avoid circular import
 class DBObjectBase(ABC):
     """
     NOTE: 
@@ -354,6 +357,7 @@ class FileConn(DBObjectBase):
         files = [self.parse_record(r) for r in res]
         return files
     
+    # DEPRECATED
     async def list_path(self, url: str) -> PathContents:
         """
         List all files and directories under the given path.  
@@ -478,12 +482,13 @@ class FileConn(DBObjectBase):
         """
         Copy all files under old_url to new_url, 
         if user_id is None, will not change the owner_id of the files. Otherwise, will change the owner_id to user_id.
+        will skip files ending with '/{DIR_CONFIG_FNAME}' (directory config files)
         """
         assert_or(old_url.endswith('/'), InvalidInputError("Old path must end with /"))
         assert_or(new_url.endswith('/'), InvalidInputError("New path must end with /"))
         cursor = await self.cur.execute(
-            "SELECT * FROM fmeta WHERE url LIKE ? ESCAPE '\\'",
-            (self.escape_sqlike(old_url) + '%', )
+            "SELECT * FROM fmeta WHERE url LIKE ? ESCAPE '\\' AND url NOT LIKE ? ESCAPE '\\'",
+            (self.escape_sqlike(old_url) + '%', '%/' + self.escape_sqlike(ENCODE_DIR_CONFIG_FNAME))
             )
         res = await cursor.fetchall()
         for r in res:
@@ -528,11 +533,14 @@ class FileConn(DBObjectBase):
         self.logger.info(f"Transferred ownership of file {url} from user {old.owner_id} to user {new_owner}")
     
     async def move_dir(self, old_url: str, new_url: str, transfer_to_user: Optional[int] = None):
+        """
+        will skip files ending with '/{DIR_CONFIG_FNAME}' (directory config files)
+        """
         assert_or(old_url.endswith('/'), InvalidInputError("Old path must end with /"))
         assert_or(new_url.endswith('/'), InvalidInputError("New path must end with /"))
         cursor = await self.cur.execute(
-            "SELECT url, owner_id, file_size FROM fmeta WHERE url LIKE ? ESCAPE '\\'",
-            (self.escape_sqlike(old_url) + '%', )
+            "SELECT url, owner_id, file_size FROM fmeta WHERE url LIKE ? ESCAPE '\\' AND url NOT LIKE ? ESCAPE '\\'",
+            (self.escape_sqlike(old_url) + '%', '%/' + self.escape_sqlike(ENCODE_DIR_CONFIG_FNAME))
             )
         res = await cursor.fetchall()
         for r in res:
@@ -569,7 +577,7 @@ class FileConn(DBObjectBase):
         return [self.parse_record(r) for r in res]
 
     async def delete_records_by_prefix(self, path: str) -> list[FileRecord]:
-        """Delete all records with url starting with path"""
+        """ Delete all records with url starting with path """
         # update user size
         cursor = await self.cur.execute(
             "SELECT DISTINCT owner_id FROM fmeta WHERE url LIKE ? ESCAPE '\\'",

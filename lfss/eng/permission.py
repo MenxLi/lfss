@@ -4,7 +4,18 @@ from contextlib import asynccontextmanager
 from .datatype import UserRecord, FileRecord, FileReadPermission, AccessLevel
 from .database_conn import UserConn, FileConn
 from .connection_pool import unique_cursor
+from .dir_config import load_dir_config
+from .utils import decode_uri_components
+from .config import DIR_CONFIG_FNAME
 from .error import *
+
+def is_dir_config_file(path: str | FileRecord) -> bool:
+    if isinstance(path, FileRecord):
+        return path.name() == DIR_CONFIG_FNAME
+    elif isinstance(path, str):
+        return decode_uri_components(path).endswith('/' + DIR_CONFIG_FNAME)
+    else:
+        return False
 
 async def _get_path_owner(cur: aiosqlite.Cursor, path: str) -> UserRecord:
     path_username = path.split('/')[0]
@@ -31,6 +42,9 @@ async def check_file_read_permission(user: UserRecord, file: FileRecord, cursor:
                 yield _cur
         else:
             yield cursor
+    
+    if is_dir_config_file(file):
+        return False, "Permission denied, directory config file can only be accessed by the owner/admin"
     
     f_perm = file.permission
 
@@ -82,13 +96,26 @@ async def check_path_permission(path: str, user: UserRecord, cursor: Optional[ai
     if user.id == path_owner.id:
         return AccessLevel.ALL
     
-    # if the path is a file, check if the user is the owner
+    # if the path is a file
     if not path.endswith('/'):
         async with this_cur() as cur:
             fconn = FileConn(cur)
             file = await fconn.get_file_record(path)
+        
+        # file owner has all access
         if file and file.owner_id == user.id:
             return AccessLevel.ALL
+
+        # directory config file can only be accessed by owner/path owner/admin
+        if is_dir_config_file(path):
+            return AccessLevel.NONE
+    
+    # check directory config access control
+    async with this_cur() as cur:
+        dir_cfg = await load_dir_config(path, cur)
+    if dir_cfg.access_control is not None:
+        if user.username in dir_cfg.access_control:
+            return dir_cfg.access_control[user.username]
     
     # check alias level
     async with this_cur() as cur:

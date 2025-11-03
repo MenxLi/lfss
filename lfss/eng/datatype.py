@@ -108,6 +108,23 @@ class DirectoryRecord:
 class PathContents:
     dirs: list[DirectoryRecord] = dataclasses.field(default_factory=list)
     files: list[FileRecord] = dataclasses.field(default_factory=list)
+
+def parse_read_permission(s: str | int) -> FileReadPermission:
+    if isinstance(s, int):
+        return FileReadPermission(s)
+    for p in FileReadPermission:
+        if p.name.lower() == s.lower():
+            return p
+    raise ValueError(f"Invalid file read permission {s}")
+
+def parse_access_level(s: str | int) -> AccessLevel:
+    if isinstance(s, int):
+        return AccessLevel(s)
+
+    for p in AccessLevel:
+        if p.name.lower() == s.lower():
+            return p
+    raise ValueError(f"Invalid access level {s}")
     
 DECOY_USER = UserRecord(0, 'decoy', 'decoy', False, '2021-01-01 00:00:00', '2021-01-01 00:00:00', 0, FileReadPermission.PRIVATE)
 FileSortKey = typing.Literal['', 'url', 'file_size', 'create_time', 'access_time', 'mime_type']

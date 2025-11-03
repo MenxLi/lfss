@@ -301,25 +301,6 @@ export default class Connector {
         if (!path.endsWith('/')){ path += '/'; }
         return path;
     }
-    /**
-     * @param {string} path - the path to the file directory, should ends with '/'
-     * @returns {Promise<PathListResponse>} - the promise of the request
-     * NOTE: will deprecated in future
-     */
-    async listPath(path){
-        path = this._sanitizeDirPath(path);
-        const dst = new URL(this.config.endpoint + '/' + path);
-        const res = await fetch(dst.toString(), {
-            method: 'GET',
-            headers: {
-                'Authorization': 'Bearer ' + this.config.token
-            },
-        });
-        if (res.status == 403 || res.status == 401){
-            throw new Error(`Access denied to ${path}`);
-        }
-        return await res.json();
-    }
 
     /**
      * @param {string} path - the path to the file directory, should ends with '/'

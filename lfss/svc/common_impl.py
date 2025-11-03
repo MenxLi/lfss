@@ -3,12 +3,13 @@ from fastapi import Request, Response, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from typing import Optional, Literal
 from ..eng.connection_pool import unique_cursor
-from ..eng.datatype import UserRecord, FileRecord, PathContents, AccessLevel, FileReadPermission
-from ..eng.database_conn import delayed_log_access, FileConn, UserConn
+from ..eng.datatype import UserRecord, FileRecord, AccessLevel, FileReadPermission
+from ..eng.database_conn import delayed_log_access, FileConn
 from ..eng.database import check_file_read_permission, check_path_permission
 from ..eng.thumb import get_thumb
 from ..eng.utils import format_last_modified, ensure_uri_components
 from ..eng.config import CHUNK_SIZE, DEBUG_MODE
+from ..eng.dir_config import load_dir_config
 
 from .app_base import skip_request_log, db, logger
 
@@ -107,7 +108,7 @@ async def get_impl(
     # handle directory query
     if path == "": path = "/"
     if path.endswith("/"):
-        return await _get_dir_impl(user=user, path=path, download=download, thumb=thumb, is_head=is_head)
+        return await _get_dir_impl(request=request, user=user, path=path, download=download, thumb=thumb, is_head=is_head)
     
     # handle file query
     async with unique_cursor() as cur:
@@ -145,52 +146,29 @@ async def get_impl(
             return await emit_file(file_record, None, "inline", is_head = is_head, range_start=range_start, range_end=range_end)
 
 async def _get_dir_impl(
+    request: Request,
     user: UserRecord, 
     path: str, 
-    download: bool = False, 
-    thumb: bool = False,
     is_head = False,
+    download: bool = False,
+    thumb: bool = False,
     ):
     """
-    handle directory query, return file under the path as json
-    TODO: will change the behavior at next (major) version update
+    handle directory query, return index file if specified in dir config, 
+    else return 404
     """
     assert path.endswith("/")
     async with unique_cursor() as cur:
-        fconn = FileConn(cur)
-        if user.id == 0:
-            raise HTTPException(status_code=401, detail="Permission denied, credential required")
-        if thumb:
-            return await emit_thumbnail(path, download, create_time=None)
-        
-        if path == "/":
-            if is_head: return Response(status_code=200)
-            peer_users = await UserConn(cur).list_peer_users(user.id, AccessLevel.READ)
-            return PathContents(
-                dirs = await fconn.list_root_dirs(user.username, *[x.username for x in peer_users], skim=True) \
-                    if not user.is_admin else await fconn.list_root_dirs(skim=True),
-                files = []
-            )
+        dir_cfg = await load_dir_config(path, cur)
+        if not dir_cfg.index:
+            raise HTTPException(status_code=404, detail="Index file not specified")
 
-        if not await check_path_permission(path, user, cursor=cur) >= AccessLevel.READ:
-            raise HTTPException(status_code=403, detail="Permission denied")
-        
-        path_sp = path.split("/")
-        if is_head:
-            if len(path_sp) == 2:
-                assert path_sp[1] == ""
-                if await UserConn(cur).get_user(path_sp[0]):
-                    return Response(status_code=200)
-                else:
-                    raise HTTPException(status_code=404, detail="User not found")
-            else:
-                if await fconn.is_dir_exist(path):
-                    return Response(status_code=200)
-                else:
-                    raise HTTPException(status_code=404, detail="Path not found")
+        index_path = path + ensure_uri_components(dir_cfg.index)
+        await FileConn(cur).get_file_record(index_path, throw=True)
 
-        return await fconn.list_path(path)
-    
+    assert not index_path.endswith("/"), "Index path must not end with /"
+    return await get_impl(request=request, user=user, path=index_path, download=download, thumb=thumb, is_head=is_head)
+
 async def put_file_impl(
     request: Request, 
     user: UserRecord, 

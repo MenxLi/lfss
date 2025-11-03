@@ -369,7 +369,7 @@ class Client:
         path = _p(path)
         if path == '/':
             # handle root path separately
-            dirnames = [f'{self.whoami().username}/'] + [f'{p.username}/' for p in self.list_peers(AccessLevel.READ)]
+            dirnames = [f'{self.whoami().username}/'] + [f'{p.username}/' for p in self.peers(AccessLevel.READ)]
             return PathContents(
                 dirs = [DirectoryRecord(url = d) for d in dirnames], 
                 files = []
@@ -463,7 +463,7 @@ class Client:
             )()
         return response.json()['used']
 
-    def list_peers(
+    def peers(
         self, 
         level: AccessLevel = AccessLevel.READ, 
         incoming: bool = False, 
@@ -487,7 +487,7 @@ class Client:
         users = [UserRecord(**u) for u in response.json()]
         return users
     
-    def query_user(self, u: int | str) -> UserRecord:
+    def user_query(self, u: int | str) -> UserRecord:
         """ 
         Query user information by username or userid. 
         If the current user is admin, the returned UserRecord is not desensitized.
@@ -501,7 +501,7 @@ class Client:
         return UserRecord(**response.json())
 
     # ========================== Admin APIs ==========================
-    def add_user(
+    def user_add(
         self, 
         username: str, 
         password: Optional[str] = None, 
@@ -521,7 +521,7 @@ class Client:
         response = self._fetch_factory('POST', '_api/user/add', search_params=data)()
         return UserRecord(**response.json())
     
-    def update_user(
+    def user_update(
         self, 
         username: str, 
         password: Optional[str] = None, 
@@ -544,7 +544,7 @@ class Client:
         response = self._fetch_factory('POST', '_api/user/update', search_params=data)()
         return UserRecord(**response.json())
     
-    def delete_user(self, username: str) -> UserRecord:
+    def user_delete(self, username: str) -> UserRecord:
         """ Admin API: Delete a user from the system. """
         response = self._fetch_factory('POST', '_api/user/delete', {'username': username})()
         return UserRecord(**response.json())

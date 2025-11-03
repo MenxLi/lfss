@@ -22,21 +22,21 @@ def test_user_creation(server):
 
 def test_list_peers(server):
     c0 = get_conn('u0')
-    peers0 = c0.list_peers(admin=False)
+    peers0 = c0.peers(admin=False)
     assert len(peers0) == 1, "Peer count is not correct"
     assert peers0[0].username == 'u2', "Peer username is not correct"
 
-    assert c0.list_peers(incoming=True, admin=False) == [], "Incoming peer count is not correct"
-    assert c0.list_peers(incoming=True, admin=True)[0].username == 'u3', "Incoming peer username is not correct"
+    assert c0.peers(incoming=True, admin=False) == [], "Incoming peer count is not correct"
+    assert c0.peers(incoming=True, admin=True)[0].username == 'u3', "Incoming peer username is not correct"
 
     c2 = get_conn('u2')
-    peers2 = c2.list_peers(incoming=True, admin=False)
+    peers2 = c2.peers(incoming=True, admin=False)
     assert len(peers2) == 2, "Peer count is not correct"
 
     c3 = get_conn('u3')
-    peers3 = c3.list_peers(admin=True)
+    peers3 = c3.peers(admin=True)
     assert len(peers3) == 3, "Peer count is not correct"
-    peers3_in = c3.list_peers(incoming=True)
+    peers3_in = c3.peers(incoming=True)
     assert len(peers3_in) == 0, "Incoming peer count is not correct"
 
 def test_u2_upload(server):

@@ -184,7 +184,7 @@ def main():
     
     elif args.command == "peers":
         with catch_request_error():
-            users = connector.list_peers(level=args.level, incoming=args.incoming, admin=args.admin)
+            users = connector.peers(level=args.level, incoming=args.incoming, admin=args.admin)
             if not args.incoming:
                 print(f"Peers that you have {args.level.name} access to:")
             else:

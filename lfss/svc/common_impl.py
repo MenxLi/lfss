@@ -4,7 +4,7 @@ from fastapi.responses import StreamingResponse
 from typing import Optional, Literal
 from ..eng.connection_pool import unique_cursor
 from ..eng.datatype import UserRecord, FileRecord, AccessLevel, FileReadPermission
-from ..eng.database_conn import delayed_log_access, FileConn
+from ..eng.database_conn import delayed_log_access, FileConn, UserConn
 from ..eng.database import check_file_read_permission, check_path_permission
 from ..eng.thumb import get_thumb
 from ..eng.utils import format_last_modified, ensure_uri_components
@@ -158,6 +158,32 @@ async def _get_dir_impl(
     else return 404
     """
     assert path.endswith("/")
+
+    # backward compatibility: HEAD request to directory checks if any file exists 
+    # this also complies with webdav spec... but may cause confusion...
+    # TODO: may change this behavior in future versions
+    if is_head:
+        if path == "/":
+            return Response(status_code=200)
+        if not await check_path_permission(path, user) >= AccessLevel.READ:
+            raise HTTPException(status_code=403 if user.id != 0 else 401, detail="Permission denied")
+        async with unique_cursor() as cur:
+            path_sp = path.split("/")
+            if len(path_sp) == 2:
+                assert path_sp[1] == ""
+                # check if user exists instead
+                if await UserConn(cur).get_user(path_sp[0]):
+                    return Response(status_code=200)
+                else:
+                    raise HTTPException(status_code=404, detail="User not found")
+            else:
+                fconn = FileConn(cur)
+                if await fconn.is_dir_exist(path):
+                    return Response(status_code=200)
+                else:
+                    raise HTTPException(status_code=404, detail="Path not found")
+        raise Exception("unreachable")
+
     async with unique_cursor() as cur:
         dir_cfg = await load_dir_config(path, cur)
         if not dir_cfg.index:

@@ -1,5 +1,5 @@
 ## 0.14
-### 0.14.0-pre
+### 0.14.0
 - Break: Remove `GET` directory path to list content. 
 - Add directory config to control single directory permission and behavior.
 - Add `parent` method to path record classes.

@@ -3,7 +3,9 @@
 - Break: Remove `GET` directory path to list content. 
 - Add directory config to control single directory permission and behavior.
 - Add `parent` method to path record classes.
+- Add version info to the package and server.
 - Add http apis for user management. 
+- Make `.api` alias for `_api` endpoints.
 - Refactors on engine file structure.
 - Fix list peers may include self. 
 

@@ -79,6 +79,11 @@ async def post_file(
 async def delete_file(path: str, user: UserRecord = Depends(registered_user)):
     return await delete_impl(path, user)
 
+@router_api.get("/version")
+@handle_exception
+async def get_version():
+    from lfss import __version__
+    return JSONResponse(content=__version__)
 
 @router_api.get("/bundle")
 @handle_exception

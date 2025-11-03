@@ -153,10 +153,10 @@ async def admin_user(user: UserRecord = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin permission required")
     return user
 
-router_api = APIRouter(prefix="/_api")
-router_user = APIRouter(prefix="/_api/user")
-router_dav = APIRouter(prefix="")
-router_fs = APIRouter(prefix="")
+router_api = APIRouter()
+router_user = APIRouter()
+router_dav = APIRouter()
+router_fs = APIRouter()
 
 __all__ = [
     "app", "db", "logger", 

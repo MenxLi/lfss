@@ -91,6 +91,7 @@ class UserConn(DBObjectBase):
         def validate_username(username: str):
             assert_or(not set(username) & {'/', ':'}, InvalidInputError("Invalid username"))
             assert_or(not username.startswith('_'), InvalidInputError("Error: reserved username"))
+            assert_or(not username.startswith('.'), InvalidInputError("Error: reserved username"))
             assert_or(not (len(username) > 255), InvalidInputError("Username too long"))
             assert_or(urllib.parse.quote(username) == username, InvalidInputError("Invalid username, must be URL safe"))
         validate_username(username)

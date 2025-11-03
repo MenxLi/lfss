@@ -159,14 +159,13 @@ async def _get_dir_impl(
     """
     assert path.endswith("/")
 
-    # backward compatibility: HEAD request to directory checks if any file exists 
-    # this also complies with webdav spec... but may cause confusion...
-    # TODO: may change this behavior in future versions
+    if not await check_path_permission(path, user) >= AccessLevel.READ:
+        raise HTTPException(status_code=403 if user.id != 0 else 401, detail="Permission denied")
+
+    # for webdav HEAD request
     if is_head:
         if path == "/":
             return Response(status_code=200)
-        if not await check_path_permission(path, user) >= AccessLevel.READ:
-            raise HTTPException(status_code=403 if user.id != 0 else 401, detail="Permission denied")
         async with unique_cursor() as cur:
             path_sp = path.split("/")
             if len(path_sp) == 2:
@@ -187,10 +186,12 @@ async def _get_dir_impl(
     async with unique_cursor() as cur:
         dir_cfg = await load_dir_config(path, cur)
         if not dir_cfg.index:
-            raise HTTPException(status_code=404, detail="Index file not specified")
+            return Response(status_code=204)
 
         index_path = path + ensure_uri_components(dir_cfg.index)
-        await FileConn(cur).get_file_record(index_path, throw=True)
+        fr = await FileConn(cur).get_file_record(index_path, throw=False)
+        if fr is None:
+            return Response(status_code=204, content="Index file not found")
 
     assert not index_path.endswith("/"), "Index path must not end with /"
     return await get_impl(request=request, user=user, path=index_path, download=download, thumb=thumb, is_head=is_head)

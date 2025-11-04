@@ -6,7 +6,7 @@ authors = ["Li, Mengxun <mengxunli@whu.edu.cn>"]
 readme = "Readme.md"
 homepage = "https://github.com/MenxLi/lfss"
 repository = "https://github.com/MenxLi/lfss"
-include = ["Readme.md", "docs/*", "frontend/*", "lfss/sql/*"]
+include = ["Readme.md", "docs/.vitepress/dist/*", "frontend/*", "lfss/sql/*"]
 
 [tool.poetry.dependencies]
 python = ">=3.10"   # PEP-622

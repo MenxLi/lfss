@@ -4,6 +4,7 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: "LFSS",
   description: "LFSS Documentation",
+  base: '/.docs/',
   themeConfig: {
     // https://vitepress.dev/reference/default-theme-config
     nav: [

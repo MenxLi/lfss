@@ -1,4 +1,7 @@
 ## 0.15
+### 0.15.2
+- Fix: Include static files in package distribution (fix previous release).
+
 ### 0.15.1
 - Fix: Include static files in package distribution.
 

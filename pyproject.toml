@@ -1,15 +1,16 @@
 [tool.poetry]
 name = "lfss"
-version = "0.15.1"
+version = "0.15.2"
 description = "Lite file storage service"
 authors = ["Li, Mengxun <mengxunli@whu.edu.cn>"]
 readme = "Readme.md"
 homepage = "https://github.com/MenxLi/lfss"
 repository = "https://github.com/MenxLi/lfss"
+packages = [{ include = "lfss" }]
 include = [
     "readme.md", 
-    { path = "lfss/sql", format = ["sdist", "wheel"] },
-    { path = "lfss/svc/static", format = ["sdist", "wheel"] },
+    { path = "lfss/sql/*", format = ["sdist", "wheel"] },
+    { path = "lfss/svc/static/**/*", format = ["sdist", "wheel"] },
     ]
 
 [tool.poetry.dependencies]

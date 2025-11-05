@@ -1,5 +1,5 @@
 
-# Quick Start
+# Server Setup Guide
 
 ```bash
 pip install "lfss[all]"

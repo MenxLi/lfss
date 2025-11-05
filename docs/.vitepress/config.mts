@@ -13,13 +13,20 @@ export default defineConfig({
 
     sidebar: [
       {
+        text: 'Quick Start',
+        items: [
+          { text: 'Server Setup', link: '/server-intro' },
+          { text: 'Client Intro', link: '/client-intro' }, 
+        ]
+      }, 
+      {
         text: 'Documentation',
         items: [
-          { text: 'Getting Started', link: '/getting-started' },
+          { text: 'CLI Commands', link: '/commands' },
           { text: 'Environment Variables', link: '/environment-variables' },
-          { text: 'Client Intro', link: '/client-intro' }, 
           { text: 'Permission System', link: '/permission' },
           { text: 'WebDAV', link: '/webdav' },
+          { text: 'Development', link: '/Development' },
         ]
       }, 
       {

@@ -24,10 +24,7 @@ lfss-serve
 By default, the data will be stored in `.storage_data`. 
 You can change storage directory using the `LFSS_DATA` environment variable.
 
-I provide a simple client to interact with the service: 
-```sh
-lfss-panel --open
-```
+There is a simple frontend at `http://localhost:8000/.panel/`.
 Or, you can start a web server at `/frontend` and open `index.html` in your browser. 
 
 The API usage is simple, just `GET`, `PUT`, `DELETE` to the `/<username>/file/url` path.  

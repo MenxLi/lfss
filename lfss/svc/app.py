@@ -4,16 +4,15 @@ from .app_base import ENABLE_WEBDAV
 from .app_native import *
 from .app_native_user import *
 
-__src_root = Path(__file__).parent.parent
-__doc_path = __src_root.parent / "docs" / ".vitepress" / "dist"
-assert __doc_path.parent.exists()
-if not __doc_path.exists():
-    __doc_path.mkdir()
-    with open(__doc_path / "index.html", "w") as f:
-        f.write("<h1>Documentation not built yet.</h1><p>Please build the documentation first.</p>")
+__this_dir = Path(__file__).parent
+__doc_path = __this_dir / "static" / "docs"
+__panel_path = __this_dir / "static" / "panel"
+if __doc_path.exists():
+    app.mount("/.docs", StaticFiles(directory=__doc_path, html=True), name="docs")
+if __panel_path.exists():
+    app.mount("/.panel", StaticFiles(directory=__panel_path, html=True), name="panel")
 
 # order matters
-app.mount("/.docs", StaticFiles(directory=__doc_path), name="docs")
 app.include_router(router_user, prefix="/_api/user")
 app.include_router(router_user, prefix="/.api/user")
 app.include_router(router_api, prefix="/_api")

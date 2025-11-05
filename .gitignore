@@ -16,6 +16,9 @@ dist
 build
 cache
 
+lfss/svc/static/*
+!lfss/svc/static/.gitkeep
+
 _test
 .storage_data
 test/.sandbox/

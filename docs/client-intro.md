@@ -1,6 +1,19 @@
 
 # Connect to LFSS
 
+## WebUI and JavaScript API
+A simple web-based file manager is provided in the package.  
+The web app can be accessed at the `/.panel/` path after starting the LFSS server.
+
+*e.g.*
+if your server is running at `http://localhost:8000`,
+you can open the panel at `http://localhost:8000/.panel/`.
+
+Or, you can open a static web server at the `/frontend` directory ([source](https://github.com/MenxLi/lfss/tree/main/frontend)).
+
+Alongside the web server, a JavaScript API client is also provided in the `frontend` directory. 
+Simply include the [`api.js`](https://github.com/MenxLi/lfss/blob/main/frontend/api.js) file in your project to easily interact with the LFSS server.
+
 ## Python Tools
 
 To install python CLI tools without dependencies (to avoid conflicts with your existing packages):
@@ -61,15 +74,3 @@ with open(file.name(), "wb") as f:
 ```
 More comments can be found at the implementation of the [Client class](https://github.com/MenxLi/lfss/blob/main/lfss/api/connector.py).
 
-
-## JavaScript API and Web-UI
-A simple web-based file manager is provided in the package.  
-To start the web server, run:
-```sh
-lfss-panel --open
-```
-This will start a web server at `http://localhost:8009/`. 
-Or, you can open a static web server at the `/frontend` directory ([source](https://github.com/MenxLi/lfss/tree/main/frontend)).
-
-Alongside the web server, a JavaScript API client is also provided in the `frontend` directory. 
-Simply include the [`api.js`](https://github.com/MenxLi/lfss/blob/main/frontend/api.js) file in your project to easily interact with the LFSS server.

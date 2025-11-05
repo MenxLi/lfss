@@ -1,3 +1,9 @@
+## 0.15
+### 0.15.0
+- Include `.docs` and `.panel` routes.
+- Remove `lfss-panel`. 
+- Fix: Public index file visibility. 
+
 ## 0.14
 ### 0.14.1
 - Break: Change `.lfss-dir.json` to `.lfssdir.json` for directory config file (Yank previous release).

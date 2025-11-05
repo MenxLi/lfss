@@ -1,4 +1,7 @@
 ## 0.15
+### 0.15.1
+- Fix: Include static files in package distribution.
+
 ### 0.15.0
 - Include `.docs` and `.panel` routes.
 - Remove `lfss-panel`. 

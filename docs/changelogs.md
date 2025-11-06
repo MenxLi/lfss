@@ -1,4 +1,8 @@
 ## 0.15
+### 0.15.3
+- Panel updates. 
+- Fix: JS API default origin endpoint.
+
 ### 0.15.2
 - Fix: Include static files in package distribution (fix previous release).
 

@@ -56,3 +56,8 @@ Directory-listing is not allowed for these users.
 | list       | Yes   | Yes  | Yes    | Yes    | No if not peer       | No                     |
 
 > Capitilized methods are HTTP methods, N/A means not applicable.
+
+:::info
+Peer relations can be overridden by single directory permission settings, 
+please refer to the [Single Directory Configuration](./lfssdir.md) document for more details.
+:::

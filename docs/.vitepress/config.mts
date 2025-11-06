@@ -25,6 +25,7 @@ export default defineConfig({
           { text: 'CLI Commands', link: '/commands' },
           { text: 'Environment Variables', link: '/environment-variables' },
           { text: 'Permission System', link: '/permission' },
+          { text: 'Configure Single Directory', link: '/lfssdir' },
           { text: 'WebDAV', link: '/webdav' },
           { text: 'Development', link: '/Development' },
         ]

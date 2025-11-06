@@ -11,8 +11,19 @@ you can open the panel at `http://localhost:8000/.panel/`.
 
 Or, you can open a static web server at the `/frontend` directory ([source](https://github.com/MenxLi/lfss/tree/main/frontend)).
 
+> The panel is pretty basic at the moment, and is not planned to be a full-featured file manager. 
+If you want a more advanced file manager, please consider building your own with the APIs. 
+
 Alongside the web server, a JavaScript API client is also provided in the `frontend` directory. 
 Simply include the [`api.js`](https://github.com/MenxLi/lfss/blob/main/frontend/api.js) file in your project to easily interact with the LFSS server.
+
+:::tip
+If you see a blank page when opening the panel, or you want to change the server endpoint, 
+please click on this button to configure the endpoint and token.
+
+<!-- ![Set Endpoint](./imgs/set-endpoint.png) -->
+<img src="./imgs/set-endpoint.png" alt="Set Endpoint" style='border: 1px solid #ccc; margin-block: 1em;' />
+:::
 
 ## Python Tools
 

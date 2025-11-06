@@ -1,7 +1,8 @@
 # CLI Commands
 
 ## Client Commands
-If you install LFSS via pip, you will get the `lfss` command-line tool.
+If you install LFSS via pip, you will get the `lfss` command-line tool. 
+Example useages can be found in the [Python Tools](./client-intro.md#python-tools) section.
 
 ```bash
 lfss --help

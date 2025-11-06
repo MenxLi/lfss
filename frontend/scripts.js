@@ -508,6 +508,7 @@ async function refreshFileList(){
 
                 {
                     const sizeTd = document.createElement('td');
+                    sizeTd.classList.add('file-size-td');
                     const fileSize = file.file_size;
                     sizeTd.textContent = formatSize(fileSize);
                     tr.appendChild(sizeTd);
@@ -515,6 +516,7 @@ async function refreshFileList(){
 
                 {
                     const dateTd = document.createElement('td');
+                    dateTd.classList.add('file-date-td');
                     const accessTime = file.access_time;
                     dateTd.textContent = cvtGMT2Local(accessTime);
                     tr.appendChild(dateTd);

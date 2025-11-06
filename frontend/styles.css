@@ -117,6 +117,16 @@ div#settings-bar{
     gap: 1rem;
     padding-bottom: 0.2rem;
 }
+div.page-config {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.2rem;
+}
+div.page-config > select, input{
+    font-size: small;
+    padding: 0.1rem;
+}
 div#position-hint{
     cursor: pointer;
     color: rgb(138, 138, 138);
@@ -177,7 +187,7 @@ table#files tr td:nth-child(2), table#files tr td:nth-child(4){
     width: 1%;
 }
 table#files tr td:nth-child(3), table#files tr td:nth-child(5){
-    width: 12%;
+    width: 8%;
 }
 
 div.filename-container{
@@ -192,9 +202,14 @@ div.filename-container > span.text-mime:hover{
     text-decoration: underline;
     cursor: pointer;
 }
+td.file-size-td, td.file-date-td{
+    font-size: small;
+    color: grey;
+}
 label#upload-file-prefix{
     width: 800px;
     text-align: right;
+    font-size: small;
 }
 input#file-name.red-bg{
     background-color: #ff001511
@@ -206,8 +221,13 @@ input#file-name.duplicate{
 .action-container{
     display: flex;
     flex-direction: row;
-    gap: 10px;
+    gap: 0rem;
     justify-content: flex-end;
+    /** circular overall container **/
+    align-items: center;
+    border-radius: 99rem;
+    transition: all 0.2s;
+    border: 1px solid #195f8b;
 }
 a{
     color: #195f8b;
@@ -216,14 +236,15 @@ a{
 .action-container a{
     padding: 0.2rem;
     padding-inline: 0.5rem;
-    border: 1px solid #195f8b;
-    border-radius: 0.25rem;
+    /* border: 1px solid #195f8b; */
+    /* border-radius: 0.25rem; */
     color: #195f8b;
     transition: all 0.2s;
 }
 .action-container a:hover{
     background-color: #195f8b;
     transform: scale(1.1);
+    border-radius: 99rem;
     color: white;
 }
 

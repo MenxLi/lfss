@@ -62,8 +62,8 @@ export default class Connector {
         // get default endpoint from url
         const searchParams = (new URL(window.location.href)).searchParams;
         const defaultToken = searchParams.get('lfss-token') || '';
-        const defaultEndpoint = searchParams.get('lfss-endpoint') || 
-                        (searchParams.origin == 'null' ? 'http://localhost:8000' : searchParams.origin);
+        const origin = window.location.origin;
+        const defaultEndpoint = searchParams.get('lfss-endpoint') || (origin ? origin : 'http://localhost:8000');
 
         /** @type {Config} */
         this.config = {

@@ -19,7 +19,7 @@ export const store = {
     },
 
     get token() {
-        return loadPersistedState('token', '');
+        return loadPersistedState('token', (new Connector()).config.token);
     },
     set token(t) {
         setPersistedState('token', t);
@@ -27,7 +27,8 @@ export const store = {
     },
 
     get endpoint() {
-        return loadPersistedState('endpoint', 'http://localhost:8000');
+        console.log(new Connector().config);
+        return loadPersistedState('endpoint', (new Connector()).config.endpoint);
     },
     set endpoint(url) {
         setPersistedState('endpoint', url);

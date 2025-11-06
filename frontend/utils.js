@@ -95,6 +95,17 @@ export function asHtmlText(text){
     return htmlText;
 }
 
+export function isMimeText(mime){
+    return mime.startsWith('text/') || 
+        mime === 'application/json' || 
+        mime === 'application/javascript' || 
+        mime === 'application/xml' || 
+        mime === 'application/x-www-form-urlencoded' || 
+        mime === 'application/sql' ||
+        mime.endsWith('+xml') ||
+        mime.endsWith('+json');
+}
+
 /**
  * Iterates over all files dropped in the event,
  * including files inside directories, and processes them

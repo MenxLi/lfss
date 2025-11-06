@@ -82,6 +82,7 @@ export function makeThumbHtml(c, r){
             <img src="${c.config.endpoint}/${url}?token=${token}&thumb=true" alt="${r.url}" class="thumb" \
             onerror="this.src='${getSafeIconUrl(getIconSVGFromMimeType(mtype))}';this.classList.add('thumb-svg');" \
             onclick="window.open('${c.config.endpoint}/${url}?token=${token}', '_blank');" \
+            title="Click to open full image" \
             /> \
         </div>
         `;
@@ -91,6 +92,7 @@ export function makeThumbHtml(c, r){
         <div class="thumb" id="${thumb_id}"> \
             <img src="${getSafeIconUrl(getIconSVGFromMimeType(mtype))}" alt="${r.url}" class="thumb thumb-svg" \
             onclick="window.open('${c.config.endpoint}/${url}?token=${token}', '_blank');" \
+            title="Click to open file" \
             / > \
         </div>
         `;

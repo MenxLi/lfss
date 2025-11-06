@@ -1,6 +1,6 @@
 import { permMap, listPath, uploadFile } from './api.js';
 import { showFloatingWindowLineInput, showPopup } from './popup.js';
-import { formatSize, decodePathURI, ensurePathURI, getRandomString, cvtGMT2Local, debounce, encodePathURI, asHtmlText } from './utils.js';
+import { formatSize, decodePathURI, ensurePathURI, getRandomString, cvtGMT2Local, debounce, encodePathURI, asHtmlText, isMimeText } from './utils.js';
 import { showInfoPanel, showDirInfoPanel } from './info.js';
 import { makeThumbHtml } from './thumb.js';
 import { store } from './state.js';
@@ -81,7 +81,7 @@ pathBackButton.addEventListener('click', () => {
     onPathChange();
 });
 
-function onFileNameInpuChange(){
+function onFileNameInputChange(){
     const fileName = uploadFileNameInput.value;
     if (fileName.endsWith('/')){
         uploadFileNameInput.classList.add('red-bg');
@@ -110,6 +110,27 @@ function onFileNameInpuChange(){
     }
 }
 
+/** @param {import('./api.js').FileRecord | null} f */
+function openEditor(f = null){
+    let path = '';
+    if (!f){
+        const fname = uploadFileNameInput.value;
+        if (fname.length === 0 || fname.endsWith('/')){
+            throw new Error('Invalid file name');
+        }
+        path = store.dirpath + fname;
+        path = ensurePathURI(path);
+    }
+    else {
+        path = f.url;
+    }
+    const thisUrl = new URL(window.location.href);
+    thisUrl.pathname = thisUrl.pathname.replace(/\/[^\/]*$/, '/edit.html');
+    thisUrl.searchParams.set('path', path);
+    thisUrl.searchParams.set('from', window.location.href);
+    window.location.href = thisUrl.href;
+}
+
 randomizeFnameButton.addEventListener('click', () => {
     let currentName = uploadFileNameInput.value;
     let newName = getRandomString(24);
@@ -122,7 +143,7 @@ randomizeFnameButton.addEventListener('click', () => {
         newName += '.' + ext;
     }
     uploadFileNameInput.value = newName;
-    onFileNameInpuChange();
+    onFileNameInputChange();
 });
 function updateFileUploadButton(){
     if (uploadFileSelector.files.length === 0){
@@ -152,17 +173,12 @@ updateFileUploadButton();
 uploadFileSelector.addEventListener('change', () => {
     updateFileUploadButton();
     uploadFileNameInput.value = uploadFileSelector.files[0].name;
-    onFileNameInpuChange();
+    onFileNameInputChange();
 });
 uploadButton.addEventListener('click', () => {
     // create new empty file or edit existing file
     if (uploadFileSelector.files.length === 0){
-        const newUrl = ensurePathURI(store.dirpath + uploadFileNameInput.value);
-        const thisUrl = new URL(window.location.href);
-        thisUrl.pathname = thisUrl.pathname.replace(/\/[^\/]*$/, '/edit.html');
-        thisUrl.searchParams.set('path', newUrl);
-        thisUrl.searchParams.set('from', window.location.href);
-        window.location.href = thisUrl.href;
+        openEditor();
         return;
     }
 
@@ -181,7 +197,7 @@ uploadButton.addEventListener('click', () => {
         .then(() => {
             refreshFileList();
             uploadFileNameInput.value = '';
-            onFileNameInpuChange();
+            onFileNameInputChange();
             showPopup('Upload success.', {level: 'success', timeout: 3000});
         }, 
         (err) => {
@@ -196,7 +212,7 @@ uploadFileNameInput.addEventListener('keydown', (e) => {
         uploadButton.click();
     }
 });
-uploadFileNameInput.addEventListener('input', debounce(onFileNameInpuChange, 500));
+uploadFileNameInput.addEventListener('input', debounce(onFileNameInputChange, 500));
 
 {
     window.addEventListener('dragover', (e) => {
@@ -213,7 +229,7 @@ uploadFileNameInput.addEventListener('input', debounce(onFileNameInpuChange, 500
             uploadFileNameInput.focus();
             // trigger change event
             updateFileUploadButton();
-            onFileNameInpuChange();
+            onFileNameInputChange();
             return;
         }
 
@@ -474,9 +490,18 @@ async function refreshFileList(){
                     nameTd.innerHTML = `
                     <div class="filename-container">
                         ${makeThumbHtml(conn, file)}
-                        <span>${asHtmlText(fileName)}</span>
+                        <span class="${isMimeText(file.mime_type) ? 'text-mime' : ''}">
+                            ${asHtmlText(fileName)}
+                        </span>
                     </div>
                     `
+                    if (isMimeText(file.mime_type)){
+                        const textSpan = nameTd.querySelector('span.text-mime');
+                        textSpan.title = 'Click to edit';
+                        textSpan.addEventListener('click', () => {
+                            openEditor(file);
+                        });
+                    }
                     tr.appendChild(nameTd);
                     tbody.appendChild(tr);
                 }

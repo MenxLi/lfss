@@ -181,10 +181,16 @@ table#files tr td:nth-child(3), table#files tr td:nth-child(5){
 }
 
 div.filename-container{
+    /* font-family: monospace; */
+    font-size: 0.9rem;
     display: flex;
     flex-direction: row;
     align-items: center;
     gap: 0.5rem;
+}
+div.filename-container > span.text-mime:hover{
+    text-decoration: underline;
+    cursor: pointer;
 }
 label#upload-file-prefix{
     width: 800px;

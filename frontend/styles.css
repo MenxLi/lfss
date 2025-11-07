@@ -173,7 +173,8 @@ table#files th {
 }
 table#files th, table#files td {
     border: 1px solid #ddd;
-    padding: 8px;
+    padding-inline: 0.5rem;
+    padding-block: 0.3rem;
     text-align: left;
 }
 table#files tr {
@@ -192,7 +193,7 @@ table#files tr td:nth-child(3), table#files tr td:nth-child(5){
 
 div.filename-container{
     /* font-family: monospace; */
-    font-size: 0.9rem;
+    /* font-size: 0.9rem; */
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -219,6 +220,7 @@ input#file-name.duplicate{
 }
 
 .action-container{
+    /* font-size: 0.9rem; */
     display: flex;
     flex-direction: row;
     gap: 0rem;
@@ -227,14 +229,14 @@ input#file-name.duplicate{
     align-items: center;
     border-radius: 99rem;
     transition: all 0.2s;
-    border: 1px solid #195f8b;
+    border: 1px solid #195f8baa;
 }
 a{
     color: #195f8b;
     text-decoration: none;
 }
 .action-container a{
-    padding: 0.2rem;
+    padding: 0.25rem;
     padding-inline: 0.5rem;
     /* border: 1px solid #195f8b; */
     /* border-radius: 0.25rem; */
@@ -245,6 +247,7 @@ a{
     background-color: #195f8b;
     transform: scale(1.1);
     border-radius: 99rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     color: white;
 }
 

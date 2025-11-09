@@ -15,7 +15,7 @@ async def _main():
     sp_add.add_argument('username', type=str)
     sp_add.add_argument('password', nargs='?', type=str, default=None)
     sp_add.add_argument('--admin', action='store_true', help='Set user as admin')
-    sp_add.add_argument("--permission", type=parse_permission, default=FileReadPermission.UNSET, help="File permission, can be public, protected, private, or unset")
+    sp_add.add_argument("--permission", type=parse_permission, default=FileReadPermission.UNSET, help="File fallback read permission, can be public, protected, private, or unset")
     sp_add.add_argument('--max-storage', type=parse_storage_size, default="10G", help="Maximum storage size, e.g. 1G, 100M, 10K, default is 10G")
     
     sp_delete = sp.add_parser('delete')
@@ -27,7 +27,7 @@ async def _main():
         if s.lower() == 'false':
             return False
         raise ValueError('Not a boolean')
-    sp_set = sp.add_parser('set')
+    sp_set = sp.add_parser('set', help="Set user properties, refer to 'add' subcommand for details on each argument")
     sp_set.add_argument('username', type=str)
     sp_set.add_argument('-p', '--password', type=str, default=None)
     sp_set.add_argument('-a', '--admin', type=parse_bool, default=None)
@@ -36,7 +36,7 @@ async def _main():
 
     sp_list = sp.add_parser('list')
     sp_list.add_argument("username", nargs='*', type=str, default=None)
-    sp_list.add_argument("-l", "--long", action="store_true")
+    sp_list.add_argument("-l", "--long", action="store_true", help="Show detailed information, including credential and peer users")
     
     sp_peer = sp.add_parser('set-peer')
     sp_peer.add_argument('src_username', type=str)

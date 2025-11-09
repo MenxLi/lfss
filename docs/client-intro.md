@@ -11,7 +11,7 @@ you can open the panel at `http://localhost:8000/.panel/`.
 
 Or, you can open a static web server at the `/frontend` directory ([source](https://github.com/MenxLi/lfss/tree/main/frontend)).
 
-> The panel is pretty basic at the moment, and is not planned to be a full-featured file manager. 
+> The panel is pretty basic at the moment, and is not planned to be a full-featured, good-looking file manager. 
 If you want a more advanced file manager, please consider building your own with the APIs. 
 
 Alongside the web server, a JavaScript API client is also provided in the `frontend` directory. 
@@ -27,7 +27,7 @@ please click on this button to configure the endpoint and token.
 
 ## Python Tools
 
-To install python CLI tools without dependencies (to avoid conflicts with your existing packages):
+To install python CLI tools:
 ```sh
 pip install lfss
 ```
@@ -63,7 +63,7 @@ More commands can be found using `lfss --help`.
 
 
 ## Python API
-The CLI is essentially a thin wrapper around the Python API. 
+The CLI is essentially a wrapper around the Python API. 
 You can also use the Python API directly in your project. 
 For example, to stream download the first file in your root directory:
 ```python

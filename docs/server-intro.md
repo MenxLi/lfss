@@ -20,7 +20,8 @@ Create a user using the following command:
 ```bash
 lfss-user add <username> <password> --admin
 ```
-This command will create an admin user, which can manage other users.
+This command will create an admin user, which can manage other users. 
+More user management commands can be found in `lfss-user --help` and `lfss-user <subcommand> --help`.
 
 ## Interact with the server
 Please refer to [Client-side tools](./client-intro.md) for more details on how to use the client CLI tools to interact with the server.

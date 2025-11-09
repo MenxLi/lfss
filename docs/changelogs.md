@@ -1,4 +1,9 @@
 ## 0.15
+### 0.15.4 
+- Add docs for single directory config.
+- Panel layout more compact.
+- Fix docs build layout bug.
+
 ### 0.15.3
 - Panel updates. 
 - Fix: JS API default origin endpoint.

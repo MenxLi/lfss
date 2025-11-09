@@ -1,9 +1,10 @@
 
+# Lite File Storage Service (LFSS)
 
-LFSS stands for **Lite File Storage Service**,
-
-It is a lightweight and high-performance object storage service, 
+A lightweight and high-performance object storage service, 
 using sqlite and filesystem as the backend storage.
+
+![Architecture Diagram](./imgs/arch.svg)
 
 **Highlights:**
 

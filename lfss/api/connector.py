@@ -8,7 +8,7 @@ import requests.adapters
 import urllib.parse
 from tempfile import SpooledTemporaryFile
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from lfss.eng.config import DIR_CONFIG_FNAME
+DIR_CONFIG_FNAME = '.lfssdir.json'  # avoid create DATA_HOME, should be same as in config.py
 from lfss.eng.datatype import (
     FileReadPermission, FileRecord, DirectoryRecord, UserRecord, PathContents, AccessLevel, 
     DirConfig, FileSortKey, DirSortKey

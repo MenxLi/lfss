@@ -36,7 +36,7 @@ async def load_dir_config(path: str, cur: Optional[aiosqlite.Cursor] = None) -> 
             blob = b''.join([chunk async for chunk in blob_iter])
         else:
             blob = await fconn.get_file_blob(dir_config_file.file_id)
-            config = DirConfig.from_json(json.loads(blob.decode('utf-8')))
+        config = DirConfig.from_json(json.loads(blob.decode('utf-8')))
         return config
 
     # main logic

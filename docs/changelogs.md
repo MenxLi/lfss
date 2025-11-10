@@ -1,4 +1,7 @@
 ## 0.15
+### 0.15.6
+- Fix static file missing for package distribution.
+
 ### 0.15.5
 - Fix: Py API should not create data home directory.
 - Fix: Load directory config from external storage.

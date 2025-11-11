@@ -144,19 +144,35 @@ class UserConn(DBObjectBase):
         self.logger.info(f"Delete user {username}")
     
     async def set_peer_level(self, src_user: int | str, dst_user: int | str, level: AccessLevel):
-        """ src_user can do [AccessLevel] to dst_user """
+        """ 
+        src_user can do [AccessLevel] to dst_user 
+        if set to AccessLevel.NONE, remove the peer relation record.
+        """
         assert int(level) >= AccessLevel.NONE, f"Cannot set alias level to {level}"
-        match (src_user, dst_user):
-            case (int(), int()):
-                await self.cur.execute("INSERT OR REPLACE INTO upeer (src_user_id, dst_user_id, access_level) VALUES (?, ?, ?)", (src_user, dst_user, int(level)))
-            case (str(), str()):
-                await self.cur.execute("INSERT OR REPLACE INTO upeer (src_user_id, dst_user_id, access_level) VALUES ((SELECT id FROM user WHERE username = ?), (SELECT id FROM user WHERE username = ?), ?)", (src_user, dst_user, int(level)))
-            case (str(), int()):
-                await self.cur.execute("INSERT OR REPLACE INTO upeer (src_user_id, dst_user_id, access_level) VALUES ((SELECT id FROM user WHERE username = ?), ?, ?)", (src_user, dst_user, int(level)))
-            case (int(), str()):
-                await self.cur.execute("INSERT OR REPLACE INTO upeer (src_user_id, dst_user_id, access_level) VALUES (?, (SELECT id FROM user WHERE username = ?), ?)", (src_user, dst_user, int(level)))
-            case (_, _):
-                raise ValueError("Invalid arguments")
+        if level == AccessLevel.NONE:
+            match (src_user, dst_user):
+                case (int(), int()):
+                    await self.cur.execute("DELETE FROM upeer WHERE src_user_id = ? AND dst_user_id = ?", (src_user, dst_user))
+                case (str(), str()):
+                    await self.cur.execute("DELETE FROM upeer WHERE src_user_id = (SELECT id FROM user WHERE username = ?) AND dst_user_id = (SELECT id FROM user WHERE username = ?)", (src_user, dst_user))
+                case (str(), int()):
+                    await self.cur.execute("DELETE FROM upeer WHERE src_user_id = (SELECT id FROM user WHERE username = ?) AND dst_user_id = ?", (src_user, dst_user))
+                case (int(), str()):
+                    await self.cur.execute("DELETE FROM upeer WHERE src_user_id = ? AND dst_user_id = (SELECT id FROM user WHERE username = ?)", (src_user, dst_user))
+                case (_, _):
+                    raise ValueError("Invalid arguments")
+        else:
+            match (src_user, dst_user):
+                case (int(), int()):
+                    await self.cur.execute("INSERT OR REPLACE INTO upeer (src_user_id, dst_user_id, access_level) VALUES (?, ?, ?)", (src_user, dst_user, int(level)))
+                case (str(), str()):
+                    await self.cur.execute("INSERT OR REPLACE INTO upeer (src_user_id, dst_user_id, access_level) VALUES ((SELECT id FROM user WHERE username = ?), (SELECT id FROM user WHERE username = ?), ?)", (src_user, dst_user, int(level)))
+                case (str(), int()):
+                    await self.cur.execute("INSERT OR REPLACE INTO upeer (src_user_id, dst_user_id, access_level) VALUES ((SELECT id FROM user WHERE username = ?), ?, ?)", (src_user, dst_user, int(level)))
+                case (int(), str()):
+                    await self.cur.execute("INSERT OR REPLACE INTO upeer (src_user_id, dst_user_id, access_level) VALUES (?, (SELECT id FROM user WHERE username = ?), ?)", (src_user, dst_user, int(level)))
+                case (_, _):
+                    raise ValueError("Invalid arguments")
     
     async def query_peer_level(self, src_user_id: int, dst_user_id: int) -> AccessLevel:
         """ src_user can do [AliasLevel] to dst_user """

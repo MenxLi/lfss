@@ -556,11 +556,14 @@ export async function listPath(conn, path, {
 
     if (path === '/' || path === ''){
         // this handles separate case for the root directory
-        const dirnames = [
-            (await conn.whoami()).username + '/'
-        ].concat(
+        const myusername = (await conn.whoami()).username;
+        let dirnames = [];
+        if (!myusername.startsWith('.v-')){
+            dirnames = dirnames.concat([myusername + '/']);
+        }
+        dirnames = dirnames.concat(
             (await conn.listPeers({ level: 1, incoming: false })).map(u => u.username + '/')
-        )
+        );
         return [
             {
                 dirs: dirnames.map(dirname => ({

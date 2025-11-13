@@ -1,3 +1,9 @@
+## 0.16
+### 0.16.0
+- Add virtual user support.
+- Remove peer relationships if set to none.
+- Fix user deletion not remove user storage statistics.
+
 ## 0.15
 ### 0.15.6
 - Fix static file missing for package distribution.

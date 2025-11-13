@@ -93,6 +93,23 @@ async def add_user(
         permission=permission
         )
 
+@router_user.post("/add-virtual")
+@handle_exception
+async def add_virtual_user(
+    tag: str = "",
+    peers: str = "",
+    max_storage: str = '1G',
+    expire: Optional[int | str] = None,
+    _: UserRecord = Depends(admin_user), 
+    ):
+    # not desensitized
+    return await UserCtl.add_virtual(
+        tag=tag,
+        peers=peers,
+        max_storage=max_storage, 
+        expire=expire
+        )
+
 @router_user.post("/update")
 @handle_exception
 async def update_user(

@@ -2,7 +2,7 @@
 High level user-management API.
 """
 
-import secrets
+import secrets, random
 from typing import Optional
 from .utils import parse_storage_size, parse_sec_time, fmt_sec_time
 from .datatype import UserRecord, FileReadPermission, AccessLevel
@@ -100,7 +100,7 @@ class UserCtl:
         if isinstance(permission, str):
             permission = parse_permission(permission)
         
-        UserCtl.logger.info(f"Creating user: {username}, admin: {admin}, max_storage: {max_storage}, permission: {permission.name}")
+        UserCtl.logger.debug(f"Creating user: {username}, admin: {admin}, max_storage: {max_storage}, permission: {permission.name}")
         async with transaction() as conn:
             uconn = UserConn(conn)
             user_id = await uconn.create_user(username, password, admin, max_storage=max_storage, permission=permission)
@@ -113,7 +113,7 @@ class UserCtl:
         tag: str = "", 
         peers: dict[AccessLevel, list[str]] | str = {},
         max_storage: int | str = '100G', 
-        expire_seconds: Optional[int] = None, 
+        expire: Optional[int | str] = None, 
         ) -> UserRecord:
         """
         Add a new virtual (hidden) user to the system.
@@ -122,16 +122,23 @@ class UserCtl:
         if peers is a string, it will be parsed by parse_peer_list.
         Returns the created UserRecord.
         """
+        def rnd_part(n: int) -> str:
+            base = secrets.token_urlsafe(n)
+            return base.replace('-', random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'))
+
         if tag:
-            assert tag.isalnum(), "Tag must be alphanumeric"
-            username = f"{UserCtl.virtual_prefix}{tag}-{secrets.token_urlsafe(8)}"
+            assert_or(tag.isalnum(), lambda: InvalidInputError("Tag must be alphanumeric"))
+            username = f"{UserCtl.virtual_prefix}{tag}-{rnd_part(8)}"
         else:
-            username = f"{UserCtl.virtual_prefix}{secrets.token_urlsafe(12)}"
+            username = f"{UserCtl.virtual_prefix}{rnd_part(12)}"
         
         if isinstance(peers, str):
             peers = parse_peer_list(peers)
         
-        UserCtl.logger.info(f"Creating virtual user: {username}, expire in {expire_seconds} seconds, peers: {peers}")
+        if isinstance(expire, str):
+            expire = parse_sec_time(expire)
+        
+        UserCtl.logger.debug(f"Creating virtual user: {username}, expire in {expire} seconds, peers: {peers}")
         async with transaction() as conn:
             uconn = UserConn(conn)
             if isinstance(max_storage, str):
@@ -144,8 +151,8 @@ class UserCtl:
                 permission=FileReadPermission.UNSET,
                 _validate = False
             )
-            if expire_seconds is not None:
-                await uconn.set_user_expire(user_id, expire_seconds)
+            if expire is not None:
+                await uconn.set_user_expire(user_id, expire)
             for level, user_list in peers.items():
                 if isinstance(level, str):
                     level = parse_access_level(level)
@@ -165,7 +172,7 @@ class UserCtl:
         if isinstance(expire_seconds, str):
             expire_seconds = parse_sec_time(expire_seconds)
         user = await _get_user__check(username)
-        UserCtl.logger.info(
+        UserCtl.logger.debug(
             f"Setting user expire: {username} to "
             f"{fmt_sec_time(expire_seconds) if expire_seconds is not None else 'never'}"
             )
@@ -181,7 +188,7 @@ class UserCtl:
         """ Delete a user from the system"""
         await _get_user__check(username)
 
-        UserCtl.logger.info(f"Deleting user: {username}")
+        UserCtl.logger.debug(f"Deleting user: {username}")
         return await Database().delete_user(username)
     
     @staticmethod

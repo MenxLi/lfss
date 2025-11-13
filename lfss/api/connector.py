@@ -379,7 +379,7 @@ class Client:
         if path == '/':
             # handle root path separately
             my_username = self.whoami().username
-            dirnames = [f'{my_username}/'] if not my_username.startswith('.') else [] + [f'{p.username}/' for p in self.peers(AccessLevel.READ)]
+            dirnames = ([f'{my_username}/'] if not my_username.startswith('.') else []) + [f'{p.username}/' for p in self.peers(AccessLevel.READ)]
             return PathContents(
                 dirs = [DirectoryRecord(url = d) for d in dirnames], 
                 files = []
@@ -537,7 +537,7 @@ class Client:
         username: str, 
         password: Optional[str] = None, 
         admin: bool = False, 
-        max_storage: int | str = '100G', 
+        max_storage: int | str = '10G', 
         permission: FileReadPermission | str = 'unset'
         ) -> UserRecord:
         """ Admin API: Add a new user to the system. """
@@ -550,6 +550,30 @@ class Client:
         if password is not None:
             data['password'] = password
         response = self._fetch_factory('POST', '_api/user/add', search_params=data)()
+        return UserRecord(**response.json())
+    
+    def add_virtual_user(
+        self, 
+        tag: str = "", 
+        peers: dict[AccessLevel, list[str]] | str = {},
+        max_storage: int | str = '1G', 
+        expire: Optional[int | str] = None, 
+        ) -> UserRecord:
+        """ Admin API: Add a new virtual (hidden) user to the system. """
+        data = {
+            'tag': tag,
+            'max_storage': str(max_storage),
+        }
+        if isinstance(peers, dict):
+            peer_strs = []
+            for level, users in peers.items():
+                peer_strs.append(f"{level.name}:{','.join(users)}")
+            data['peers'] = ';'.join(peer_strs)
+        else:
+            data['peers'] = peers
+        if expire is not None:
+            data['expire'] = str(expire)
+        response = self._fetch_factory('POST', '_api/user/add-virtual', search_params=data)()
         return UserRecord(**response.json())
     
     def set_user(

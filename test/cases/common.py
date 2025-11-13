@@ -6,6 +6,8 @@ import pytest, os
 
 def get_conn(username, password = 'test'):
     return Client(f"http://localhost:{SERVER_PORT}", token=hash_credential(username, password))
+def get_conn_bytoken(token):
+    return Client(f"http://localhost:{SERVER_PORT}", token=token)
 
 def create_server_context():
     # clear environment variables

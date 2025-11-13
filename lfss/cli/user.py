@@ -19,9 +19,10 @@ async def _main():
     sp_add.add_argument('--max-storage', type=parse_storage_size, default="10G", help="Maximum storage size, e.g. 1G, 100M, 10K, default is 10G")
 
     sp_add_virtual = sp.add_parser('add-virtual', help="Add a virtual (hidden) user, username will be prefixed with '.v-'")
-    sp_add_virtual.add_argument('--tag', type=str, default=None, help="Tag for the virtual user, will be embedded in the username for easier identification")
+    sp_add_virtual.add_argument('--tag', type=str, default="", help="Tag for the virtual user, will be embedded in the username for easier identification")
     sp_add_virtual.add_argument('--peers', type=str, default="", help="Peer users and their access levels in the format 'READ:user1,user2;WRITE:user3'")
     sp_add_virtual.add_argument('--max-storage', type=parse_storage_size, default="1G", help="Maximum storage size for the virtual user, e.g. 1G, 100M, 10K, default is 1G")
+    sp_add_virtual.add_argument('--expire', type=str, default=None, help="Expire time in seconds or a string like '1d2h3m4s'. If not provided, the user will never expire.")
     
     sp_delete = sp.add_parser('delete')
     sp_delete.add_argument('username', type=str)
@@ -69,15 +70,16 @@ async def _main():
             max_storage=args.max_storage, 
             permission=args.permission
         )
-        print('User created, credential:', user.credential)
+        print('User created. | credential:', user.credential)
     
     if args.subparser_name == 'add-virtual':
         user =  await UserCtl.add_virtual(
             tag=args.tag,
             peers=args.peers,
-            max_storage=args.max_storage
+            max_storage=args.max_storage, 
+            expire=args.expire
         )
-        print('Virtual user created, username:', user.username, ', credential:', user.credential)
+        print('Virtual user created, username:', user.username, '| credential:', user.credential)
     
     if args.subparser_name == 'delete':
         user = await UserCtl.delete(args.username)

@@ -43,7 +43,7 @@ async def _main():
     sp_list = sp.add_parser('list', help="List specified users, or detailed info with -l")
     sp_list.add_argument("username", nargs='*', type=str, default=None)
     sp_list.add_argument("-l", "--long", action="store_true", help="Show detailed information, including credential and peer users")
-    sp_list.add_argument("--hidden", action="store_true", help="Include hidden users (virtual users) in the listing")
+    sp_list.add_argument("-a", '--all', action="store_true", dest="show_all", help="Show all users, include hidden users (virtual users) in the listing")
     
     sp_peer = sp.add_parser('set-peer', help="Set peer user relationship")
     sp_peer.add_argument('src_username', type=str)
@@ -107,7 +107,7 @@ async def _main():
         async with get_uconn() as uconn:
             term_width = os.get_terminal_size().columns
             async def __iter_users():
-                if args.hidden:
+                if args.show_all:
                     async for user in uconn.iter_all(): yield user
                     async for user in uconn.iter_hidden(): yield user
                 else:

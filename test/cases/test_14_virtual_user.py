@@ -27,6 +27,11 @@ def test_init_user_creation(server):
     v1_token = v1.credential
     v1_name = v1.username
 
+def test_u1_create(server):
+    u1 = get_conn('u1')
+    with pytest.raises(Exception, match="403"):
+        u1.add_virtual_user(tag="baduser", peers={AccessLevel.READ: ['u0']})
+
 def test_v1_put(server):
     v1 = get_conn_bytoken(v1_token)
 

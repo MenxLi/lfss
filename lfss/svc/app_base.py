@@ -11,7 +11,8 @@ from ..eng.log import get_logger
 from ..eng.datatype import UserRecord
 from ..eng.connection_pool import unique_cursor
 from ..eng.datatype import DECOY_USER
-from ..eng.database_conn import delayed_log_activity, UserConn
+from ..eng.database_conn import delayed_log_activity
+from ..eng.userman import UserCtl
 from ..eng.database import Database
 from ..eng.connection_pool import global_connection_init, global_connection_close
 from ..eng.utils import wait_for_debounce_tasks, now_stamp, hash_credential
@@ -125,19 +126,17 @@ async def get_current_user(
     First try to get the user from the bearer token, 
     if not found, try to get the user from the query parameter
     """
-    async with unique_cursor() as conn:
-        uconn = UserConn(conn)
-        if h_token:
-            user = await uconn.get_user_by_credential(h_token.credentials)
-            if not user: raise HTTPException(status_code=401, detail="Invalid token", headers={"WWW-Authenticate": "Basic" if ENABLE_WEBDAV else "Bearer"})
-        elif ENABLE_WEBDAV and b_token:
-            user = await uconn.get_user_by_credential(hash_credential(b_token.username, b_token.password))
-            if not user: raise HTTPException(status_code=401, detail="Invalid token", headers={"WWW-Authenticate": "Basic" if ENABLE_WEBDAV else "Bearer"})
-        elif q_token:
-            user = await uconn.get_user_by_credential(q_token)
-            if not user: raise HTTPException(status_code=401, detail="Invalid token", headers={"WWW-Authenticate": "Basic" if ENABLE_WEBDAV else "Bearer"})
-        else:
-            return DECOY_USER
+    if h_token:
+        user = await UserCtl.get_user_by_credential(h_token.credentials, check_expire=True)
+        if not user: raise HTTPException(status_code=401, detail="Invalid token", headers={"WWW-Authenticate": "Basic" if ENABLE_WEBDAV else "Bearer"})
+    elif ENABLE_WEBDAV and b_token:
+        user = await UserCtl.get_user_by_credential(hash_credential(b_token.username, b_token.password), check_expire=True)
+        if not user: raise HTTPException(status_code=401, detail="Invalid token", headers={"WWW-Authenticate": "Basic" if ENABLE_WEBDAV else "Bearer"})
+    elif q_token:
+        user = await UserCtl.get_user_by_credential(q_token, check_expire=True)
+        if not user: raise HTTPException(status_code=401, detail="Invalid token", headers={"WWW-Authenticate": "Basic" if ENABLE_WEBDAV else "Bearer"})
+    else:
+        return DECOY_USER
 
     if not user.id == 0:
         await delayed_log_activity(user.username)

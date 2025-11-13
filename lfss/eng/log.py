@@ -1,4 +1,4 @@
-from .config import LOG_DIR, DISABLE_LOGGING
+from .config import LOG_DIR, DISABLE_LOGGING, DEBUG_MODE
 import time, sqlite3, dataclasses
 from typing import TypeVar, Callable, Literal, Optional
 from concurrent.futures import ThreadPoolExecutor
@@ -130,7 +130,7 @@ def get_logger(
     name = 'default', 
     log_home = LOG_DIR, 
     level = 'DEBUG',
-    term_level = 'INFO',
+    term_level = 'INFO' if not DEBUG_MODE else 'DEBUG',
     file_handler_type: _fh_T = 'sqlite', 
     global_instance = True
     )->BaseLogger:

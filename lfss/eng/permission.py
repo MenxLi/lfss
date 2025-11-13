@@ -81,6 +81,10 @@ async def check_path_permission(path: str, user: UserRecord, cursor: Optional[ai
                 yield _cur
         else:
             yield cursor
+    
+    # reserved paths
+    if path.startswith('.') or path.startswith('/.'):
+        return AccessLevel.NONE
 
     # check if path user exists, may raise exception
     async with this_cur() as cur:

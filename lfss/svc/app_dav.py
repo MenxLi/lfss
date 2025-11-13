@@ -246,7 +246,7 @@ async def dav_propfind(request: Request, path: str, user: UserRecord = Depends(r
                     dir_el = await create_dir_xml_element(await user_path_record(u.username, c))
                     multistatus.append(dir_el)
             else:
-                async for u in uconn.all():
+                async for u in uconn.iter_all():
                     dir_el = await create_dir_xml_element(await user_path_record(u.username, c))
                     multistatus.append(dir_el)
 

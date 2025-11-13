@@ -378,7 +378,8 @@ class Client:
         path = _p(path)
         if path == '/':
             # handle root path separately
-            dirnames = [f'{self.whoami().username}/'] + [f'{p.username}/' for p in self.peers(AccessLevel.READ)]
+            my_username = self.whoami().username
+            dirnames = [f'{my_username}/'] if not my_username.startswith('.') else [] + [f'{p.username}/' for p in self.peers(AccessLevel.READ)]
             return PathContents(
                 dirs = [DirectoryRecord(url = d) for d in dirnames], 
                 files = []

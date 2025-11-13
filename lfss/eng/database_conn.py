@@ -3,7 +3,7 @@
 from typing import Optional, Literal, overload
 from collections.abc import AsyncIterable
 from abc import ABC
-import re
+import re, time
 
 import urllib.parse
 import asyncio
@@ -86,7 +86,8 @@ class UserConn(DBObjectBase):
     
     async def create_user(
         self, username: str, password: str, is_admin: bool = False, 
-        max_storage: int = 1073741824, permission: FileReadPermission = FileReadPermission.UNSET
+        max_storage: int = 1073741824, permission: FileReadPermission = FileReadPermission.UNSET, 
+        _validate = True
         ) -> int:
         def validate_username(username: str):
             assert_or(not set(username) & {'/', ':'}, InvalidInputError("Invalid username"))
@@ -94,7 +95,8 @@ class UserConn(DBObjectBase):
             assert_or(not username.startswith('.'), InvalidInputError("Error: reserved username"))
             assert_or(not (len(username) > 255), InvalidInputError("Username too long"))
             assert_or(urllib.parse.quote(username) == username, InvalidInputError("Invalid username, must be URL safe"))
-        validate_username(username)
+        if _validate:
+            validate_username(username)
         self.logger.debug(f"Creating user {username}")
         credential = hash_credential(username, password)
         assert_or(await self.get_user(username) is None, InvalidDataError(f"Duplicate username: {username}"))
@@ -102,6 +104,22 @@ class UserConn(DBObjectBase):
         self.logger.info(f"User {username} created")
         assert self.cur.lastrowid is not None
         return self.cur.lastrowid
+    
+    async def query_user_expire(self, user_id: int) -> Optional[int]:
+        """ Return the remaining seconds before user expire, None if no expire is set. """
+        await self.cur.execute("SELECT posix_stamp FROM uexpire WHERE user_id = ?", (user_id, ))
+        res = await self.cur.fetchone()
+        return res[0] - int(time.time()) if res is not None else None
+    
+    async def set_user_expire(self, user_id: int, expire_seconds: int):
+        """ Set the user to expire in `expire_seconds` seconds from now. """
+        expire_time = int(time.time()) + expire_seconds
+        await self.cur.execute("INSERT OR REPLACE INTO uexpire (user_id, posix_stamp) VALUES (?, ?)", (user_id, expire_time))
+        self.logger.info(f"Set user {user_id} to expire in {expire_seconds} seconds")
+    
+    async def clear_user_expire(self, user_id: int):
+        await self.cur.execute("DELETE FROM uexpire WHERE user_id = ?", (user_id, ))
+        self.logger.info(f"Cleared expire for user {user_id}")
     
     async def update_user(
         self, username: str, password: Optional[str] = None, is_admin: Optional[bool] = None, 
@@ -130,8 +148,13 @@ class UserConn(DBObjectBase):
             )
         self.logger.info(f"User {username} updated")
     
-    async def all(self):
-        await self.cur.execute("SELECT * FROM user")
+    async def iter_all(self) -> AsyncIterable[UserRecord]:
+        await self.cur.execute("SELECT * FROM user where username NOT LIKE '.%'")
+        for record in await self.cur.fetchall():
+            yield self.parse_record(record)
+    
+    async def iter_hidden(self) -> AsyncIterable[UserRecord]:
+        await self.cur.execute("SELECT * FROM user where username LIKE '.%'")
         for record in await self.cur.fetchall():
             yield self.parse_record(record)
     
@@ -139,8 +162,11 @@ class UserConn(DBObjectBase):
         await self.cur.execute("UPDATE user SET last_active = CURRENT_TIMESTAMP WHERE username = ?", (username, ))
     
     async def delete_user(self, username: str):
+        """ Note: this will not delete files owned by the user, please use higher level API to delete user and files together. """
         await self.cur.execute("DELETE FROM upeer WHERE src_user_id = (SELECT id FROM user WHERE username = ?) OR dst_user_id = (SELECT id FROM user WHERE username = ?)", (username, username))
         await self.cur.execute("DELETE FROM user WHERE username = ?", (username, ))
+        await self.cur.execute("DELETE FROM usize WHERE user_id = (SELECT id FROM user WHERE username = ?)", (username, ))
+        await self.cur.execute("DELETE FROM uexpire WHERE user_id = (SELECT id FROM user WHERE username = ?)", (username, ))
         self.logger.info(f"Delete user {username}")
     
     async def set_peer_level(self, src_user: int | str, dst_user: int | str, level: AccessLevel):
@@ -185,7 +211,7 @@ class UserConn(DBObjectBase):
         return AccessLevel(res[0])
     
     async def list_all_users(self) -> list[UserRecord]:
-        return [u async for u in self.all()]
+        return [u async for u in self.iter_all()]
     
     async def list_admin_users(self) -> list[UserRecord]:
         await self.cur.execute("SELECT * FROM user WHERE is_admin = 1")

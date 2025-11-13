@@ -133,6 +133,47 @@ def now_stamp() -> float:
 def stamp_to_str(stamp: float) -> str:
     return datetime.datetime.fromtimestamp(stamp).strftime('%Y-%m-%d %H:%M:%S')
 
+def parse_sec_time(s: str) -> int:
+    """ Parse a time duration string to seconds, i.e. '1h30m' -> 5400 seconds """
+    total_seconds = 0
+    num_str = ''
+    for c in s:
+        if c.isdigit():
+            num_str += c
+        else:
+            if not num_str:
+                raise ValueError(f"Invalid time duration string: {s}")
+            num = int(num_str)
+            match c.lower():
+                case 's': total_seconds += num
+                case 'm': total_seconds += num * 60
+                case 'h': total_seconds += num * 3600
+                case 'd': total_seconds += num * 86400
+                case 'w': total_seconds += num * 604800
+                case 'y': total_seconds += num * 31536000
+                case _: raise ValueError(f"Invalid time duration string: {s}")
+            num_str = ''
+    if num_str:
+        raise ValueError(f"Invalid time duration string: {s}")
+    return total_seconds
+def fmt_sec_time(seconds: int) -> str:
+    """ Format seconds to a time duration string, i.e. 5400 -> '1h30m' """
+    parts = []
+    units = [
+        ('y', 31536000),
+        ('w', 604800),
+        ('d', 86400),
+        ('h', 3600),
+        ('m', 60),
+        ('s', 1)
+    ]
+    for suffix, unit_seconds in units:
+        if seconds >= unit_seconds:
+            num = seconds // unit_seconds
+            parts.append(f"{num}{suffix}")
+            seconds %= unit_seconds
+    return ''.join(parts) if parts else '0s'
+
 def parse_storage_size(s: str) -> int:
     """ Parse the file size string to bytes """
     if s[-1].isdigit():

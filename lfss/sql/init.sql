@@ -41,6 +41,12 @@ CREATE TABLE IF NOT EXISTS main.upeer (
     FOREIGN KEY(dst_user_id) REFERENCES user(id)
 ); 
 
+CREATE TABLE IF NOT EXISTS main.uexpire (
+    user_id INTEGER PRIMARY KEY,
+    posix_stamp INTEGER NOT NULL,
+    FOREIGN KEY(user_id) REFERENCES user(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_fmeta_url ON fmeta(url);
 
 CREATE INDEX IF NOT EXISTS idx_user_username ON user(username);

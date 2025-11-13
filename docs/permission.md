@@ -7,7 +7,7 @@ There are different access levels for different users, which determine what oper
 - <span class="perm">admin/all</span>: all permissions including `GET`/`PUT`/`POST`/`DELETE` and listing directories.
 - <span class="perm">write</span>: same as admin except for [directory configuration](./lfssdir.md) file.
 - <span class="perm">read</span>: only `GET` permission and listing directories.
-- <span class="perm">none</span>: no permissions.
+- <span class="perm">none</span>: no permissions as above, but may have `GET` permission on files via direct link, depending on the file and path-owner's **permission** settings (refer to the [section below](#file-access-with-get-permission)).
 
 :::info
 **directory** path ends with `/` and **file** does not end with `/`.

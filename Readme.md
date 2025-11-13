@@ -35,8 +35,4 @@ The authentication can be acheived through one of the following methods:
 
 You can refer to `frontend` as an application example, `lfss/api/connector.py` for more APIs. 
 
-By default, the service exposes all files to the public for `GET` requests, 
-but file-listing is restricted to the user's own files.  
-Please refer to [docs/Permission.md](./docs/permission.md) for more details on the permission system. 
-
-More can be found in the [docs](./docs) directory.
+More information can be found in the [documentation](https://menxli.github.io/lfss/).

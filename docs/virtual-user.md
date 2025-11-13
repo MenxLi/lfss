@@ -11,7 +11,10 @@ This makes virtual users essentially "access keys" to some users' paths.
 
 The virtual user always have a name starting with `.v-`, 
 a typical virtual user name looks like `.v-{tag}-{id}`. 
-The tag is used to identify the purpose of the virtual user, and the id is a unique random string.
+The tag is used to identify the purpose of the virtual user, and the id is a unique random string. 
+
+The virtual user is hidden from the user list by default. 
+To list virtual users, you can use the `-a/--all` flag with the `lfss-user list` command.
 
 To create a virtual user, you can use either the CLI command or the admin API. For example:
 

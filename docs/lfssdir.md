@@ -1,6 +1,8 @@
 
 # Configure Single Directory
 
+> Added in v0.14.0.
+
 You can configure the behavior of a single directory by placing a special file named `.lfssdir.json` in it.
 
 The file should contain a JSON object with the following optional fields:

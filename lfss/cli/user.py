@@ -11,7 +11,7 @@ from ..eng.userman import UserCtl, parse_access_level
 async def _main():
     parser = argparse.ArgumentParser()
     sp = parser.add_subparsers(dest='subparser_name', required=True)
-    sp_add = sp.add_parser('add')
+    sp_add = sp.add_parser('add', help="Add a new user")
     sp_add.add_argument('username', type=str)
     sp_add.add_argument('password', nargs='?', type=str, default=None)
     sp_add.add_argument('--admin', action='store_true', help='Set user as admin')
@@ -40,17 +40,17 @@ async def _main():
     sp_set.add_argument('--permission', type=parse_permission, default=None)
     sp_set.add_argument('--max-storage', type=parse_storage_size, default=None)
 
-    sp_list = sp.add_parser('list')
+    sp_list = sp.add_parser('list', help="List specified users, or detailed info with -l")
     sp_list.add_argument("username", nargs='*', type=str, default=None)
     sp_list.add_argument("-l", "--long", action="store_true", help="Show detailed information, including credential and peer users")
     sp_list.add_argument("--hidden", action="store_true", help="Include hidden users (virtual users) in the listing")
     
-    sp_peer = sp.add_parser('set-peer')
+    sp_peer = sp.add_parser('set-peer', help="Set peer user relationship")
     sp_peer.add_argument('src_username', type=str)
     sp_peer.add_argument('dst_username', type=str)
     sp_peer.add_argument('--level', type=parse_access_level, default=AccessLevel.READ, help="Access level")
 
-    sp_expire = sp.add_parser('set-expire')
+    sp_expire = sp.add_parser('set-expire', help="Set or clear user expire time")
     sp_expire.add_argument('username', type=str)
     sp_expire.add_argument('expire_time', type=str, nargs='?', default=None, help="Expire time in seconds or a string like '1d2h3m4s'. If not provided, the user will never expire.")
     

@@ -9,12 +9,24 @@ There are different access levels for different users, which determine what oper
 - <span class="perm">read</span>: only `GET` permission and listing directories.
 - <span class="perm">none</span>: no permissions.
 
-## User Roles
-There are two user roles in the system: Admin and Normal User ("users" are like "buckets" to some extent).  
-A user have <span class="perm">all</span> permissions of the files and directories under its path (starting with `/<user>/`). 
-Admins have <span class="perm">admin</span> permissions of all files and directories.
+:::info
+**directory** path ends with `/` and **file** does not end with `/`.
+:::
 
-> **directory** path ends with `/` and **file** does not end with `/`.
+## User Roles
+There are three user roles in the system: Admin, Normal User, and Virtual User 
+- A normal user have <span class="perm">all</span> permissions of the files and directories under its path (starting with `/<user>/`). 
+- A virtual user doesn't have it's own path.
+- Admins have <span class="perm">admin</span> permissions of all files and directories.
+
+:::tip **Users are like "buckets" or "access keys" to some extent**  
+Normal users are like "buckets" that own files and directories.  
+Virtual users are like "access keys" that have expiry time and limited access to some users' paths.
+:::
+
+**Below sections only discuss normal users and admins. For virtual users, please refer to the [Virtual User](./virtual-user.md) document.**
+
+
 
 ### Ownership
 There are two types of ownership for files (terms used in permission checks):

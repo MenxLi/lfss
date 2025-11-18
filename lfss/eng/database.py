@@ -103,6 +103,16 @@ class Database:
             
             # check mime type
             if mime_type is None:
+                def custom_mime_checker(url: str) -> Optional[str]:
+                    last_component = url.split('/')[-1]
+                    if not '.' in last_component:
+                        return None
+                    ext = last_component.split('.')[-1].lower()
+                    if ext == 'md':
+                        return 'text/markdown'
+                    return None
+                mime_type = custom_mime_checker(url)
+            if mime_type is None:
                 mime_type, _ = mimetypes.guess_type(url)
             if mime_type is None:
                 await f.seek(0)

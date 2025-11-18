@@ -39,6 +39,7 @@ lfss-vacuum = "lfss.cli.vacuum:main"
 lfss-balance = "lfss.cli.balance:main"
 lfss-log = "lfss.cli.log:main"
 lfss-cli = "lfss.cli.cli:main"
+lfss-systemd = "lfss.cli.systemd:main"
 lfss = "lfss.cli.cli:main"
 
 [build-system]

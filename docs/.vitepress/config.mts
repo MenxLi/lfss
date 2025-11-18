@@ -18,6 +18,7 @@ export default defineConfig({
         text: 'Quick Start',
         items: [
           { text: 'Server Setup', link: '/server-intro' },
+          { text: 'Start on Boot', link: '/start-on-boot' },
           { text: 'Client Intro', link: '/client-intro' }, 
         ]
       }, 

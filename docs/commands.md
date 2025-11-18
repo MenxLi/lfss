@@ -19,6 +19,7 @@ lfss-serve          # Start the LFSS server
 lfss-user           # Manage users
 lfss-log            # View server logs
 lfss-vacuum         # Vacuum the database and shrink log files
+lfss-systemd        # Generate systemd unit file for LFSS server
 ```
 
 All these commands have their own `--help` message, you can check them for more details.

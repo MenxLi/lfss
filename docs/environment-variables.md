@@ -1,5 +1,5 @@
 
-# Enviroment variables
+# Environment Variables
 
 **Server**
 - `LFSS_DATA`: The directory to store the data. Default is `.storage_data`.

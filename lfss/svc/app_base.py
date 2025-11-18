@@ -9,7 +9,6 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, HTTPBasic
 
 from ..eng.log import get_logger
 from ..eng.datatype import UserRecord
-from ..eng.connection_pool import unique_cursor
 from ..eng.datatype import DECOY_USER
 from ..eng.database_conn import delayed_log_activity
 from ..eng.userman import UserCtl
@@ -21,7 +20,7 @@ from ..eng.config import DEBUG_MODE
 from .request_log import RequestDB
 
 ENABLE_WEBDAV = os.environ.get("LFSS_WEBDAV", "0") == "1"
-logger = get_logger("server", term_level="DEBUG")
+logger = get_logger("server")
 logger_failed_request = get_logger("failed_requests", term_level="INFO")
 db = Database()
 req_conn = RequestDB()
@@ -64,8 +63,8 @@ def handle_exception(fn):
             raise 
     return wrapper
 
-env_origins = os.environ.get("LFSS_ORIGINS", "*")
-logger.debug(f"LFSS_ORIGINS: {env_origins}")
+env_origins = os.environ.get("LFSS_ORIGIN", "*")
+logger.debug(f"LFSS_ORIGIN: {env_origins}")
 origins = [x.strip() for x in env_origins.split(",") if x.strip()]
 app = FastAPI(docs_url=None, redoc_url=None, lifespan=lifespan)
 app.add_middleware(

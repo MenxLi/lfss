@@ -1,5 +1,7 @@
 from pathlib import Path
 import argparse, typing, sys
+
+from lfss import __version__
 from lfss.api import Client, upload_directory, upload_file, download_file, download_directory
 from lfss.eng.datatype import (
     FileReadPermission, AccessLevel, 
@@ -75,7 +77,11 @@ def print_path_list(
         print_ln(f)
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description="Client-side command line interface, set LFSS_ENDPOINT and LFSS_TOKEN environment variables for authentication.")
+    parser = argparse.ArgumentParser(
+        description = f"Client-side command line interface (v{__version__}). \n"
+        "Set LFSS_ENDPOINT and LFSS_TOKEN environment variables for authentication.", 
+        formatter_class=argparse.RawTextHelpFormatter
+        )
 
     sp = parser.add_subparsers(dest="command", required=True)
 
@@ -166,6 +172,10 @@ def parse_arguments():
     sp_show = sp.add_parser("concatenate", help="Concatenate and print files", aliases=["cat"])
     sp_show.add_argument("path", help="Path to the text files", type=str, nargs="+")
     sp_show.add_argument("-e", "--encoding", type=str, default="utf-8", help="Text file encoding, default utf-8")
+
+    # check server version
+    sp_version = sp.add_parser("version", help="Show server version")
+
     return parser.parse_args()
 
 def main():
@@ -360,6 +370,12 @@ def main():
                         print(chunk, end="")
                 except (FileNotFoundError, ValueError) as e:
                     print(f"\033[31m{e}\033[0m", file=sys.stderr)
+    
+    elif args.command == "version":
+        with catch_request_error():
+            server_version = connector.version()
+            print(f"Client version: {__version__}")
+            print(f"Server version: {server_version}")
     
     else:
         raise NotImplementedError(f"Command {args.command} not implemented.")

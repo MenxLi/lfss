@@ -158,7 +158,7 @@ class Client:
         To get the client version, use `lfss.__version__`.
         """
         response = self._fetch_factory('GET', '_api/version')()
-        return response.text.strip()
+        return response.json()
     
     def exists(self, path: str) -> bool:
         """Checks if a file/directory exists."""

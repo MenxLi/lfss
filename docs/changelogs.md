@@ -1,4 +1,11 @@
 ## 0.16
+### 0.16.1
+- Add systemd file generation tool.
+- Mime-type detection for markdown files.
+- Add version cli to show client and server version.
+- Fix py api version method return type.
+- Fix origin environment variable name. 
+
 ### 0.16.0
 - Add virtual user support.
 - Remove peer relationships if set to none.

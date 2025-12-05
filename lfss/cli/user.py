@@ -1,4 +1,4 @@
-import argparse, asyncio, os
+import argparse, asyncio, os, fnmatch
 from contextlib import asynccontextmanager
 from .cli import parse_permission, FileReadPermission
 from ..eng.utils import parse_storage_size, fmt_storage_size, fmt_sec_time
@@ -41,7 +41,7 @@ async def _main():
     sp_set.add_argument('--max-storage', type=parse_storage_size, default=None)
 
     sp_list = sp.add_parser('list', help="List specified users, or detailed info with -l")
-    sp_list.add_argument("username", nargs='*', type=str, default=None)
+    sp_list.add_argument("username", nargs='*', type=str, default=["*"], help = "Username patterns to filter, supports wildcards (*, ?). If not provided, lists all users.")
     sp_list.add_argument("-l", "--long", action="store_true", help="Show detailed information, including credential and peer users")
     sp_list.add_argument("-a", '--all', action="store_true", dest="show_all", help="Show all users, include hidden users (virtual users) in the listing")
     
@@ -104,6 +104,12 @@ async def _main():
         print(f"User [{args.username}] expire time set.")
     
     if args.subparser_name == 'list':
+        def _match_username(username: str) -> bool:
+            for pattern in args.username:
+                if fnmatch.fnmatch(username, pattern):
+                    return True
+            return False
+
         async with get_uconn() as uconn:
             term_width = os.get_terminal_size().columns
             async def __iter_users():
@@ -113,7 +119,7 @@ async def _main():
                 else:
                     async for user in uconn.iter_all(): yield user
             async for user in __iter_users():
-                if args.username and not user.username in args.username:
+                if not _match_username(user.username):
                     continue
                 print("\033[90m-\033[0m" * term_width)
                 print(user)

@@ -127,7 +127,8 @@ class UserCtl:
             return base.replace('-', random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'))
 
         if tag:
-            assert_or(tag.isalnum(), lambda: InvalidInputError("Tag must be alphanumeric"))
+            __allowed_chars = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
+            assert_or(all(c in __allowed_chars for c in tag), lambda: InvalidInputError("Tag must be alphanumeric or underscore"))
             username = f"{UserCtl.virtual_prefix}{tag}-{rnd_part(8)}"
         else:
             username = f"{UserCtl.virtual_prefix}{rnd_part(12)}"

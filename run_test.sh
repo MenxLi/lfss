@@ -1,1 +1,0 @@
-pytest test/cases/test_*.py --html=test/report/index.html --pdb

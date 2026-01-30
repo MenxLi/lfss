@@ -58,6 +58,109 @@ async function fmtFailedResponse(res){
     return txt;
 }
 
+/**
+ * A wrapper class for fetch API to handle common tasks like authentication and error handling.
+ */
+export class Fetcher {
+    /**
+     * @param {Config} config 
+     */
+    constructor(config){
+        this.config = config;
+    }
+
+    /**
+     * Internal method to build the URL with search parameters
+     * @param {string} path 
+     * @param {Object} [params]
+     * @returns {string}
+     */
+    _buildUrl(path, params){
+        if (path.startsWith('/')){ path = path.slice(1); }
+        const base = this.config.endpoint.endsWith('/') ? this.config.endpoint : this.config.endpoint + '/';
+        const url = new URL(base + path);
+        if (params){
+             for (const [key, value] of Object.entries(params)){
+                 if (Array.isArray(value)){
+                     value.forEach(v => url.searchParams.append(key, v));
+                 } else if (value !== undefined && value !== null) {
+                    url.searchParams.append(key, value);
+                 }
+             }
+        }
+        return url.toString();
+    }
+
+    /**
+     * Generic request method
+     * @param {string} method 
+     * @param {string} path 
+     * @param {Object} [options]
+     * @param {Object} [options.params] - URL search parameters
+     * @param {Object} [options.headers] - Additional headers
+     * @param {BodyInit} [options.body] - Request body
+     * @returns {Promise<Response>}
+     */
+    async request(method, path, { params, headers, body } = {}){
+        const url = this._buildUrl(path, params);
+        return await fetch(url, {
+            method,
+            headers: {
+                "Authorization": 'Bearer ' + this.config.token,
+                ...headers
+            }, 
+            body
+        });
+    }
+
+    /**
+     * @param {string} path 
+     * @param {Object} [options] 
+     * @returns {Promise<Response>}
+     */
+    async get(path, options){
+        return this.request('GET', path, options);
+    }
+
+    /**
+     * @param {string} path 
+     * @param {Object} [options] 
+     * @returns {Promise<Response>}
+     */
+    async head(path, options){
+        return this.request('HEAD', path, options);
+    }
+
+    /**
+     * @param {string} path 
+     * @param {BodyInit} body 
+     * @param {Object} [options] 
+     * @returns {Promise<Response>}
+     */
+    async post(path, body, options){
+        return this.request('POST', path, { body, ...options });
+    }
+
+    /**
+     * @param {string} path 
+     * @param {BodyInit} body 
+     * @param {Object} [options] 
+     * @returns {Promise<Response>}
+     */
+    async put(path, body, options){
+        return this.request('PUT', path, { body, ...options });
+    }
+
+    /**
+     * @param {string} path 
+     * @param {Object} [options] 
+     * @returns {Promise<Response>}
+     */
+    async delete(path, options){
+        return this.request('DELETE', path, options);
+    }
+}
+
 export default class Connector {
 
     constructor(){
@@ -72,16 +175,11 @@ export default class Connector {
             endpoint: defaultEndpoint,
             token: defaultToken
         }
+        this.fetcher = new Fetcher(this.config);
     }
 
     async exists(path){
-        if (path.startsWith('/')){ path = path.slice(1); }
-        const res = await fetch(this.config.endpoint + '/' + path, {
-            method: 'HEAD',
-            headers: {
-             "Authorization": 'Bearer ' + this.config.token
-            },
-        });
+        const res = await this.fetcher.head(path);
         if (res.ok){
             return true;
         } else if (res.status == 404){
@@ -92,13 +190,7 @@ export default class Connector {
     }
 
     async getText(path){
-        if (path.startsWith('/')){ path = path.slice(1); }
-        const res = await fetch(this.config.endpoint + '/' + path, {
-            method: 'GET',
-            headers: {
-             "Authorization": 'Bearer ' + this.config.token
-            },
-        });
+        const res = await this.fetcher.get(path);
         if (res.status != 200){
             throw new Error(`Failed to get file, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
         }
@@ -136,19 +228,13 @@ export default class Connector {
         conflict = 'abort',
         permission = 0
     } = {}){
-        if (path.startsWith('/')){ path = path.slice(1); }
         const fileBytes = await file.arrayBuffer();
-        const dst = new URL(this.config.endpoint + '/' + path);
-        dst.searchParams.append('conflict', conflict);
-        dst.searchParams.append('permission', permission);
-        const res = await fetch(dst.toString(), {
-            method: 'PUT',
+        const res = await this.fetcher.put(path, fileBytes, {
+            params: { conflict, permission },
             headers: {
-                'Authorization': 'Bearer ' + this.config.token, 
                 'Content-Type': 'application/octet-stream', 
                 'Content-Length': fileBytes.byteLength
-            },
-            body: fileBytes
+            }
         });
         if (res.status != 200 && res.status != 201){
             throw new Error(`Failed to upload file, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
@@ -169,21 +255,11 @@ export default class Connector {
         conflict = 'abort',
         permission = 0
     } = {}){
-        if (path.startsWith('/')){ path = path.slice(1); }
-        const dst = new URL(this.config.endpoint + '/' + path);
-        dst.searchParams.append('conflict', conflict);
-        dst.searchParams.append('permission', permission);
         // post as multipart form data
         const formData = new FormData();
         formData.append('file', file);
-        const res = await fetch(dst.toString(), {
-            method: 'POST',
-            // don't include the content type, let the browser handle it
-            // https://muffinman.io/blog/uploading-files-using-fetch-multipart-form-data/
-            headers: {
-                'Authorization': 'Bearer ' + this.config.token, 
-            },
-            body: formData
+        const res = await this.fetcher.post(path, formData, {
+            params: { conflict, permission }
         });
                 
         if (res.status != 200 && res.status != 201){
@@ -206,17 +282,11 @@ export default class Connector {
         permission = 0
     } = {}){
         if (!path.endsWith('.json')){ throw new Error('Upload object must end with .json'); }
-        if (path.startsWith('/')){ path = path.slice(1); }
-        const dst = new URL(this.config.endpoint + '/' + path);
-        dst.searchParams.append('conflict', conflict);
-        dst.searchParams.append('permission', permission);
-        const res = await fetch(dst.toString(), {
-            method: 'PUT',
+        const res = await this.fetcher.put(path, JSON.stringify(data), {
+            params: { conflict, permission },
             headers: {
-                'Authorization': 'Bearer ' + this.config.token,
                 'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
+            }
         });
         if (res.status != 200 && res.status != 201){
             throw new Error(`Failed to upload object, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
@@ -229,13 +299,7 @@ export default class Connector {
      * @returns {Promise<Object>} - return the json object
     */
     async getJson(path){
-        if (path.startsWith('/')){ path = path.slice(1); }
-        const res = await fetch(this.config.endpoint + '/' + path, {
-            method: 'GET',
-            headers: {
-             "Authorization": 'Bearer ' + this.config.token
-            },
-        });
+        const res = await this.fetcher.get(path);
         if (res.status != 200){
             throw new Error(`Failed to get object, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
         }
@@ -251,15 +315,10 @@ export default class Connector {
     async getMultipleText(paths, {
         skipContent = false
     } = {}){
-        const url = new URL(this.config.endpoint + '/_api/get-multiple');
-        url.searchParams.append('skip_content', skipContent);
-        for (const path of paths){
-            url.searchParams.append('path', path);
-        }
-        const res = await fetch(url.toString(), {
-            method: 'GET',
-            headers: {
-                "Authorization": 'Bearer ' + this.config.token,
+        const res = await this.fetcher.get('_api/get-multiple', {
+            params: {
+                skip_content: skipContent,
+                path: paths
             }
         });
         if (res.status != 200 && res.status != 206){
@@ -269,13 +328,7 @@ export default class Connector {
     }
 
     async delete(path){
-        if (path.startsWith('/')){ path = path.slice(1); }
-        const res = await fetch(this.config.endpoint + '/' + path, {
-            method: 'DELETE',
-            headers: {
-                'Authorization': 'Bearer ' + this.config.token
-            }, 
-        });
+        const res = await this.fetcher.delete(path);
         if (res.status == 200) return;
         throw new Error(`Failed to delete file, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
     }
@@ -285,12 +338,8 @@ export default class Connector {
      * @returns {Promise<FileRecord | DirectoryRecord | null>} - the promise of the request
      */
     async getMetadata(path){
-        if (path.startsWith('/')){ path = path.slice(1); }
-        const res = await fetch(this.config.endpoint + '/_api/meta?path=' + path, {
-            method: 'GET',
-            headers: {
-                'Authorization': 'Bearer ' + this.config.token
-            },
+        const res = await this.fetcher.get('_api/meta', {
+            params: { path }
         });
         if (res.status == 404){
             return null;
@@ -313,14 +362,8 @@ export default class Connector {
         flat = false
     } = {}){
         path = this._sanitizeDirPath(path);
-        const dst = new URL(this.config.endpoint + '/_api/count-files');
-        dst.searchParams.append('path', path);
-        dst.searchParams.append('flat', flat);
-        const res = await fetch(dst.toString(), {
-            method: 'GET',
-            headers: {
-                'Authorization': 'Bearer ' + this.config.token
-            },
+        const res = await this.fetcher.get('_api/count-files', {
+            params: { path, flat }
         });
         if (res.status != 200){
             throw new Error(`Failed to count files, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
@@ -348,18 +391,15 @@ export default class Connector {
         flat = false
     } = {}){
         path = this._sanitizeDirPath(path);
-        const dst = new URL(this.config.endpoint + '/_api/list-files');
-        dst.searchParams.append('path', path);
-        dst.searchParams.append('offset', offset);
-        dst.searchParams.append('limit', limit);
-        dst.searchParams.append('order_by', orderBy);
-        dst.searchParams.append('order_desc', orderDesc);
-        dst.searchParams.append('flat', flat);
-        const res = await fetch(dst.toString(), {
-            method: 'GET',
-            headers: {
-                'Authorization': 'Bearer ' + this.config.token
-            },
+        const res = await this.fetcher.get('_api/list-files', {
+            params: {
+                path,
+                offset,
+                limit,
+                order_by: orderBy,
+                order_desc: orderDesc,
+                flat
+            }
         });
         if (res.status != 200){
             throw new Error(`Failed to list files, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
@@ -373,13 +413,8 @@ export default class Connector {
      **/
     async countDirs(path){
         path = this._sanitizeDirPath(path);
-        const dst = new URL(this.config.endpoint + '/_api/count-dirs');
-        dst.searchParams.append('path', path);
-        const res = await fetch(dst.toString(), {
-            method: 'GET',
-            headers: {
-                'Authorization': 'Bearer ' + this.config.token
-            },
+        const res = await this.fetcher.get('_api/count-dirs', {
+            params: { path }
         });
         if (res.status != 200){
             throw new Error(`Failed to count directories, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
@@ -407,18 +442,15 @@ export default class Connector {
         skim = true
     } = {}){
         path = this._sanitizeDirPath(path);
-        const dst = new URL(this.config.endpoint + '/_api/list-dirs');
-        dst.searchParams.append('path', path);
-        dst.searchParams.append('offset', offset);
-        dst.searchParams.append('limit', limit);
-        dst.searchParams.append('order_by', orderBy);
-        dst.searchParams.append('order_desc', orderDesc);
-        dst.searchParams.append('skim', skim);
-        const res = await fetch(dst.toString(), {
-            method: 'GET',
-            headers: {
-                'Authorization': 'Bearer ' + this.config.token
-            },
+        const res = await this.fetcher.get('_api/list-dirs', {
+            params: {
+                path,
+                offset,
+                limit,
+                order_by: orderBy,
+                order_desc: orderDesc,
+                skim
+            }
         });
         if (res.status != 200){
             throw new Error(`Failed to list directories, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
@@ -431,12 +463,7 @@ export default class Connector {
      * @returns {Promise<UserRecord>} - the promise of the request
      */
     async whoami(){
-        const res = await fetch(this.config.endpoint + '/_api/user/whoami', {
-            method: 'GET',
-            headers: {
-                'Authorization': 'Bearer ' + this.config.token
-            },
-        });
+        const res = await this.fetcher.get('_api/user/whoami');
         if (res.status != 200){
             throw new Error('Failed to get user info, status code: ' + res.status);
         }
@@ -451,14 +478,8 @@ export default class Connector {
      * @returns {Promise<UserRecord[]>} - the promise of the request
      */
     async listPeers({ level = 1, incoming = false } = {}){
-        const dst = new URL(this.config.endpoint + '/_api/user/list-peers');
-        dst.searchParams.append('level', level);
-        dst.searchParams.append('incoming', incoming);
-        const res = await fetch(dst.toString(), {
-            method: 'GET',
-            headers: {
-                'Authorization': 'Bearer ' + this.config.token
-            },
+        const res = await this.fetcher.get('_api/user/list-peers', {
+            params: { level, incoming }
         });
         if (res.status != 200){
             throw new Error('Failed to list peer users, status code: ' + res.status);
@@ -471,15 +492,11 @@ export default class Connector {
      * @param {number} permission - please refer to the permMap
      */
     async setFilePermission(path, permission){
-        if (path.startsWith('/')){ path = path.slice(1); }
-        const dst = new URL(this.config.endpoint + '/_api/set-perm');
-        dst.searchParams.append('path', path);
-        dst.searchParams.append('perm', permission);
-        const res = await fetch(dst.toString(), {
-            method: 'POST',
-            headers: {
-                'Authorization': 'Bearer ' + this.config.token
-            },
+        const res = await this.fetcher.post('_api/set-perm', null, {
+            params: {
+                path,
+                perm: permission
+            }
         });
         if (res.status != 200){
             throw new Error(`Failed to set permission, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
@@ -491,17 +508,14 @@ export default class Connector {
      * @param {string} newPath - new file path(url)
      */
     async move(path, newPath){
-        if (path.startsWith('/')){ path = path.slice(1); }
-        if (newPath.startsWith('/')){ newPath = newPath.slice(1); }
-        const dst = new URL(this.config.endpoint + '/_api/move');
-        dst.searchParams.append('src', path);
-        dst.searchParams.append('dst', newPath);
-        const res = await fetch(dst.toString(), {
-            method: 'POST',
-            headers: {
-                'Authorization': 'Bearer ' + this.config.token, 
-                'Content-Type': 'application/www-form-urlencoded'
+        const res = await this.fetcher.post('_api/move', null, {
+            params: {
+                src: path,
+                dst: newPath
             },
+            headers: {
+                'Content-Type': 'application/www-form-urlencoded'
+            }
         });
         if (res.status != 200){
             throw new Error(`Failed to move file, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
@@ -513,17 +527,14 @@ export default class Connector {
      * @param {string} dstPath - new file path(url)
      */
     async copy(srcPath, dstPath){
-        if (srcPath.startsWith('/')){ srcPath = srcPath.slice(1); }
-        if (dstPath.startsWith('/')){ dstPath = dstPath.slice(1); }
-        const dst = new URL(this.config.endpoint + '/_api/copy');
-        dst.searchParams.append('src', srcPath);
-        dst.searchParams.append('dst', dstPath);
-        const res = await fetch(dst.toString(), {
-            method: 'POST',
-            headers: {
-                'Authorization': 'Bearer ' + this.config.token,
-                'Content-Type': 'application/www-form-urlencoded'
+        const res = await this.fetcher.post('_api/copy', null, {
+            params: {
+                src: srcPath,
+                dst: dstPath
             },
+            headers: {
+                'Content-Type': 'application/www-form-urlencoded'
+            }
         });
         if (!(res.status == 200 || res.status == 201)){
             throw new Error(`Failed to copy file, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);

@@ -77,6 +77,14 @@ export default class Connector {
         };
         this.fetcher = new Fetcher(this.config);
     }
+    async version() {
+        const res = await this.fetcher.get('_api/version');
+        if (res.status != 200) {
+            throw new Error('Failed to get version, status code: ' + res.status);
+        }
+        const data = await res.json();
+        return data;
+    }
     async exists(path) {
         const res = await this.fetcher.head(path);
         if (res.ok) {

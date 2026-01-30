@@ -4,30 +4,32 @@
  * @property {string} endpoint - the endpoint of the API
  * @property {string} token - the token to authenticate the user
  * 
- * Partially complete...
  * @typedef {Object} UserRecord
  * @property {number} id - the id of the user
  * @property {string} username - the username of the user
+ * @property {string} credential - the credential of the user (will be anonymized)
  * @property {boolean} is_admin - whether the user is an admin
  * @property {string} create_time - the time the user was created
  * @property {number} max_storage - the maximum storage the user can use
  * @property {number} permission - the default read permission of the files owned by the user
  * 
- * Partially complete...
  * @typedef {Object} FileRecord
  * @property {string} url - the url of the file
  * @property {number} owner_id - the id of the owner of the file
+ * @property {string} file_id - the unique id of the file
  * @property {number} file_size - the size of the file, in bytes
  * @property {string} create_time - the time the file was created
  * @property {string} access_time - the time the file was last accessed
+ * @property {number} permission - the read permission of the file
+ * @property {number} external - whether the file is stored externally (server internal use only)
  * @property {string} mime_type - the mime type of the file
  * 
- * Partially complete...
  * @typedef {Object} DirectoryRecord
  * @property {string} url - the url of the directory
  * @property {number} size - the size of the directory, in bytes
- * @property {string} create_time - the time the directory was created
- * @property {string} access_time - the time the directory was last accessed
+ * @property {string} create_time - the time the directory was created (the time its first file was created)
+ * @property {string} update_time - the time the directory was last updated (the last time one of its files was created)
+ * @property {string} access_time - the time the directory was last accessed (the last time one of its files was accessed)
  * @property {number} n_files - the number of total files in the directory, including subdirectories
  * 
  * @typedef {Object} PathListResponse

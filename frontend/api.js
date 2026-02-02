@@ -71,11 +71,17 @@ export default class Connector {
         const defaultToken = searchParams.get('lfss-token') || '';
         const origin = window.location.origin;
         const defaultEndpoint = searchParams.get('lfss-endpoint') || (origin ? origin : 'http://localhost:8000');
-        this.config = {
+        const config = {
             endpoint: defaultEndpoint,
             token: defaultToken
         };
-        this.fetcher = new Fetcher(this.config);
+        this.fetcher = new Fetcher(config);
+    }
+    get config() {
+        return this.fetcher.config;
+    }
+    set config(config) {
+        this.fetcher = new Fetcher(config);
     }
     async version() {
         const res = await this.fetcher.get('_api/version');

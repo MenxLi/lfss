@@ -1,12 +1,13 @@
 from typing import Optional, Literal, Annotated
 from collections import OrderedDict
+import uuid
 
 from fastapi import Depends, Request, Response, UploadFile, Query
 from fastapi.responses import StreamingResponse, JSONResponse, RedirectResponse
 from fastapi.exceptions import HTTPException 
 
 from ..eng.utils import ensure_uri_components
-from ..eng.config import MAX_MEM_FILE_BYTES
+from ..eng.config import MAX_MEM_FILE_BYTES, DATA_HOME
 from ..eng.connection_pool import unique_cursor
 from ..eng.database_conn import delayed_log_access, FileConn
 from ..eng.database import check_file_read_permission, check_path_permission
@@ -84,6 +85,17 @@ async def delete_file(path: str, user: UserRecord = Depends(registered_user)):
 async def get_version():
     from lfss import __version__
     return JSONResponse(content=__version__)
+
+@router_api.get("/database-id")
+@handle_exception
+async def database_uid():
+    db_uid_file = DATA_HOME / "database_id.txt"
+    if not db_uid_file.exists():
+        uid = uuid.uuid4().hex
+        db_uid_file.write_text(uid)
+    else:        
+        uid = db_uid_file.read_text()
+    return JSONResponse(content=uid)
 
 @router_api.get("/bundle")
 @handle_exception

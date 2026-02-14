@@ -262,6 +262,13 @@ export default class Connector {
         return await res.json();
     }
     ;
+    async databaseID() {
+        const res = await this.fetcher.get('_api/database-id');
+        if (res.status != 200) {
+            throw new Error('Failed to get database ID, status code: ' + res.status);
+        }
+        return await res.json();
+    }
     async listPeers({ level = 1, incoming = false } = {}) {
         const res = await this.fetcher.get('_api/user/list-peers', {
             params: { level, incoming }

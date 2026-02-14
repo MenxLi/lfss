@@ -229,3 +229,10 @@ def test_invalid_char(server):
     assert len(c.list_files('u0/@/')) == 1, "Invalid character path failed"
     assert len(c.list_dirs('u0/@/')) == 0, "Invalid character path failed"
     assert len(c.list_files('u0/@/', flat=True)) == 1, "Invalid character path failed"
+
+def test_database_id(server):
+    c = get_conn('u0')
+    d_id = c.database_id()
+    assert isinstance(d_id, str) and len(d_id) > 0, "Database ID is not correct"
+    d_id2 = c.database_id()
+    assert d_id == d_id2, "Database ID should be consistent"

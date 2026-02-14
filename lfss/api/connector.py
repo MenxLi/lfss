@@ -160,6 +160,14 @@ class Client:
         response = self._fetch_factory('GET', '_api/version')()
         return response.json()
     
+    def database_id(self) -> str:
+        """ 
+        Get the UUID of the LFSS server instance. Can be used to distinguish different instances, 
+        e.g. in a distributed setup.
+        """
+        response = self._fetch_factory('GET', '_api/database-id')()
+        return response.json()
+    
     def exists(self, path: str) -> bool:
         """Checks if a file/directory exists."""
         path = _p(path)

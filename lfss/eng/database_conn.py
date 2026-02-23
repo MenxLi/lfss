@@ -808,7 +808,10 @@ async def delayed_log_access(url: str):
     ),
 )
 def validate_url(url: str, utype: Literal['file', 'dir'] = 'file'):
-    """ Check if a path is valid. The input path is considered url safe """
+    """ 
+    Check if a path is valid. The input path is considered url safe 
+    (url should not start with /)
+    """
     if len(url) > 1024: 
         raise InvalidPathError(f"URL too long: {url}")
 
@@ -816,7 +819,11 @@ def validate_url(url: str, utype: Literal['file', 'dir'] = 'file'):
     if not is_valid:    # early return, no need to check further
         raise InvalidPathError(f"Invalid URL: {url}")
 
-    for part in url.split('/'):
+    url_sp = url.split('/')
+    for i, part in enumerate(url_sp):
+        if i != len(url_sp) - 1 and part == '':
+            is_valid = False
+            break
         if validate_url.prohibited_part_regex.search(urllib.parse.unquote(part)):
             is_valid = False
             break

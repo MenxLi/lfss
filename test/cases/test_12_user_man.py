@@ -55,3 +55,32 @@ def test_set_peer_access(server):
     
     assert c0.peers(as_user='u2', admin=False)[0].username == 'u3', "Peer listing failed"
     assert c0.peers(as_user='u3', incoming=True, admin=False)[0].username == 'u2', "Peer listing failed"
+
+def test_list_users(server):
+    c0 = get_conn('u0')
+    
+    # Test basic list
+    users = c0.list_users()
+    assert len(users) >= 3 # u0, u2, u3
+    usernames = [u.username for u in users]
+    assert 'u0' in usernames
+    assert 'u2' in usernames
+    assert 'u3' in usernames
+    
+    # Test filter
+    users = c0.list_users(username_filter='u2')
+    assert len(users) == 1
+    assert users[0].username == 'u2'
+    
+    # Test sorting
+    users = c0.list_users(order_by='username', order_desc=True)
+    assert users[0].username >= users[1].username
+    
+    # Test virtual user inclusion
+    c0.add_virtual_user(tag='v1', max_storage='1G')
+    users_without_virtual = c0.list_users(include_virtual=False)
+    users_with_virtual = c0.list_users(include_virtual=True)
+    
+    assert len(users_with_virtual) > len(users_without_virtual)
+    assert any(u.username.startswith('.v-') for u in users_with_virtual)
+    assert not any(u.username.startswith('.v-') for u in users_without_virtual)

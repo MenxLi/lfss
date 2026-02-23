@@ -60,6 +60,10 @@
         "password": "密码",
         "confirmDelete": "确定要删除此用户吗？",
         "success": "操作成功",
-        "failed": "操作失败"
+        "failed": "操作失败",
+        "leaveBlank": "留空以保持不变",
+        "randomPassword": "生成随机密码",
+        "copyToken": "复制 Token",
+        "tokenCopied": "Token 已复制到剪贴板"
     }
 }

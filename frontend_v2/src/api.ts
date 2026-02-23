@@ -9,6 +9,7 @@ export interface UserRecord {
     credential: string;
     is_admin: boolean;
     create_time: string;
+    last_active: string;
     max_storage: number;
     permission: number;
 }
@@ -387,6 +388,30 @@ export default class Connector {
         return await res.json();
     }
 
+    async listUsers({
+        username_filter,
+        include_virtual = false,
+        order_by = 'create_time',
+        order_desc = false,
+        offset = 0,
+        limit = 1000
+    }: {
+        username_filter?: string,
+        include_virtual?: boolean,
+        order_by?: 'username' | 'create_time' | 'is_admin' | 'last_active',
+        order_desc?: boolean,
+        offset?: number,
+        limit?: number
+    } = {}): Promise<UserRecord[]> {
+        const res = await this.fetcher.get('_api/user/list', {
+            params: { username_filter, include_virtual, order_by, order_desc, offset, limit }
+        });
+        if (res.status != 200) {
+            throw new Error('Failed to list users, status code: ' + res.status);
+        }
+        return await res.json();
+    }
+
     async addUser(params: { username: string, password?: string, admin?: boolean, max_storage?: string, permission?: string }): Promise<UserRecord> {
         const res = await this.fetcher.post('_api/user/add', null, { params });
         if (!res.ok) {
@@ -565,14 +590,17 @@ export class ApiUtils {
     }
 
     static getDownloadUrl(conn: Connector, url: string): string {
-        return `${conn.config.endpoint}/_api/file${url}?token=${conn.config.token}`
+        if (url.startsWith('/')) { url = url.slice(1); }
+        return `${conn.config.endpoint}/${url}?token=${conn.config.token}&download=true`;
     }
 
     static getThumbUrl(conn: Connector, url: string): string {
-        return `${conn.config.endpoint}/_api/file${url}?thumb=true&token=${conn.config.token}`
+        if (url.startsWith('/')) { url = url.slice(1); }
+        return `${conn.config.endpoint}/${url}?token=${conn.config.token}&thumb=true`;
     }
 
     static getBundleUrl(conn: Connector, path: string): string {
+        if (path.startsWith('/')) { path = path.slice(1); }
         return `${conn.config.endpoint}/_api/bundle?token=${conn.config.token}&path=${encodeURIComponent(path)}`
     }
 }

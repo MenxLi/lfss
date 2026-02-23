@@ -540,6 +540,30 @@ class Client:
         return UserRecord(**response.json())
 
     # ========================== Admin APIs ==========================
+    def list_users(
+        self,
+        username_filter: Optional[str] = None,
+        include_virtual: bool = False,
+        order_by: Literal['username', 'create_time', 'is_admin', 'last_active'] = 'create_time',
+        order_desc: bool = False,
+        offset: int = 0,
+        limit: int = 1000
+    ) -> list[UserRecord]:
+        """
+        List all users. Only admin can call this API.
+        """
+        params = {
+            'include_virtual': include_virtual,
+            'order_by': order_by,
+            'order_desc': order_desc,
+            'offset': offset,
+            'limit': limit
+        }
+        if username_filter is not None:
+            params['username_filter'] = username_filter
+        response = self._fetch_factory('GET', '_api/user/list', params)()
+        return [UserRecord(**u) for u in response.json()]
+
     def add_user(
         self, 
         username: str, 

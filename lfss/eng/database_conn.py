@@ -58,6 +58,10 @@ class UserConn(DBObjectBase):
     def parse_record(record) -> UserRecord:
         return UserRecord(*record)
 
+    @staticmethod
+    def escape_sqlike(url: str) -> str:
+        return url.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+
     async def get_user(self, username: str) -> Optional[UserRecord]:
         await self.cur.execute("SELECT * FROM user WHERE username = ?", (username, ))
         res = await self.cur.fetchone()
@@ -212,6 +216,36 @@ class UserConn(DBObjectBase):
     
     async def list_all_users(self) -> list[UserRecord]:
         return [u async for u in self.iter_all()]
+    
+    async def list_users(
+        self, 
+        username_filter: Optional[str] = None,
+        include_virtual: bool = False,
+        order_by: Literal['username', 'create_time', 'is_admin', 'last_active'] = 'create_time',
+        order_desc: bool = False,
+        offset: int = 0,
+        limit: int = 1000
+    ) -> list[UserRecord]:
+        query = "SELECT * FROM user WHERE 1=1"
+        params = []
+        
+        if not include_virtual:
+            query += " AND username NOT LIKE '.%'"
+            
+        if username_filter:
+            query += " AND username LIKE ? ESCAPE '\\'"
+            params.append(f"%{self.escape_sqlike(username_filter)}%")
+            
+        if order_by not in ['username', 'create_time', 'is_admin', 'last_active']:
+            order_by = 'create_time'
+            
+        query += f" ORDER BY {order_by} {'DESC' if order_desc else 'ASC'}"
+        query += " LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        
+        await self.cur.execute(query, tuple(params))
+        res = await self.cur.fetchall()
+        return [self.parse_record(r) for r in res]
     
     async def list_admin_users(self) -> list[UserRecord]:
         await self.cur.execute("SELECT * FROM user WHERE is_admin = 1")

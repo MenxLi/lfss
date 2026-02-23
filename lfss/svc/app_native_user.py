@@ -1,6 +1,6 @@
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Literal
 
 from .app_base import *
 from ..eng.datatype import UserRecord, AccessLevel, FileReadPermission
@@ -61,6 +61,29 @@ async def list_peers(
 
 
 # ========================== Admin APIs ==========================
+@router_user.get("/list")
+@handle_exception
+async def list_users(
+    username_filter: Optional[str] = None,
+    include_virtual: bool = False,
+    order_by: Literal['username', 'create_time', 'is_admin', 'last_active'] = 'create_time',
+    order_desc: bool = False,
+    offset: int = 0,
+    limit: int = 1000,
+    _: UserRecord = Depends(admin_user), 
+    ):
+    async with unique_cursor() as conn:
+        uconn = UserConn(conn)
+        users = await uconn.list_users(
+            username_filter=username_filter,
+            include_virtual=include_virtual,
+            order_by=order_by,
+            order_desc=order_desc,
+            offset=offset,
+            limit=limit
+        )
+    return users
+
 @router_user.get("/query")
 @handle_exception
 async def query_user(

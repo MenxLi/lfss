@@ -60,6 +60,10 @@
         "password": "Password",
         "confirmDelete": "Are you sure to delete this user?",
         "success": "Operation successful",
-        "failed": "Operation failed"
+        "failed": "Operation failed",
+        "leaveBlank": "Leave blank to keep unchanged",
+        "randomPassword": "Generate random password",
+        "copyToken": "Copy Token",
+        "tokenCopied": "Token copied to clipboard"
     }
 }

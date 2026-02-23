@@ -1,0 +1,65 @@
+{
+    "login": {
+        "title": "LFSS Control Panel",
+        "username": "Username",
+        "password": "Password",
+        "submit": "Login",
+        "success": "Login successful",
+        "failed": "Login failed"
+    },
+    "menu": {
+        "dashboard": "Dashboard",
+        "files": "Files",
+        "users": "Users",
+        "logout": "Logout"
+    },
+    "dashboard": {
+        "welcome": "Welcome, {name}",
+        "storage": "Storage Usage",
+        "used": "Used",
+        "total": "Total",
+        "unlimited": "Unlimited",
+        "role": "Role",
+        "admin": "Admin",
+        "user": "User",
+        "collaborators": "Collaborators",
+        "noCollaborators": "No collaborators yet"
+    },
+    "files": {
+        "upload": "Upload",
+        "newFolder": "New Folder",
+        "name": "Name",
+        "size": "Size",
+        "modified": "Modified",
+        "permission": "Permission",
+        "actions": "Actions",
+        "delete": "Delete",
+        "rename": "Rename",
+        "download": "Download",
+        "confirmDelete": "Are you sure to delete this item?",
+        "folderName": "Folder Name",
+        "newName": "New Name",
+        "success": "Operation successful",
+        "failed": "Operation failed",
+        "empty": "No files",
+        "permissions": {
+            "unset": "Unset",
+            "public": "Public",
+            "protected": "Protected",
+            "private": "Private"
+        }
+    },
+    "users": {
+        "addUser": "Add User",
+        "username": "Username",
+        "role": "Role",
+        "storage": "Max Storage",
+        "actions": "Actions",
+        "edit": "Edit",
+        "delete": "Delete",
+        "password": "Password",
+        "confirmDelete": "Are you sure to delete this user?",
+        "success": "Operation successful",
+        "failed": "Operation failed"
+    }
+}

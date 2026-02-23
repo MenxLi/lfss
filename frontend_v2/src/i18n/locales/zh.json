@@ -1,0 +1,65 @@
+{
+    "login": {
+        "title": "LFSS 控制面板",
+        "username": "用户名",
+        "password": "密码",
+        "submit": "登录",
+        "success": "登录成功",
+        "failed": "登录失败"
+    },
+    "menu": {
+        "dashboard": "仪表盘",
+        "files": "文件管理",
+        "users": "用户管理",
+        "logout": "退出登录"
+    },
+    "dashboard": {
+        "welcome": "欢迎，{name}",
+        "storage": "存储使用情况",
+        "used": "已用",
+        "total": "总计",
+        "unlimited": "无限制",
+        "role": "角色",
+        "admin": "管理员",
+        "user": "普通用户",
+        "collaborators": "协作者",
+        "noCollaborators": "暂无协作者"
+    },
+    "files": {
+        "upload": "上传",
+        "newFolder": "新建文件夹",
+        "name": "名称",
+        "size": "大小",
+        "modified": "修改时间",
+        "permission": "权限",
+        "actions": "操作",
+        "delete": "删除",
+        "rename": "重命名",
+        "download": "下载",
+        "confirmDelete": "确定要删除此项吗？",
+        "folderName": "文件夹名称",
+        "newName": "新名称",
+        "success": "操作成功",
+        "failed": "操作失败",
+        "empty": "暂无文件",
+        "permissions": {
+            "unset": "未设置",
+            "public": "公开",
+            "protected": "受保护",
+            "private": "私有"
+        }
+    },
+    "users": {
+        "addUser": "添加用户",
+        "username": "用户名",
+        "role": "角色",
+        "storage": "最大存储",
+        "actions": "操作",
+        "edit": "编辑",
+        "delete": "删除",
+        "password": "密码",
+        "confirmDelete": "确定要删除此用户吗？",
+        "success": "操作成功",
+        "failed": "操作失败"
+    }
+}

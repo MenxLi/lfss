@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/store/user'
+import Connector from '@/api'
 
 const resolveRouterBase = () => {
     const path = window.location.pathname
@@ -51,12 +52,46 @@ const router = createRouter({
     ]
 })
 
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to) => {
     const userStore = useUserStore()
-    if (to.name !== 'Login' && !userStore.token) {
-        next({ name: 'Login' })
-    } else {
-        next()
+
+    if (to.name === 'Login') {
+        return true
+    }
+
+    if (!userStore.token) {
+        userStore.logout()
+        return {
+            name: 'Login',
+            query: { redirect: to.fullPath }
+        }
+    }
+
+    if (userStore.userInfo) {
+        return true
+    }
+
+    const endpoint = (localStorage.getItem('endpoint') || '').trim()
+    if (!endpoint) {
+        userStore.logout()
+        return {
+            name: 'Login',
+            query: { redirect: to.fullPath }
+        }
+    }
+
+    try {
+        const conn = new Connector()
+        conn.config = { endpoint, token: userStore.token }
+        const user = await conn.whoami()
+        userStore.setUserInfo(user)
+        return true
+    } catch {
+        userStore.logout()
+        return {
+            name: 'Login',
+            query: { redirect: to.fullPath }
+        }
     }
 })
 

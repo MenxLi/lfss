@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { useI18n } from 'vue-i18n'
 import Connector from '@/api'
@@ -8,6 +8,7 @@ import { useLogStore } from '@/store/logs'
 import { resolveEndpoint } from '@/utils'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 const { t } = useI18n()
 const logStore = useLogStore()
@@ -18,6 +19,14 @@ const form = ref({
 })
 
 const loading = ref(false)
+
+const resolveRedirectPath = () => {
+  const redirect = route.query.redirect
+  const target = Array.isArray(redirect) ? redirect[0] : redirect
+  if (typeof target !== 'string') return '/'
+  if (!target.startsWith('/') || target.startsWith('//')) return '/'
+  return target
+}
 
 onMounted(() => {
   const savedEndpoint = localStorage.getItem('endpoint')
@@ -42,7 +51,7 @@ const handleLogin = async () => {
       localStorage.setItem('endpoint', endpoint)
       userStore.setUserInfo(user)
       logStore.logMessage('success', t('login.success'))
-      router.push('/')
+      router.replace(resolveRedirectPath())
     } else {
       logStore.logMessage('error', t('login.failed'))
     }

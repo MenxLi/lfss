@@ -23,6 +23,6 @@ export const useUserStore = defineStore('user', () => {
 }, {
     persist: {
         key: 'lfss-user',
-        pick: ['token']
+        pick: ['token'],
     }
 })

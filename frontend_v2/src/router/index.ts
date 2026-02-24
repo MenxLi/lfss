@@ -1,8 +1,16 @@
-import { createRouter, createWebHashHistory } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/store/user'
 
+const resolveRouterBase = () => {
+    const path = window.location.pathname
+    if (path === '/.panel' || path.startsWith('/.panel/')) {
+        return '/.panel/'
+    }
+    return '/'
+}
+
 const router = createRouter({
-    history: createWebHashHistory(),
+    history: createWebHistory(resolveRouterBase()),
     routes: [
         {
             path: '/login',

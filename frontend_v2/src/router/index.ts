@@ -22,6 +22,21 @@ const router = createRouter({
                     path: 'files/:path(.*)*',
                     name: 'Files',
                     component: () => import('@/views/Files.vue')
+                },
+                {
+                    path: 'editor',
+                    name: 'Editor',
+                    component: () => import('@/views/Editor.vue')
+                },
+                {
+                    path: 'users',
+                    name: 'Users',
+                    component: () => import('@/views/UserManagement.vue')
+                },
+                {
+                    path: 'logs',
+                    name: 'Logs',
+                    component: () => import('@/views/Logs.vue')
                 }
             ]
         }

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { ElMessage } from 'element-plus'
 import Connector, { ApiUtils } from '@/api'
 import type { DirectoryRecord, FileRecord } from '@/api'
 import { copyToClipboard } from '@/utils'
+import { useLogStore } from '@/store/logs'
 
 const props = defineProps<{
   conn: Connector
@@ -13,12 +13,26 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
+const logStore = useLogStore()
+
 const detailsDialogVisible = ref(false)
 const detailsData = ref<(DirectoryRecord | FileRecord) & { isDir: boolean } | null>(null)
+const ownerUsername = ref<string>('')
 
-const open = (row: DirectoryRecord | FileRecord, isDir: boolean) => {
+const open = async (row: DirectoryRecord | FileRecord, isDir: boolean) => {
   detailsData.value = { ...row, isDir }
   detailsDialogVisible.value = true
+  ownerUsername.value = ''
+  
+  if (!isDir && 'owner_id' in row) {
+    try {
+      const user = await props.conn.queryUser(row.owner_id)
+      ownerUsername.value = user.username
+    } catch (e) {
+      console.error('Failed to fetch owner username', e)
+      ownerUsername.value = String(row.owner_id)
+    }
+  }
 }
 
 defineExpose({ open })
@@ -41,7 +55,7 @@ const copyUrl = () => {
   if (!detailsData.value) return
   const url = ApiUtils.getDownloadUrl(props.conn, detailsData.value.url)
   copyToClipboard(url)
-  ElMessage.success('URL copied to clipboard')
+  logStore.logMessage('success', 'URL copied to clipboard')
 }
 </script>
 
@@ -55,15 +69,18 @@ const copyUrl = () => {
     <div v-if="detailsData" class="space-y-4">
       <div class="grid grid-cols-3 gap-2">
         <div class="font-bold text-gray-600">Name:</div>
-        <div class="col-span-2 break-all">{{ detailsData.url.split('/').filter(Boolean).pop() }}</div>
+        <div class="col-span-2 break-all">{{ ApiUtils.decodePath(detailsData.url).split('/').filter(Boolean).pop() }}</div>
         
         <div class="font-bold text-gray-600">Path:</div>
-        <div class="col-span-2 break-all">{{ detailsData.url }}</div>
+        <div class="col-span-2 break-all">{{ ApiUtils.decodePath(detailsData.url) }}</div>
         
         <div class="font-bold text-gray-600">Type:</div>
         <div class="col-span-2">{{ detailsData.isDir ? 'Directory' : 'File' }}</div>
         
         <template v-if="!detailsData.isDir">
+          <div class="font-bold text-gray-600">Owner:</div>
+          <div class="col-span-2">{{ ownerUsername || (detailsData as FileRecord).owner_id }}</div>
+
           <div class="font-bold text-gray-600">Size:</div>
           <div class="col-span-2">{{ formatSize((detailsData as FileRecord).file_size) }}</div>
           

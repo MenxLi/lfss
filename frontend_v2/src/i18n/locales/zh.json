@@ -11,6 +11,7 @@
         "dashboard": "仪表盘",
         "files": "文件管理",
         "users": "用户管理",
+        "logs": "日志",
         "logout": "退出登录"
     },
     "dashboard": {
@@ -23,7 +24,13 @@
         "admin": "管理员",
         "user": "普通用户",
         "collaborators": "协作者",
-        "noCollaborators": "暂无协作者"
+        "noCollaborators": "暂无协作者",
+        "includeAdmin": "包含管理员",
+        "incomingAccess": "入站访问",
+        "accessRead": "只读",
+        "accessWrite": "读写",
+        "failedToLoadStorage": "加载存储信息失败",
+        "failedToLoadCollaborators": "加载协作者失败"
     },
     "files": {
         "upload": "上传",
@@ -64,6 +71,31 @@
         "leaveBlank": "留空以保持不变",
         "randomPassword": "生成随机密码",
         "copyToken": "复制 Token",
-        "tokenCopied": "Token 已复制到剪贴板"
+        "tokenCopied": "Token 已复制到剪贴板",
+        "copyTokenFailed": "复制 Token 失败",
+        "loadFailed": "加载用户列表失败",
+        "warningTitle": "警告",
+        "searchPlaceholder": "搜索用户...",
+        "showVirtualUsers": "显示虚拟用户",
+        "refresh": "刷新",
+        "createdAt": "创建时间",
+        "lastActive": "最近活跃",
+        "never": "从未",
+        "storagePlaceholder": "例如 100G",
+        "cancel": "取消",
+        "confirm": "确认",
+        "peerEditorFor": "{username} 的协作者权限",
+        "searchUsersPlaceholder": "搜索用户以添加协作者",
+        "incomingAccess": "入站访问",
+        "peerUser": "协作者",
+        "accessLevel": "访问级别",
+        "addPeer": "添加协作者",
+        "removePeer": "移除",
+        "savePeers": "保存协作者",
+        "noPeers": "暂无协作者配置",
+        "loadPeersFailed": "加载协作者权限失败",
+        "searchUsersFailed": "搜索用户失败",
+        "savePeersFailed": "保存协作者权限失败",
+        "peersSaved": "协作者权限已更新"
     }
 }

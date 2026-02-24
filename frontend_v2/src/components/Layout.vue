@@ -81,6 +81,14 @@ const toggleLocale = () => {
           <el-icon><Folder /></el-icon>
           <template #title>{{ t('menu.files') }}</template>
         </el-menu-item>
+        <el-menu-item index="/users" v-if="userStore.userInfo?.is_admin">
+          <el-icon><User /></el-icon>
+          <template #title>{{ t('menu.users') }}</template>
+        </el-menu-item>
+        <el-menu-item index="/logs">
+          <el-icon><Document /></el-icon>
+          <template #title>{{ t('menu.logs') }}</template>
+        </el-menu-item>
       </el-menu>
       <div class="p-4 border-t border-gray-700 flex flex-col gap-2 items-center">
         <el-button link @click="toggleLocale" class="text-gray-300 hover:text-white w-full">

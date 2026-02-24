@@ -50,6 +50,13 @@ export const permMap: Record<number, string> = {
     3: 'private'
 };
 
+export const accessLevelMap: Record<number, string> = {
+    0: 'none',
+    1: 'read',
+    2: 'write',
+    10: 'all'
+};
+
 async function fmtFailedResponse(res: Response): Promise<string> {
     const raw = await res.text();
     const json = raw ? JSON.parse(raw) : {};
@@ -71,8 +78,9 @@ export class Fetcher {
 
     _buildUrl(path: string, params?: Record<string, any>): string {
         if (path.startsWith('/')) { path = path.slice(1); }
+        const encodedPath = path.split('/').map(encodeURIComponent).join('/');
         const base = this.config.endpoint.endsWith('/') ? this.config.endpoint : this.config.endpoint + '/';
-        const url = new URL(base + path);
+        const url = new URL(base + encodedPath);
         if (params) {
             for (const [key, value] of Object.entries(params)) {
                 if (Array.isArray(value)) {
@@ -378,9 +386,23 @@ export default class Connector {
         return await res.json();
     }
 
-    async listPeers({ level = 1, incoming = false, admin = false }: { level?: number, incoming?: boolean, admin?: boolean } = {}): Promise<UserRecord[]> {
+    // level: access level to filter peer users, 1 for read-only, 2 for write
+    // incoming: to list incoming peers, if false, list outgoing peers (default: false)
+    // admin: whether to include admin users
+    // as_user: list peers as if you are this user (admin only)
+    async listPeers({
+        level = 1,
+        incoming = false,
+        admin = false,
+        as_user
+    }: {
+        level?: number,
+        incoming?: boolean,
+        admin?: boolean,
+        as_user?: string
+    } = {}): Promise<UserRecord[]> {
         const res = await this.fetcher.get('_api/user/list-peers', {
-            params: { level, incoming, admin }
+            params: { level, incoming, admin, as_user }
         });
         if (res.status != 200) {
             throw new Error('Failed to list peer users, status code: ' + res.status);
@@ -388,6 +410,59 @@ export default class Connector {
         return await res.json();
     }
 
+    async queryUser(userId: number): Promise<UserRecord> {
+        const res = await this.fetcher.get('_api/user/query', {
+            params: { userid: userId }
+        });
+        if (res.status != 200) {
+            throw new Error('Failed to query user, status code: ' + res.status);
+        }
+        return await res.json();
+    }
+
+    async setFilePermission(path: string, permission: number): Promise<void> {
+        const res = await this.fetcher.post('_api/set-perm', null, {
+            params: {
+                path,
+                perm: permission
+            }
+        });
+        if (res.status != 200) {
+            throw new Error(`Failed to set permission, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
+        }
+    }
+
+    async move(path: string, newPath: string): Promise<void> {
+        const res = await this.fetcher.post('_api/move', null, {
+            params: {
+                src: path,
+                dst: newPath
+            },
+            headers: {
+                'Content-Type': 'application/www-form-urlencoded'
+            }
+        });
+        if (res.status != 200) {
+            throw new Error(`Failed to move file, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
+        }
+    }
+
+    async copy(srcPath: string, dstPath: string): Promise<void> {
+        const res = await this.fetcher.post('_api/copy', null, {
+            params: {
+                src: srcPath,
+                dst: dstPath
+            },
+            headers: {
+                'Content-Type': 'application/www-form-urlencoded'
+            }
+        });
+        if (!(res.status == 200 || res.status == 201)) {
+            throw new Error(`Failed to copy file, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
+        }
+    }
+
+    // admin only APIs below =========
     async listUsers({
         username_filter,
         include_virtual = false,
@@ -436,45 +511,16 @@ export default class Connector {
         return await res.json();
     }
 
-    async setFilePermission(path: string, permission: number): Promise<void> {
-        const res = await this.fetcher.post('_api/set-perm', null, {
+    async setPeer(src_username: string, dst_username: string, level: 'NONE' | 'READ' | 'WRITE'): Promise<void> {
+        const res = await this.fetcher.post('_api/user/set-peer', null, {
             params: {
-                path,
-                perm: permission
+                src_username,
+                dst_username,
+                level
             }
         });
-        if (res.status != 200) {
-            throw new Error(`Failed to set permission, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
-        }
-    }
-
-    async move(path: string, newPath: string): Promise<void> {
-        const res = await this.fetcher.post('_api/move', null, {
-            params: {
-                src: path,
-                dst: newPath
-            },
-            headers: {
-                'Content-Type': 'application/www-form-urlencoded'
-            }
-        });
-        if (res.status != 200) {
-            throw new Error(`Failed to move file, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
-        }
-    }
-
-    async copy(srcPath: string, dstPath: string): Promise<void> {
-        const res = await this.fetcher.post('_api/copy', null, {
-            params: {
-                src: srcPath,
-                dst: dstPath
-            },
-            headers: {
-                'Content-Type': 'application/www-form-urlencoded'
-            }
-        });
-        if (!(res.status == 200 || res.status == 201)) {
-            throw new Error(`Failed to copy file, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
+        if (!res.ok) {
+            throw new Error(`Failed to set peer access, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
         }
     }
 }
@@ -589,14 +635,25 @@ export class ApiUtils {
         return await conn.post(path, file, { conflict, permission });
     }
 
-    static getDownloadUrl(conn: Connector, url: string): string {
-        if (url.startsWith('/')) { url = url.slice(1); }
-        return `${conn.config.endpoint}/${url}?token=${conn.config.token}&download=true`;
+    static encodePath(path: string): string {
+        return path.split('/').map(encodeURIComponent).join('/');
     }
 
-    static getThumbUrl(conn: Connector, url: string): string {
+    static decodePath(path: string): string {
+        return path.split('/').map(decodeURIComponent).join('/');
+    }
+
+    static getFileUrl(conn: Connector, url: string, includeToken: boolean = true): string {
         if (url.startsWith('/')) { url = url.slice(1); }
-        return `${conn.config.endpoint}/${url}?token=${conn.config.token}&thumb=true`;
+        return `${conn.config.endpoint}/${this.encodePath(url)}${includeToken ? `?token=${conn.config.token}` : ''}`;
+    }
+
+    static getDownloadUrl(conn: Connector, url: string, includeToken: boolean = true): string {
+        return this.getFileUrl(conn, url, includeToken) + (includeToken ? `&download=true` : '?download=true');
+    }
+
+    static getThumbUrl(conn: Connector, url: string, includeToken: boolean = true): string {
+        return this.getFileUrl(conn, url, includeToken) + (includeToken ? `&thumb=true` : '?thumb=true');
     }
 
     static getBundleUrl(conn: Connector, path: string): string {

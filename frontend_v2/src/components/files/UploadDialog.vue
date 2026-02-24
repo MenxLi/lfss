@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
 import Connector, { ApiUtils } from '@/api'
 import { forEachFile } from '@/utils'
 import { UploadFilled, Refresh } from '@element-plus/icons-vue'
+import { useLogStore } from '@/store/logs'
 
 const props = defineProps<{
   conn: Connector
@@ -17,6 +17,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const logStore = useLogStore()
 
 const uploadDialogVisible = ref(false)
 const uploadPath = ref('')
@@ -129,7 +130,7 @@ const handleDrop = async (e: DragEvent) => {
       }
     }
   } catch (err: any) {
-    ElMessage.error('Failed to read files: ' + err.message)
+    logStore.logMessage('error', 'Failed to read files: ' + err.message)
   } finally {
     isUploading.value = false
   }
@@ -167,11 +168,11 @@ const confirmUpload = async () => {
       })
 
       await Promise.all(uploadTasks.map(task => runWithLimit(task)))
-      ElMessage.success('Upload success')
+      logStore.logMessage('success', 'Upload success')
       uploadDialogVisible.value = false
       emit('uploaded')
     } catch (err: any) {
-      ElMessage.error('Failed to upload some files: ' + err.message)
+      logStore.logMessage('error', 'Failed to upload some files: ' + err.message)
     } finally {
       isUploading.value = false
     }
@@ -183,12 +184,12 @@ const confirmUpload = async () => {
   try {
     const fullPath = joinPath(uploadPath.value, uploadFileName.value)
     await ApiUtils.uploadFile(props.conn, fullPath, uploadFileObj.value, { conflict: 'overwrite' })
-    ElMessage.success(t('files.success'))
+    logStore.logMessage('success', t('files.success'))
     uploadDialogVisible.value = false
     emit('uploaded')
   } catch (e: unknown) {
     const err = e as Error
-    ElMessage.error(err.message || t('files.failed'))
+    logStore.logMessage('error', err.message || t('files.failed'))
   } finally {
     isUploading.value = false
   }

@@ -2,10 +2,11 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
 import Connector, { ApiUtils, permMap } from '@/api'
 import type { DirectoryRecord, FileRecord } from '@/api'
 import { useUserStore } from '@/store/user'
+import { useLogStore } from '@/store/logs'
 import {
   Document,
   Folder,
@@ -15,7 +16,6 @@ import {
   CopyDocument,
   Rank,
   InfoFilled,
-  FolderAdd,
   Back
 } from '@element-plus/icons-vue'
 import UploadDialog from '@/components/files/UploadDialog.vue'
@@ -25,6 +25,7 @@ const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const userStore = useUserStore()
+const logStore = useLogStore()
 
 const currentPath = computed(() => {
   const path = route.params.path as string | string[]
@@ -34,10 +35,10 @@ const currentPath = computed(() => {
   return p
 })
 
-const joinPath = (base: string, name: string) => {
-  if (!base) return name
-  return base.endsWith('/') ? `${base}${name}` : `${base}/${name}`
-}
+// const joinPath = (base: string, name: string) => {
+//   if (!base) return name
+//   return base.endsWith('/') ? `${base}${name}` : `${base}/${name}`
+// }
 
 const dirs = ref<DirectoryRecord[]>([])
 const files = ref<FileRecord[]>([])
@@ -71,7 +72,7 @@ const loadData = async () => {
     totalItems.value = count.dirs + count.files
   } catch (e: unknown) {
     const err = e as Error
-    ElMessage.error(err.message || 'Failed to load files')
+    logStore.logMessage('error', err.message || 'Failed to load files')
   } finally {
     loading.value = false
   }
@@ -138,12 +139,12 @@ const handleDelete = async (item: DirectoryRecord | FileRecord, isDir: boolean) 
     })
     const path = item.url
     await conn.delete(isDir && !path.endsWith('/') ? path + '/' : path)
-    ElMessage.success(t('files.success'))
+    logStore.logMessage('success', t('files.success'))
     loadData()
   } catch (e: unknown) {
     if (e !== 'cancel') {
       const err = e as Error
-      ElMessage.error(err.message || t('files.failed'))
+      logStore.logMessage('error', err.message || t('files.failed'))
     }
   }
 }
@@ -177,13 +178,13 @@ const handleMove = async (item: DirectoryRecord | FileRecord, isDir: boolean) =>
     })) as any
     if (value) {
       await conn.move(srcPath, value)
-      ElMessage.success('Moved successfully')
+      logStore.logMessage('success', 'Moved successfully')
       loadData()
     }
   } catch (e: unknown) {
     if (e !== 'cancel') {
       const err = e as Error
-      ElMessage.error(err.message || 'Failed to move')
+      logStore.logMessage('error', err.message || 'Failed to move')
     }
   }
 }
@@ -200,35 +201,13 @@ const handleCopy = async (item: DirectoryRecord | FileRecord, isDir: boolean) =>
     })) as any
     if (value) {
       await conn.copy(srcPath, value)
-      ElMessage.success('Copied successfully')
+      logStore.logMessage('success', 'Copied successfully')
       loadData()
     }
   } catch (e: unknown) {
     if (e !== 'cancel') {
       const err = e as Error
-      ElMessage.error(err.message || 'Failed to copy')
-    }
-  }
-}
-
-const handleCreateFolder = async () => {
-  try {
-    const { value } = (await ElMessageBox.prompt('Enter folder name:', 'New Folder', {
-      confirmButtonText: 'Create',
-      cancelButtonText: 'Cancel',
-      inputPattern: /^[^/]+$/,
-      inputErrorMessage: 'Folder name cannot contain slashes'
-    })) as any
-    if (value) {
-      const folderPath = joinPath(currentPath.value, value)
-      await conn.putText(joinPath(folderPath, '.lfss-keep'), '')
-      ElMessage.success('Folder created')
-      loadData()
-    }
-  } catch (e: unknown) {
-    if (e !== 'cancel') {
-      const err = e as Error
-      ElMessage.error(err.message || 'Failed to create folder')
+      logStore.logMessage('error', err.message || 'Failed to copy')
     }
   }
 }
@@ -236,10 +215,10 @@ const handleCreateFolder = async () => {
 const handlePermissionChange = async (file: FileRecord, perm: number) => {
   try {
     await conn.setFilePermission(file.url, perm)
-    ElMessage.success('Permission updated')
+    logStore.logMessage('success', 'Permission updated')
   } catch (e: unknown) {
     const err = e as Error
-    ElMessage.error(err.message || 'Failed to update permission')
+    logStore.logMessage('error', err.message || 'Failed to update permission')
     loadData() // revert
   }
 }
@@ -256,11 +235,53 @@ const isImage = (url: string) => {
   return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext || '')
 }
 
+const isTextFile = (row: FileRecord) => {
+  if (row.mime_type && row.mime_type.startsWith('text/')) return true
+  const ext = row.url.split('.').pop()?.toLowerCase()
+  return ['txt', 'md', 'json', 'js', 'ts', 'vue', 'html', 'css', 'py', 'sh', 'csv', 'xml'].includes(ext || '')
+}
+
+const handleFileIconClick = (row: FileRecord) => {
+  if (isImage(row.url)) return // Handled by el-image preview
+  window.location.href = ApiUtils.getDownloadUrl(conn, row.url)
+}
+
+const handleFileNameClick = (row: FileRecord) => {
+  if (isTextFile(row)) {
+    router.push({ name: 'Editor', query: { path: row.url } })
+  } else {
+    window.open(ApiUtils.getFileUrl(conn, row.url), '_blank')
+  }
+}
+
+const handleNewCommand = async (command: string) => {
+  if (command === 'text') {
+    try {
+      const { value } = (await ElMessageBox.prompt('Enter file name:', 'New Text File', {
+        confirmButtonText: 'Create',
+        cancelButtonText: 'Cancel',
+        inputPattern: /^.+$/,
+        inputErrorMessage: 'File name cannot be empty'
+      })) as any
+      if (value) {
+        const newPath = currentPath.value + value
+        router.push({ name: 'Editor', query: { path: newPath } })
+      }
+    } catch (e) {
+      // Cancelled
+    }
+  }
+}
+
 // Details Modal State
 const detailsDialogRef = ref<InstanceType<typeof DetailsDialog> | null>(null)
 
 const handleDetails = (row: DirectoryRecord | FileRecord, isDir: boolean) => {
   detailsDialogRef.value?.open(row, isDir)
+}
+
+const getItemName = (url: string) => {
+  return ApiUtils.decodePath(url).split('/').filter(Boolean).pop() || ''
 }
 </script>
 
@@ -278,15 +299,22 @@ const handleDetails = (row: DirectoryRecord | FileRecord, isDir: boolean) => {
             :key="index"
             :to="{ path: '/files/' + currentPath.split('/').filter(Boolean).slice(0, index + 1).join('/') + '/' }"
           >
-            {{ part }}
+            {{ ApiUtils.decodePath(part) }}
           </el-breadcrumb-item>
         </el-breadcrumb>
       </div>
       <div class="flex gap-2">
-        <el-button type="success" @click="handleCreateFolder" :disabled="!currentPath">
-          <el-icon class="mr-1"><FolderAdd /></el-icon>
-          New Folder
-        </el-button>
+        <el-dropdown @command="handleNewCommand" :disabled="!currentPath">
+          <el-button type="success">
+            <el-icon class="mr-1"><Document /></el-icon>
+            New
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="text">Text File</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-button type="primary" @click="openUploadDialog" :disabled="!currentPath">
           <el-icon class="mr-1"><Upload /></el-icon>
           {{ t('files.upload') }}
@@ -302,26 +330,32 @@ const handleDetails = (row: DirectoryRecord | FileRecord, isDir: boolean) => {
       >
         <el-table-column prop="url" :label="t('files.name')" min-width="200" sortable="custom">
           <template #default="{ row }">
-            <div class="flex items-center gap-2 cursor-pointer hover:text-blue-500" @click="row.isDir ? handleDirClick(row) : null">
+            <div class="flex items-center gap-2 hover:text-blue-500 min-w-0">
               <template v-if="!row.isDir && isImage(row.url)">
                 <el-image 
                   :src="ApiUtils.getThumbUrl(conn, row.url)" 
                   lazy 
-                  class="w-8 h-8 rounded object-cover"
+                  class="w-6 h-6 rounded object-cover cursor-pointer"
                   :preview-src-list="[ApiUtils.getDownloadUrl(conn, row.url)]"
                   preview-teleported
                   @click.stop
                 >
                   <template #error>
-                    <el-icon size="20" color="#909399"><Document /></el-icon>
+                    <el-icon size="20" color="#909399" class="cursor-pointer" @click="handleFileIconClick(row)"><Document /></el-icon>
                   </template>
                 </el-image>
               </template>
-              <el-icon v-else size="20" :color="row.isDir ? '#e6a23c' : '#909399'">
+              <el-icon v-else size="20" :color="row.isDir ? '#e6a23c' : '#909399'" class="cursor-pointer" @click="row.isDir ? handleDirClick(row) : handleFileIconClick(row)">
                 <Folder v-if="row.isDir" />
                 <Document v-else />
               </el-icon>
-              <span>{{ row.url.split('/').filter(Boolean).pop() }}</span>
+              <span
+                class="cursor-pointer truncate block flex-1 min-w-0"
+                :title="getItemName(row.url)"
+                @click="row.isDir ? handleDirClick(row) : handleFileNameClick(row)"
+              >
+                {{ getItemName(row.url) }}
+              </span>
             </div>
           </template>
         </el-table-column>

@@ -3,12 +3,13 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
 import Connector from '@/api'
+import { useLogStore } from '@/store/logs'
 
 const router = useRouter()
 const userStore = useUserStore()
 const { t } = useI18n()
+const logStore = useLogStore()
 
 const form = ref({
   endpoint: window.location.origin || 'http://localhost:8000',
@@ -37,13 +38,13 @@ const handleLogin = async () => {
       userStore.setToken(form.value.token)
       localStorage.setItem('endpoint', form.value.endpoint)
       userStore.setUserInfo(user)
-      ElMessage.success(t('login.success'))
+      logStore.logMessage('success', t('login.success'))
       router.push('/')
     } else {
-      ElMessage.error(t('login.failed'))
+      logStore.logMessage('error', t('login.failed'))
     }
   } catch (e) {
-    ElMessage.error(t('login.failed'))
+    logStore.logMessage('error', t('login.failed'))
   } finally {
     loading.value = false
   }

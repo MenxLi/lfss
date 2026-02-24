@@ -11,6 +11,7 @@
         "dashboard": "Dashboard",
         "files": "Files",
         "users": "Users",
+        "logs": "Logs",
         "logout": "Logout"
     },
     "dashboard": {
@@ -23,7 +24,13 @@
         "admin": "Admin",
         "user": "User",
         "collaborators": "Collaborators",
-        "noCollaborators": "No collaborators yet"
+        "noCollaborators": "No collaborators yet",
+        "includeAdmin": "Include admin users",
+        "incomingAccess": "Incoming access",
+        "accessRead": "Read",
+        "accessWrite": "Write",
+        "failedToLoadStorage": "Failed to load storage usage",
+        "failedToLoadCollaborators": "Failed to load collaborators"
     },
     "files": {
         "upload": "Upload",
@@ -64,6 +71,31 @@
         "leaveBlank": "Leave blank to keep unchanged",
         "randomPassword": "Generate random password",
         "copyToken": "Copy Token",
-        "tokenCopied": "Token copied to clipboard"
+        "tokenCopied": "Token copied to clipboard",
+        "copyTokenFailed": "Failed to copy token",
+        "loadFailed": "Failed to load users",
+        "warningTitle": "Warning",
+        "searchPlaceholder": "Search users...",
+        "showVirtualUsers": "Show virtual users",
+        "refresh": "Refresh",
+        "createdAt": "Created",
+        "lastActive": "Last Active",
+        "never": "Never",
+        "storagePlaceholder": "e.g. 100G",
+        "cancel": "Cancel",
+        "confirm": "Confirm",
+        "peerEditorFor": "Peer Access for {username}",
+        "searchUsersPlaceholder": "Search users to add peer",
+        "incomingAccess": "Incoming access",
+        "peerUser": "Peer User",
+        "accessLevel": "Access Level",
+        "addPeer": "Add Peer",
+        "removePeer": "Remove",
+        "savePeers": "Save Peers",
+        "noPeers": "No peers configured",
+        "loadPeersFailed": "Failed to load peer access",
+        "searchUsersFailed": "Failed to search users",
+        "savePeersFailed": "Failed to save peer access",
+        "peersSaved": "Peer access updated"
     }
 }

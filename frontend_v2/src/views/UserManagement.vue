@@ -1,26 +1,34 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, User, Plus, Edit, Delete, Refresh, DocumentCopy } from '@element-plus/icons-vue'
+import { sha256 } from 'js-sha256'
 import Connector from '@/api'
 import type { UserRecord } from '@/api'
 import { useUserStore } from '@/store/user'
-import { sha256 } from 'js-sha256'
+import UserToolbar from '@/components/users/UserToolbar.vue'
+import UserTable from '@/components/users/UserTable.vue'
+import PeerAccessDialog from '@/components/users/PeerAccessDialog.vue'
 
 const { t } = useI18n()
 const userStore = useUserStore()
 
+const conn = new Connector()
+conn.config = {
+  endpoint: localStorage.getItem('endpoint') || window.location.origin,
+  token: userStore.token
+}
+
 const users = ref<UserRecord[]>([])
 const loading = ref(false)
-const dialogVisible = ref(false)
-const isEdit = ref(false)
-
 const searchQuery = ref('')
 const includeVirtual = ref(false)
 const sortBy = ref<'username' | 'create_time' | 'is_admin' | 'last_active'>('create_time')
 const sortDesc = ref(false)
+const sortableProps = ['username', 'create_time', 'is_admin', 'last_active'] as const
 
+const dialogVisible = ref(false)
+const isEdit = ref(false)
 const form = ref({
   username: '',
   password: '',
@@ -29,11 +37,13 @@ const form = ref({
   permission: 'UNSET'
 })
 
-const conn = new Connector()
-conn.config = { 
-  endpoint: localStorage.getItem('endpoint') || window.location.origin, 
-  token: userStore.token 
-}
+const peerDialogVisible = ref(false)
+const peerTargetUsername = ref('')
+
+const userToken = computed(() => {
+  if (!form.value.username || !form.value.password) return ''
+  return sha256(form.value.username + ':' + form.value.password)
+})
 
 const loadUsers = async () => {
   loading.value = true
@@ -46,20 +56,23 @@ const loadUsers = async () => {
     })
   } catch (e: unknown) {
     const err = e as Error
-    ElMessage.error(err.message || 'Failed to load users')
+    ElMessage.error(err.message || t('users.loadFailed'))
   } finally {
     loading.value = false
   }
 }
 
+watch(searchQuery, loadUsers)
+watch(includeVirtual, loadUsers)
+
+onMounted(loadUsers)
+
 const handleSortChange = ({ prop, order }: { prop: string, order: string }) => {
-  if (!prop) return
-  sortBy.value = prop as any
+  if (!prop || !sortableProps.includes(prop as typeof sortableProps[number])) return
+  sortBy.value = prop as typeof sortableProps[number]
   sortDesc.value = order === 'descending'
   loadUsers()
 }
-
-onMounted(loadUsers)
 
 const handleAdd = () => {
   isEdit.value = false
@@ -85,6 +98,11 @@ const handleEdit = (user: UserRecord) => {
   dialogVisible.value = true
 }
 
+const openPeerDialog = (user: UserRecord) => {
+  peerTargetUsername.value = user.username
+  peerDialogVisible.value = true
+}
+
 const generateRandomPassword = () => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_'
   let password = ''
@@ -94,23 +112,18 @@ const generateRandomPassword = () => {
   form.value.password = password
 }
 
-const userToken = computed(() => {
-  if (!form.value.username || !form.value.password) return ''
-  return sha256(form.value.username + ':' + form.value.password)
-})
-
 const copyToken = async () => {
   try {
     await navigator.clipboard.writeText(userToken.value)
     ElMessage.success(t('users.tokenCopied'))
-  } catch (err) {
-    ElMessage.error('Failed to copy token')
+  } catch {
+    ElMessage.error(t('users.copyTokenFailed'))
   }
 }
 
 const handleDelete = async (user: UserRecord) => {
   try {
-    await ElMessageBox.confirm(t('users.confirmDelete'), 'Warning', {
+    await ElMessageBox.confirm(t('users.confirmDelete'), t('users.warningTitle'), {
       type: 'warning'
     })
     await conn.deleteUser(user.username)
@@ -141,7 +154,7 @@ const handleSubmit = async () => {
     } else {
       await conn.addUser(params)
     }
-    
+
     ElMessage.success(t('users.success'))
     dialogVisible.value = false
     loadUsers()
@@ -155,71 +168,23 @@ const handleSubmit = async () => {
 <template>
   <el-card shadow="hover" class="w-full">
     <template #header>
-      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div class="font-bold flex items-center gap-2">
-          <el-icon><User /></el-icon>
-          {{ t('menu.users') }}
-        </div>
-        <div class="flex items-center gap-4 w-full sm:w-auto">
-          <el-input
-            v-model="searchQuery"
-            placeholder="Search users..."
-            clearable
-            @input="loadUsers"
-            class="w-full sm:w-48"
-          >
-            <template #prefix>
-              <el-icon><Search /></el-icon>
-            </template>
-          </el-input>
-          <el-checkbox v-model="includeVirtual" @change="loadUsers" label="Show Virtual Users" />
-          <el-button type="primary" @click="handleAdd">
-            <el-icon class="mr-1"><Plus /></el-icon>
-            {{ t('users.addUser') }}
-          </el-button>
-        </div>
-      </div>
+      <UserToolbar
+        v-model:search-query="searchQuery"
+        v-model:include-virtual="includeVirtual"
+        @add="handleAdd"
+        @refresh="loadUsers"
+      />
     </template>
 
-    <div v-loading="loading">
-      <el-table :data="users" style="width: 100%" @sort-change="handleSortChange">
-        <el-table-column prop="username" :label="t('users.username')" sortable="custom" />
-        <el-table-column prop="is_admin" :label="t('users.role')" sortable="custom">
-          <template #default="{ row }">
-            <el-tag :type="row.is_admin ? 'danger' : 'success'">
-              {{ row.is_admin ? t('dashboard.admin') : t('dashboard.user') }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column :label="t('users.storage')">
-          <template #default="{ row }">
-            {{ row.max_storage ? `${(row.max_storage / (1024 * 1024 * 1024)).toFixed(2)} GB` : t('dashboard.unlimited') }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="create_time" label="Created" sortable="custom">
-          <template #default="{ row }">
-            {{ new Date(row.create_time).toLocaleString() }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="last_active" label="Last Active" sortable="custom">
-          <template #default="{ row }">
-            {{ row.last_active ? new Date(row.last_active).toLocaleString() : 'Never' }}
-          </template>
-        </el-table-column>
-        <el-table-column :label="t('users.actions')" width="150" fixed="right">
-          <template #default="{ row }">
-            <el-button-group>
-              <el-button size="small" @click="handleEdit(row)">
-                <el-icon><Edit /></el-icon>
-              </el-button>
-              <el-button size="small" type="danger" @click="handleDelete(row)" :disabled="row.username === userStore.userInfo?.username">
-                <el-icon><Delete /></el-icon>
-              </el-button>
-            </el-button-group>
-          </template>
-        </el-table-column>
-      </el-table>
-    </div>
+    <UserTable
+      :users="users"
+      :loading="loading"
+      :current-username="userStore.userInfo?.username"
+      @sort="handleSortChange"
+      @edit="handleEdit"
+      @delete="handleDelete"
+      @peers="openPeerDialog"
+    />
 
     <el-dialog
       v-model="dialogVisible"
@@ -250,15 +215,21 @@ const handleSubmit = async () => {
           <el-switch v-model="form.admin" :active-text="t('dashboard.admin')" :inactive-text="t('dashboard.user')" />
         </el-form-item>
         <el-form-item :label="t('users.storage')">
-          <el-input v-model="form.max_storage" placeholder="e.g. 100G" />
+          <el-input v-model="form.max_storage" :placeholder="t('users.storagePlaceholder')" />
         </el-form-item>
       </el-form>
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="dialogVisible = false">Cancel</el-button>
-          <el-button type="primary" @click="handleSubmit">Confirm</el-button>
+          <el-button @click="dialogVisible = false">{{ t('users.cancel') }}</el-button>
+          <el-button type="primary" @click="handleSubmit">{{ t('users.confirm') }}</el-button>
         </span>
       </template>
     </el-dialog>
+
+    <PeerAccessDialog
+      v-model:visible="peerDialogVisible"
+      :username="peerTargetUsername"
+      @saved="loadUsers"
+    />
   </el-card>
 </template>

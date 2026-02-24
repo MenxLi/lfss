@@ -140,12 +140,14 @@ onMounted(async () => {
               <el-icon><User /></el-icon>
               {{ t('dashboard.collaborators') }}
             </span>
-            <el-checkbox v-model="includeAdmin" @change="loadPeers">
-              {{ t('dashboard.includeAdmin') }}
-            </el-checkbox>
-            <el-checkbox v-model="incoming" @change="loadPeers">
-              {{ t('dashboard.incomingAccess') }}
-            </el-checkbox>
+            <div class="flex items-center gap-2">
+              <el-checkbox v-model="includeAdmin" @change="loadPeers">
+                {{ t('dashboard.includeAdmin') }}
+              </el-checkbox>
+              <el-checkbox v-model="incoming" @change="loadPeers">
+                {{ t('dashboard.incomingAccess') }}
+              </el-checkbox>
+            </div>
           </div>
         </template>
         <div class="flex flex-col gap-2" v-loading="peerLoading">

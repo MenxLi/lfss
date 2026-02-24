@@ -61,10 +61,10 @@ async function fmtFailedResponse(res: Response): Promise<string> {
     const raw = await res.text();
     const json = raw ? JSON.parse(raw) : {};
     const txt = JSON.stringify(json.detail || json || "No message");
-    const maxWords = 32;
-    if (txt.length > maxWords) {
-        return txt.slice(0, maxWords) + '...';
-    }
+    // const maxWords = 32;
+    // if (txt.length > maxWords) {
+    //     return txt.slice(0, maxWords) + '...';
+    // }
     return txt;
 }
 
@@ -643,17 +643,17 @@ export class ApiUtils {
         return path.split('/').map(decodeURIComponent).join('/');
     }
 
-    static getFileUrl(conn: Connector, url: string, includeToken: boolean = true): string {
+    static getFullUrl(conn: Connector, url: string, includeToken: boolean = true): string {
         if (url.startsWith('/')) { url = url.slice(1); }
         return `${conn.config.endpoint}/${this.encodePath(url)}${includeToken ? `?token=${conn.config.token}` : ''}`;
     }
 
     static getDownloadUrl(conn: Connector, url: string, includeToken: boolean = true): string {
-        return this.getFileUrl(conn, url, includeToken) + (includeToken ? `&download=true` : '?download=true');
+        return this.getFullUrl(conn, url, includeToken) + (includeToken ? `&download=true` : '?download=true');
     }
 
     static getThumbUrl(conn: Connector, url: string, includeToken: boolean = true): string {
-        return this.getFileUrl(conn, url, includeToken) + (includeToken ? `&thumb=true` : '?thumb=true');
+        return this.getFullUrl(conn, url, includeToken) + (includeToken ? `&thumb=true` : '?thumb=true');
     }
 
     static getBundleUrl(conn: Connector, path: string): string {

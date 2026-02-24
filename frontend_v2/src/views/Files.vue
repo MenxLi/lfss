@@ -89,8 +89,8 @@ const handleSortChange = ({ prop, order }: { prop: string, order: string }) => {
     sortBy.value = ''
     sortDesc.value = false
   } else {
-    sortBy.value = prop === 'url' ? 'url' : prop === 'file_size' ? 'file_size' : prop === 'update_time' ? 'update_time' : ''
-    sortDesc.value = order === 'descending'
+    sortBy.value = prop;
+    sortDesc.value = order === 'ascending'
   }
   currentPage.value = 1
   loadData()
@@ -116,9 +116,19 @@ const formatSize = (bytes: number) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-const formatDate = (dateStr: string) => {
+const formatUtcDate = (dateStr: string) => {
   if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString()
+  const date = new Date(dateStr)
+  // Convert UTC to local time
+  date.setHours(date.getHours() - date.getTimezoneOffset() / 60)
+  return date.toLocaleString(
+    undefined, 
+    {
+      dateStyle: 'short',
+      timeStyle: 'short', 
+      hour12: false
+    }
+  )
 }
 
 const handleDirClick = (dir: DirectoryRecord) => {
@@ -250,7 +260,7 @@ const handleFileNameClick = (row: FileRecord) => {
   if (isTextFile(row)) {
     router.push({ name: 'Editor', query: { path: row.url } })
   } else {
-    window.open(ApiUtils.getFileUrl(conn, row.url), '_blank')
+    window.open(ApiUtils.getFullUrl(conn, row.url), '_blank')
   }
 }
 
@@ -286,7 +296,7 @@ const getItemName = (url: string) => {
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="h-full min-h-0 flex flex-col gap-4">
     <div class="flex justify-between items-center">
       <div class="flex items-center gap-2">
         <el-button @click="handleBack" :disabled="!currentPath">
@@ -322,10 +332,17 @@ const getItemName = (url: string) => {
       </div>
     </div>
 
-    <el-card shadow="never" v-loading="loading">
+    <el-card
+      shadow="never"
+      v-loading="loading"
+      class="flex-1 min-h-0"
+      :body-style="{ height: '100%', display: 'flex', flexDirection: 'column' }"
+    >
+      <div class="flex-1 min-h-0">
       <el-table 
         :data="[...dirs.map(d => ({...d, isDir: true})), ...files.map(f => ({...f, isDir: false}))]" 
         style="width: 100%"
+        height="100%"
         @sort-change="handleSortChange"
       >
         <el-table-column prop="url" :label="t('files.name')" min-width="200" sortable="custom">
@@ -335,17 +352,22 @@ const getItemName = (url: string) => {
                 <el-image 
                   :src="ApiUtils.getThumbUrl(conn, row.url)" 
                   lazy 
-                  class="w-6 h-6 rounded object-cover cursor-pointer"
+                  class="w-6 h-6 rounded object-cover cursor-pointer bg-gray-50"
                   :preview-src-list="[ApiUtils.getDownloadUrl(conn, row.url)]"
                   preview-teleported
                   @click.stop
                 >
                   <template #error>
-                    <el-icon size="20" color="#909399" class="cursor-pointer" @click="handleFileIconClick(row)"><Document /></el-icon>
+                    <el-icon size="30" color="#909399" class="cursor-pointer rounded p-0.5 bg-gray-50" @click="handleFileIconClick(row)"><Document /></el-icon>
                   </template>
                 </el-image>
               </template>
-              <el-icon v-else size="20" :color="row.isDir ? '#e6a23c' : '#909399'" class="cursor-pointer" @click="row.isDir ? handleDirClick(row) : handleFileIconClick(row)">
+              <el-icon v-else 
+                size="25"
+                :color="row.isDir ? '#e6a23c' : '#909399'" 
+                class="cursor-pointer rounded p-0.5 bg-gray-50" 
+                @click="row.isDir ? handleDirClick(row) : handleFileIconClick(row)
+                ">
                 <Folder v-if="row.isDir" />
                 <Document v-else />
               </el-icon>
@@ -364,9 +386,14 @@ const getItemName = (url: string) => {
             {{ row.isDir ? '-' : formatSize(row.file_size) }}
           </template>
         </el-table-column>
-        <el-table-column prop="update_time" :label="t('files.modified')" width="180" sortable="custom">
+        <el-table-column prop="create_time" :label="t('files.created')" width="180" sortable="custom">
           <template #default="{ row }">
-            {{ formatDate(row.update_time || row.create_time) }}
+            {{ formatUtcDate(row.create_time) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="access_time" :label="t('files.accessed')" width="180" sortable="custom">
+          <template #default="{ row }">
+            {{ formatUtcDate(row.access_time) }}
           </template>
         </el-table-column>
         <el-table-column :label="t('files.permission')" width="150">
@@ -408,8 +435,9 @@ const getItemName = (url: string) => {
           <el-empty :description="t('files.empty')" />
         </template>
       </el-table>
+      </div>
       
-      <div class="mt-4 flex justify-end">
+      <div class="mt-4 flex justify-end shrink-0">
         <el-pagination
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"

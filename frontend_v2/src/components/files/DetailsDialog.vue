@@ -23,15 +23,23 @@ const open = async (row: DirectoryRecord | FileRecord, isDir: boolean) => {
   detailsData.value = { ...row, isDir }
   detailsDialogVisible.value = true
   ownerUsername.value = ''
-  
+  if (isDir) {
+    props.conn.getMetadata(ApiUtils.decodePath(row.url)).then((res) => {
+      detailsData.value = { ...res as DirectoryRecord, isDir: true }
+    }).catch((e) => {
+      console.error('Failed to fetch directory details', e)
+      logStore.logMessage('error', 'Failed to load directory details')
+    })
+  }
+
   if (!isDir && 'owner_id' in row) {
-    try {
-      const user = await props.conn.queryUser(row.owner_id)
+    ownerUsername.value = String(`[ID: ${row.owner_id}]`)
+    props.conn.queryUser(row.owner_id).then((user) => {
       ownerUsername.value = user.username
-    } catch (e) {
+    }).catch((e) => {
       console.error('Failed to fetch owner username', e)
       ownerUsername.value = String(row.owner_id)
-    }
+    })
   }
 }
 
@@ -53,9 +61,14 @@ const formatDate = (dateStr: string) => {
 
 const copyUrl = () => {
   if (!detailsData.value) return
-  const url = ApiUtils.getDownloadUrl(props.conn, detailsData.value.url)
+  const url = ApiUtils.getFullUrl(props.conn, detailsData.value.url, false)
   copyToClipboard(url)
   logStore.logMessage('success', 'URL copied to clipboard')
+}
+const copyUrlRaw = () => {
+  if (!detailsData.value) return
+  copyToClipboard(detailsData.value.url)
+  logStore.logMessage('success', 'Path copied to clipboard')
 }
 </script>
 
@@ -91,18 +104,31 @@ const copyUrl = () => {
         <div class="font-bold text-gray-600">Created:</div>
         <div class="col-span-2">{{ formatDate(detailsData.create_time) }}</div>
         
-        <div class="font-bold text-gray-600">Modified:</div>
-        <div class="col-span-2">{{ formatDate((detailsData as DirectoryRecord).update_time || detailsData.create_time) }}</div>
-        
-        <template v-if="!detailsData.isDir">
-          <div class="font-bold text-gray-600">Download URL:</div>
-          <div class="col-span-2 flex items-center gap-2">
-            <el-input :value="ApiUtils.getDownloadUrl(props.conn, detailsData.url)" readonly size="small" />
-            <el-button size="small" @click="copyUrl" title="Copy URL">
-              <el-icon><CopyDocument /></el-icon>
-            </el-button>
-          </div>
+        <div class="font-bold text-gray-600">Accessed:</div>
+        <div class="col-span-2">{{ formatDate(detailsData.access_time) }}</div>
+
+        <template v-if="detailsData.isDir">
+          <div class="font-bold text-gray-600">Modified:</div>
+          <div class="col-span-2">{{ formatDate((detailsData as DirectoryRecord).update_time) }}</div>
+
+          <div class="font-bold text-gray-600">File Count:</div>
+          <div class="col-span-2">{{ (detailsData as DirectoryRecord).n_files }}</div>
+
         </template>
+        
+        <div class="col-span-3 flex items-center gap-2">
+          <el-input :value="detailsData.url" readonly size="small" />
+          <el-button size="small" @click="copyUrlRaw" title="Copy Path">
+            <el-icon><CopyDocument /></el-icon>
+          </el-button>
+        </div>
+
+        <div class="col-span-3 flex items-center gap-2">
+          <el-input :value="ApiUtils.getFullUrl(props.conn, detailsData.url, false)" readonly size="small" />
+          <el-button size="small" @click="copyUrl" title="Copy URL">
+            <el-icon><CopyDocument /></el-icon>
+          </el-button>
+        </div>
       </div>
     </div>
   </el-dialog>

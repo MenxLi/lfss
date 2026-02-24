@@ -12,6 +12,7 @@ export interface LogEntry {
 export const useLogStore = defineStore('logs', () => {
     const logs = ref<LogEntry[]>([])
     let nextId = 1
+    const MAX_TOAST_MESSAGE_LENGTH = 180
 
     const addLog = (type: LogEntry['type'], message: string) => {
         logs.value.unshift({
@@ -33,9 +34,14 @@ export const useLogStore = defineStore('logs', () => {
 
     const logMessage = (type: LogEntry['type'], message: string) => {
         addLog(type, message)
+
+        const displayMessage = message.length > MAX_TOAST_MESSAGE_LENGTH
+            ? `${message.slice(0, MAX_TOAST_MESSAGE_LENGTH)}...`
+            : message
+
         ElMessage({
             type,
-            message
+            message: displayMessage
         })
     }
 

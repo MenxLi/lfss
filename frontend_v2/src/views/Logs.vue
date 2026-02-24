@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useLogStore } from '@/store/logs'
 import { useI18n } from 'vue-i18n'
+import { ElMessageBox } from 'element-plus'
 
 const logStore = useLogStore()
 const { t } = useI18n()
@@ -16,6 +17,21 @@ const getTypeColor = (type: string) => {
     case 'error': return 'danger'
     default: return 'info'
   }
+}
+
+const MESSAGE_PREVIEW_LENGTH = 120
+
+const getMessagePreview = (message: string) => {
+  if (message.length <= MESSAGE_PREVIEW_LENGTH) {
+    return message
+  }
+  return `${message.slice(0, MESSAGE_PREVIEW_LENGTH)}...`
+}
+
+const showFullMessage = (message: string) => {
+  ElMessageBox.alert(message, 'Log Message', {
+    confirmButtonText: 'OK'
+  })
 }
 </script>
 
@@ -43,7 +59,17 @@ const getTypeColor = (type: string) => {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="message" label="Message" />
+        <el-table-column prop="message" label="Message" min-width="300">
+          <template #default="{ row }">
+            <span
+              class="block truncate cursor-pointer hover:text-blue-500"
+              :title="row.message"
+              @click="showFullMessage(row.message)"
+            >
+              {{ getMessagePreview(row.message) }}
+            </span>
+          </template>
+        </el-table-column>
         <template #empty>
           <el-empty description="No logs for this session" />
         </template>

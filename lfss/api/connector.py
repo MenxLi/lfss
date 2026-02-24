@@ -557,7 +557,9 @@ class Client:
     def set_password(self, password: str) -> str:
         """Update current authenticated user's password and return new token."""
         response = self._fetch_factory('POST', '_api/user/password', {'password': password})()
-        return response.json()['token']
+        token = response.json()['token']
+        self.config.token = token
+        return token
 
     # ========================== Admin APIs ==========================
     def list_users(

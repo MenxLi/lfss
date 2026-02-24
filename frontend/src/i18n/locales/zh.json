@@ -140,7 +140,7 @@
         "expireUpdated": "已更新 {username} 的到期时间",
         "virtualUser": "虚拟用户",
         "virtualTag": "标签",
-        "virtualTagPlaceholder": "例如 temp-share",
+        "virtualTagPlaceholder": "例如 temp_share",
         "virtualCreated": "虚拟用户已创建：{username}",
         "storagePlaceholder": "例如 100G",
         "cancel": "取消",

@@ -140,7 +140,7 @@
         "expireUpdated": "Expiry updated for {username}",
         "virtualUser": "Virtual User",
         "virtualTag": "Tag",
-        "virtualTagPlaceholder": "e.g. temp-share",
+        "virtualTagPlaceholder": "e.g. temp_share",
         "virtualCreated": "Virtual user created: {username}",
         "storagePlaceholder": "e.g. 100G",
         "cancel": "Cancel",

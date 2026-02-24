@@ -243,6 +243,9 @@ const handleSubmit = async () => {
       await conn.updateUser(params)
       logStore.logMessage('success', t('users.success'))
     } else if (form.value.virtual) {
+      if (form.value.expire && /^\d+$/.test(form.value.expire)) {
+        form.value.expire += 's'
+      }
       const created = await conn.addVirtualUser({
         tag: form.value.tag,
         max_storage: form.value.max_storage,

@@ -566,14 +566,16 @@ export default class Connector {
         return await res.json();
     }
 
-    async updateMyPassword(password: string): Promise<UserPasswordUpdateInfo> {
+    async setPassword(password: string): Promise<UserPasswordUpdateInfo> {
         const res = await this.fetcher.post('_api/user/password', null, {
             params: { password }
         });
         if (!res.ok) {
             throw new Error(`Failed to update password, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
         }
-        return await res.json();
+        const r = await res.json();
+        this.fetcher.config.token = r.token;
+        return r
     }
 
     async setUserExpire(username: string, expire?: string | number): Promise<UserExpireInfo> {

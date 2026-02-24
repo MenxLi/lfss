@@ -69,7 +69,7 @@ const updateMyPassword = async () => {
   accountLoading.value = true
   try {
     const conn = getConnector()
-    const result = await conn.updateMyPassword(passwordForm.value.password)
+    const result = await conn.setPassword(passwordForm.value.password)
     userStore.setToken(result.token)
     passwordForm.value.password = ''
     logStore.logMessage('success', t('dashboard.passwordUpdated'))

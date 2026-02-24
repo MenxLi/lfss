@@ -3,8 +3,8 @@ import { ref, onMounted, computed } from 'vue'
 import { useUserStore } from '@/store/user'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import Connector from '@/api'
 import type { UserRecord } from '@/api'
+import { createConnector, formatBytes } from '@/utils'
 
 const userStore = useUserStore()
 const { t } = useI18n()
@@ -28,21 +28,8 @@ const filteredPeers = computed(() => {
   return peers.value.filter((peer) => !peer.is_admin)
 })
 
-const formatSize = (bytes: number) => {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
-
 const getConnector = () => {
-  const conn = new Connector()
-  conn.config = {
-    endpoint: localStorage.getItem('endpoint') || window.location.origin,
-    token: userStore.token
-  }
-  return conn
+  return createConnector(userStore.token)
 }
 
 const loadStorage = async () => {
@@ -117,12 +104,12 @@ onMounted(async () => {
         <div class="flex flex-col gap-4">
           <div class="flex justify-between items-center">
             <span class="text-gray-500">{{ t('dashboard.used') }}</span>
-            <span class="font-medium text-lg">{{ formatSize(storageInfo.used) }}</span>
+            <span class="font-medium text-lg">{{ formatBytes(storageInfo.used) }}</span>
           </div>
           <div class="flex justify-between items-center">
             <span class="text-gray-500">{{ t('dashboard.total') }}</span>
             <span class="font-medium text-lg">
-              {{ storageInfo.total > 0 ? formatSize(storageInfo.total) : t('dashboard.unlimited') }}
+              {{ storageInfo.total > 0 ? formatBytes(storageInfo.total) : t('dashboard.unlimited') }}
             </span>
           </div>
           <el-progress 

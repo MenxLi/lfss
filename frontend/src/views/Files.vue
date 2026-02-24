@@ -3,7 +3,7 @@ import { ref, onMounted, watch, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
-import Connector, { ApiUtils, permMap } from '@/api'
+import { ApiUtils, permMap } from '@/api'
 import type { DirectoryRecord, FileRecord } from '@/api'
 import { useUserStore } from '@/store/user'
 import { useLogStore } from '@/store/logs'
@@ -21,7 +21,14 @@ import {
 import UploadDialog from '@/components/files/UploadDialog.vue'
 import DetailsDialog from '@/components/files/DetailsDialog.vue'
 import FileTypeIcon from '@/components/files/FileTypeIcon.vue'
-import { getLastFilenameStemRange, getLastPathComponentRange, selectInputRange } from '@/utils'
+import {
+  createConnector,
+  formatBytes,
+  formatDateTime,
+  getLastFilenameStemRange,
+  getLastPathComponentRange,
+  selectInputRange
+} from '@/utils'
 
 const route = useRoute()
 const router = useRouter()
@@ -56,6 +63,10 @@ const manualPathInput = ref('')
 const isDropActive = ref(false)
 const showManualPathControls = ref(false)
 const manualPathInputRef = ref<any>(null)
+const tableRows = computed(() => [
+  ...dirs.value.map((d) => ({ ...d, isDir: true })),
+  ...files.value.map((f) => ({ ...f, isDir: false }))
+])
 
 type PathSelectMode = 'last-filename' | 'last-pathname'
 
@@ -67,11 +78,7 @@ const normalizeDirPath = (path: string) => {
   return normalized
 }
 
-const conn = new Connector()
-conn.config = { 
-  endpoint: localStorage.getItem('endpoint') || window.location.origin, 
-  token: userStore.token 
-}
+const conn = createConnector(userStore.token)
 
 const loadData = async () => {
   loading.value = true
@@ -140,30 +147,6 @@ const handleSizeChange = (val: number) => {
 const handleCurrentChange = (val: number) => {
   currentPage.value = val
   loadData()
-}
-
-const formatSize = (bytes: number) => {
-  if (bytes === -1) return '-'
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
-
-const formatUtcDate = (dateStr: string) => {
-  if (!dateStr) return '-'
-  const date = new Date(dateStr)
-  // Convert UTC to local time
-  date.setHours(date.getHours() - date.getTimezoneOffset() / 60)
-  return date.toLocaleString(
-    undefined, 
-    {
-      dateStyle: 'short',
-      timeStyle: 'short', 
-      hour12: false
-    }
-  )
 }
 
 const handleDirClick = (dir: DirectoryRecord) => {
@@ -358,11 +341,11 @@ const handleFileNameClick = (row: FileRecord) => {
 const handleNewCommand = async (command: string) => {
   if (command === 'text') {
     try {
-      const { value } = (await ElMessageBox.prompt('Enter file name:', 'New Text File', {
-        confirmButtonText: 'Create',
-        cancelButtonText: 'Cancel',
+      const { value } = (await ElMessageBox.prompt(t('files.newFilePrompt'), t('files.newTextFile'), {
+        confirmButtonText: t('files.createAction'),
+        cancelButtonText: t('users.cancel'),
         inputPattern: /^.+$/,
-        inputErrorMessage: 'File name cannot be empty'
+        inputErrorMessage: t('files.newFileNameRequired')
       })) as any
       if (value) {
         const newPath = currentPath.value + value
@@ -428,11 +411,11 @@ manualPathInput.value = currentPath.value
         <el-dropdown @command="handleNewCommand" :disabled="!currentPath">
           <el-button type="success">
             <el-icon class="mr-1"><Document /></el-icon>
-            New
+            {{ t('files.new') }}
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="text">Text File</el-dropdown-item>
+              <el-dropdown-item command="text">{{ t('files.newTextFile') }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -455,7 +438,7 @@ manualPathInput.value = currentPath.value
     >
       <div class="flex-1 min-h-0">
       <el-table 
-        :data="[...dirs.map(d => ({...d, isDir: true})), ...files.map(f => ({...f, isDir: false}))]" 
+        :data="tableRows" 
         style="width: 100%"
         height="100%"
         @sort-change="handleSortChange"
@@ -498,17 +481,17 @@ manualPathInput.value = currentPath.value
         </el-table-column>
         <el-table-column prop="file_size" :label="t('files.size')" width="120" sortable="custom">
           <template #default="{ row }">
-            {{ row.isDir ? '-' : formatSize(row.file_size) }}
+            {{ row.isDir ? '-' : formatBytes(row.file_size) }}
           </template>
         </el-table-column>
         <el-table-column prop="create_time" :label="t('files.created')" width="180" sortable="custom">
           <template #default="{ row }">
-            {{ formatUtcDate(row.create_time) }}
+            {{ formatDateTime(row.create_time) }}
           </template>
         </el-table-column>
         <el-table-column prop="access_time" :label="t('files.accessed')" width="180" sortable="custom">
           <template #default="{ row }">
-            {{ formatUtcDate(row.access_time) }}
+            {{ formatDateTime(row.access_time) }}
           </template>
         </el-table-column>
         <el-table-column :label="t('files.permission')" width="150">
@@ -556,7 +539,7 @@ manualPathInput.value = currentPath.value
         <el-pagination
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
-          :page-sizes="[20, 50, 100, 200]"
+          :page-sizes="[20, 50, 100, 200, 500, 1000, 2000]"
           layout="total, sizes, prev, pager, next"
           :total="totalItems"
           @size-change="handleSizeChange"

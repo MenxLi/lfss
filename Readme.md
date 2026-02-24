@@ -7,7 +7,6 @@ My experiment on a lightweight and high-performance file/object storage service.
 
 - User storage limit and access control.
 - Pagination and sorted file listing for vast number of files.  
-- High performance: high concurrency, near-native speed on stress tests.
 - Support range requests, so you can stream large files / resume download.
 - WebDAV compatible ([NOTE](./docs/webdav.md)).
 
@@ -25,7 +24,9 @@ By default, the data will be stored in `.storage_data`.
 You can change storage directory using the `LFSS_DATA` environment variable.
 
 There is a simple frontend at `http://localhost:8000/.panel/`.
-Or, you can start a web server at `/frontend` and open `index.html` in your browser. 
+
+![Frontend Screenshot](https://limengxun-imagebed.oss-cn-wuhan-lr.aliyuncs.com/github/lfss-panel-20260224.png)
+
 
 The API usage is simple, just `GET`, `PUT`, `DELETE` to the `/<username>/file/url` path.  
 The authentication can be acheived through one of the following methods:

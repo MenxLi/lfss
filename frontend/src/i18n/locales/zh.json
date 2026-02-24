@@ -35,6 +35,11 @@
     },
     "files": {
         "upload": "上传",
+        "new": "新建",
+        "newTextFile": "文本文件",
+        "newFilePrompt": "请输入文件名：",
+        "newFileNameRequired": "文件名不能为空",
+        "createAction": "创建",
         "pathNav": "路径",
         "pathPlaceholder": "输入路径（例如 user/docs/）",
         "goPath": "跳转",
@@ -70,6 +75,17 @@
             "protected": "受保护",
             "private": "私有"
         }
+    },
+    "editor": {
+        "noFile": "未指定文件",
+        "fileTooLarge": "文件过大（最大 5MB）",
+        "loadFailed": "加载文件失败",
+        "saved": "保存成功",
+        "saveFailed": "保存失败",
+        "new": "新建",
+        "modified": "已修改",
+        "save": "保存",
+        "placeholder": "在此输入文件内容..."
     },
     "users": {
         "addUser": "添加用户",
@@ -113,5 +129,13 @@
         "searchUsersFailed": "搜索用户失败",
         "savePeersFailed": "保存协作者权限失败",
         "peersSaved": "协作者权限已更新"
+    },
+    "logs": {
+        "clear": "清空日志",
+        "time": "时间",
+        "type": "类型",
+        "message": "消息",
+        "messageTitle": "日志详情",
+        "empty": "本次会话暂无日志"
     }
 }

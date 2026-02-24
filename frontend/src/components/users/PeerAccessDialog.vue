@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import Connector from '@/api'
 import type { UserRecord } from '@/api'
 import { useUserStore } from '@/store/user'
 import { useI18n } from 'vue-i18n'
+import { createConnector } from '@/utils'
 
 type PeerLevel = 'READ' | 'WRITE'
 type PeerItem = { username: string, level: PeerLevel }
@@ -22,11 +22,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const userStore = useUserStore()
 
-const conn = new Connector()
-conn.config = {
-  endpoint: localStorage.getItem('endpoint') || window.location.origin,
-  token: userStore.token
-}
+const conn = createConnector(userStore.token)
 
 const loading = ref(false)
 const saving = ref(false)

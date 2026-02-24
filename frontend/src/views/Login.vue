@@ -5,6 +5,7 @@ import { useUserStore } from '@/store/user'
 import { useI18n } from 'vue-i18n'
 import Connector from '@/api'
 import { useLogStore } from '@/store/logs'
+import { resolveEndpoint } from '@/utils'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -12,7 +13,7 @@ const { t } = useI18n()
 const logStore = useLogStore()
 
 const form = ref({
-  endpoint: window.location.origin || 'http://localhost:8000',
+  endpoint: resolveEndpoint(),
   token: ''
 })
 
@@ -26,17 +27,19 @@ onMounted(() => {
 })
 
 const handleLogin = async () => {
-  if (!form.value.endpoint || !form.value.token) return
+  const endpoint = form.value.endpoint.trim()
+  const token = form.value.token.trim()
+  if (!endpoint || !token) return
   
   loading.value = true
   try {
     const conn = new Connector()
-    conn.config = { endpoint: form.value.endpoint, token: form.value.token }
+    conn.config = { endpoint, token }
     
     const user = await conn.whoami()
     if (user && user.id !== 0) {
-      userStore.setToken(form.value.token)
-      localStorage.setItem('endpoint', form.value.endpoint)
+      userStore.setToken(token)
+      localStorage.setItem('endpoint', endpoint)
       userStore.setUserInfo(user)
       logStore.logMessage('success', t('login.success'))
       router.push('/')
@@ -52,19 +55,23 @@ const handleLogin = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-gray-100">
-    <el-card class="w-96 shadow-lg">
+  <div class="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-100 to-slate-200 p-4">
+    <el-card class="w-full max-w-md border border-slate-200/70">
       <template #header>
-        <div class="text-center text-xl font-bold">{{ t('login.title') }}</div>
+        <div class="text-center text-xl font-bold tracking-tight">{{ t('login.title') }}</div>
       </template>
-      <el-form @submit.prevent="handleLogin" label-position="top">
+      <el-form @submit.prevent="handleLogin" label-position="top" class="space-y-1">
         <el-form-item label="Endpoint">
-          <el-input v-model="form.endpoint" :prefix-icon="'Link'" />
+          <el-input v-model="form.endpoint" placeholder="https://example.com">
+            <template #prefix><el-icon><Link /></el-icon></template>
+          </el-input>
         </el-form-item>
         <el-form-item label="Token">
-          <el-input v-model="form.token" type="password" show-password :prefix-icon="'Key'" />
+          <el-input v-model="form.token" type="password" show-password>
+            <template #prefix><el-icon><Key /></el-icon></template>
+          </el-input>
         </el-form-item>
-        <el-button type="primary" class="w-full mt-4" native-type="submit" :loading="loading">
+        <el-button type="primary" class="w-full mt-2" native-type="submit" :loading="loading" :disabled="!form.endpoint.trim() || !form.token.trim()">
           {{ t('login.submit') }}
         </el-button>
       </el-form>

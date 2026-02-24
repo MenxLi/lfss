@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import type { UserRecord } from '@/api'
+import { formatBytes, formatDateTime } from '@/utils'
 
 const { t } = useI18n()
 
@@ -31,17 +32,17 @@ const emit = defineEmits<{
       </el-table-column>
       <el-table-column :label="t('users.storage')" min-width="140">
         <template #default="{ row }">
-          {{ row.max_storage ? `${(row.max_storage / (1024 * 1024 * 1024)).toFixed(2)} GB` : t('dashboard.unlimited') }}
+          {{ row.max_storage ? formatBytes(row.max_storage) : t('dashboard.unlimited') }}
         </template>
       </el-table-column>
       <el-table-column prop="create_time" :label="t('users.createdAt')" sortable="custom" min-width="180">
         <template #default="{ row }">
-          {{ new Date(row.create_time).toLocaleString() }}
+          {{ formatDateTime(row.create_time) }}
         </template>
       </el-table-column>
       <el-table-column prop="last_active" :label="t('users.lastActive')" sortable="custom" min-width="180">
         <template #default="{ row }">
-          {{ row.last_active ? new Date(row.last_active).toLocaleString() : t('users.never') }}
+          {{ row.last_active ? formatDateTime(row.last_active) : t('users.never') }}
         </template>
       </el-table-column>
       <el-table-column :label="t('users.actions')" width="220" fixed="right">

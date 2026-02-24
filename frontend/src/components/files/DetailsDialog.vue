@@ -111,6 +111,9 @@ const copyUrlRaw = () => {
           <div class="font-bold text-gray-600">Modified:</div>
           <div class="col-span-2">{{ formatDate((detailsData as DirectoryRecord).update_time) }}</div>
 
+          <div class="font-bold text-gray-600">Size:</div>
+          <div class="col-span-2">{{ formatSize((detailsData as DirectoryRecord).size) }}</div>
+
           <div class="font-bold text-gray-600">File Count:</div>
           <div class="col-span-2">{{ (detailsData as DirectoryRecord).n_files }}</div>
 

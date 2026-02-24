@@ -35,6 +35,11 @@
     },
     "files": {
         "upload": "Upload",
+        "new": "New",
+        "newTextFile": "Text File",
+        "newFilePrompt": "Enter file name:",
+        "newFileNameRequired": "File name cannot be empty",
+        "createAction": "Create",
         "pathNav": "Path",
         "pathPlaceholder": "Enter path (e.g. user/docs/)",
         "goPath": "Go",
@@ -70,6 +75,17 @@
             "protected": "Protected",
             "private": "Private"
         }
+    },
+    "editor": {
+        "noFile": "No file specified",
+        "fileTooLarge": "File too large (Max 5MB)",
+        "loadFailed": "Failed to load file",
+        "saved": "Saved successfully",
+        "saveFailed": "Failed to save file",
+        "new": "New",
+        "modified": "Modified",
+        "save": "Save",
+        "placeholder": "Enter file content here..."
     },
     "users": {
         "addUser": "Add User",
@@ -113,5 +129,13 @@
         "searchUsersFailed": "Failed to search users",
         "savePeersFailed": "Failed to save peer access",
         "peersSaved": "Peer access updated"
+    },
+    "logs": {
+        "clear": "Clear Logs",
+        "time": "Time",
+        "type": "Type",
+        "message": "Message",
+        "messageTitle": "Log Message",
+        "empty": "No logs for this session"
     }
 }

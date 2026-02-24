@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import Connector, { ApiUtils } from '@/api'
+import { ApiUtils } from '@/api'
 import { useUserStore } from '@/store/user'
 import { useLogStore } from '@/store/logs'
 import { Back, DocumentChecked } from '@element-plus/icons-vue'
+import { createConnector } from '@/utils'
+import { useI18n } from 'vue-i18n'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const logStore = useLogStore()
+const { t } = useI18n()
 
 const filePath = computed(() => {
   const path = route.query.path as string
@@ -22,15 +25,11 @@ const loading = ref(false)
 const saving = ref(false)
 const isNew = ref(false)
 
-const conn = new Connector()
-conn.config = { 
-  endpoint: localStorage.getItem('endpoint') || window.location.origin, 
-  token: userStore.token 
-}
+const conn = createConnector(userStore.token)
 
 const loadFile = async () => {
   if (!filePath.value) {
-    logStore.logMessage('error', 'No file specified')
+    logStore.logMessage('error', t('editor.noFile'))
     return
   }
   
@@ -39,7 +38,7 @@ const loadFile = async () => {
     const meta = await conn.getMetadata(filePath.value)
     if (meta) {
       if ('file_size' in meta && meta.file_size > 5 * 1024 * 1024) {
-        throw new Error('File too large (Max 5MB)')
+        throw new Error(t('editor.fileTooLarge'))
       }
       const text = await conn.getText(filePath.value)
       content.value = text
@@ -51,13 +50,11 @@ const loadFile = async () => {
       originalContent.value = ''
     }
   } catch (e: any) {
-    logStore.logMessage('error', e.message || 'Failed to load file')
+    logStore.logMessage('error', e.message || t('editor.loadFailed'))
   } finally {
     loading.value = false
   }
 }
-
-onMounted(loadFile)
 
 const handleSave = async () => {
   if (!filePath.value) return
@@ -67,9 +64,9 @@ const handleSave = async () => {
     await conn.putText(filePath.value, content.value, { conflict: 'overwrite' })
     originalContent.value = content.value
     isNew.value = false
-    logStore.logMessage('success', 'Saved successfully')
+    logStore.logMessage('success', t('editor.saved'))
   } catch (e: any) {
-    logStore.logMessage('error', e.message || 'Failed to save file')
+    logStore.logMessage('error', e.message || t('editor.saveFailed'))
   } finally {
     saving.value = false
   }
@@ -94,11 +91,29 @@ const handleTab = (e: KeyboardEvent) => {
   }
 }
 
+const handleEditorShortcut = (e: KeyboardEvent) => {
+  const isSave = e.key.toLowerCase() === 's' && (e.ctrlKey || e.metaKey)
+  if (!isSave) return
+  e.preventDefault()
+  if (!loading.value && !saving.value && (isDirty.value || isNew.value)) {
+    void handleSave()
+  }
+}
+
 const isDirty = computed(() => content.value !== originalContent.value)
+
+onMounted(() => {
+  void loadFile()
+  window.addEventListener('keydown', handleEditorShortcut)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleEditorShortcut)
+})
 </script>
 
 <template>
-  <div class="h-[calc(100vh-120px)] flex flex-col space-y-4">
+  <div class="h-full min-h-0 flex flex-col gap-4">
     <div class="flex justify-between items-center">
       <div class="flex items-center gap-4">
         <el-button @click="handleBack">
@@ -106,23 +121,23 @@ const isDirty = computed(() => content.value !== originalContent.value)
         </el-button>
         <div class="text-lg font-medium flex items-center gap-2">
           {{ ApiUtils.decodePath(filePath) }}
-          <el-tag v-if="isNew" size="small" type="success">New</el-tag>
-          <el-tag v-if="isDirty" size="small" type="warning">Modified</el-tag>
+          <el-tag v-if="isNew" size="small" type="success">{{ t('editor.new') }}</el-tag>
+          <el-tag v-if="isDirty" size="small" type="warning">{{ t('editor.modified') }}</el-tag>
         </div>
       </div>
       <el-button type="primary" @click="handleSave" :loading="saving" :disabled="!isDirty && !isNew">
         <el-icon class="mr-1"><DocumentChecked /></el-icon>
-        Save
+        {{ t('editor.save') }}
       </el-button>
     </div>
 
-    <el-card shadow="never" class="flex-1 flex flex-col" body-class="flex-1 flex flex-col p-0" v-loading="loading">
+    <el-card shadow="never" class="flex-1 min-h-0 flex flex-col" body-class="flex-1 min-h-0 flex flex-col p-0" v-loading="loading">
       <textarea
         v-model="content"
-        class="flex-1 w-full p-4 resize-none outline-none font-mono text-sm bg-transparent"
+        class="flex-1 min-h-0 w-full p-4 resize-none outline-none font-mono text-sm leading-6 bg-transparent"
         @keydown="handleTab"
         :disabled="loading"
-        placeholder="Enter file content here..."
+        :placeholder="t('editor.placeholder')"
       ></textarea>
     </el-card>
   </div>

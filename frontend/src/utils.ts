@@ -1,3 +1,41 @@
+import Connector from '@/api'
+
+export function resolveEndpoint(endpoint?: string): string {
+    return endpoint?.trim() || localStorage.getItem('endpoint') || window.location.origin;
+}
+
+export function createConnector(token: string, endpoint?: string): Connector {
+    const conn = new Connector();
+    conn.config = {
+        endpoint: resolveEndpoint(endpoint),
+        token
+    };
+    return conn;
+}
+
+export function formatBytes(bytes: number): string {
+    if (bytes === -1) return '-';
+    if (bytes === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const idx = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    return `${(bytes / Math.pow(1024, idx)).toFixed(2).replace(/\.00$/, '')} ${units[idx]}`;
+}
+
+export function formatDateTime(value: string | number | Date, fromUtc = true): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return '-';
+    }
+    if (fromUtc) {
+        date.setHours(date.getHours() - date.getTimezoneOffset() / 60);
+    }
+    return date.toLocaleString(undefined, {
+        dateStyle: 'short',
+        timeStyle: 'short',
+        hour12: false
+    });
+}
+
 export function copyToClipboard(text: string) {
     function secureCopy(text: string) {
         navigator.clipboard.writeText(text);

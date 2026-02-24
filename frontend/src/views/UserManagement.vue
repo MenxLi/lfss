@@ -3,21 +3,17 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { sha256 } from 'js-sha256'
-import Connector from '@/api'
 import type { UserRecord } from '@/api'
 import { useUserStore } from '@/store/user'
 import UserToolbar from '@/components/users/UserToolbar.vue'
 import UserTable from '@/components/users/UserTable.vue'
 import PeerAccessDialog from '@/components/users/PeerAccessDialog.vue'
+import { createConnector } from '@/utils'
 
 const { t } = useI18n()
 const userStore = useUserStore()
 
-const conn = new Connector()
-conn.config = {
-  endpoint: localStorage.getItem('endpoint') || window.location.origin,
-  token: userStore.token
-}
+const conn = createConnector(userStore.token)
 
 const users = ref<UserRecord[]>([])
 const loading = ref(false)

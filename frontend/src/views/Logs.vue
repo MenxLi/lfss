@@ -2,13 +2,10 @@
 import { useLogStore } from '@/store/logs'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
+import { formatDateTime } from '@/utils'
 
 const logStore = useLogStore()
 const { t } = useI18n()
-
-const formatDate = (timestamp: number) => {
-  return new Date(timestamp).toLocaleString()
-}
 
 const getTypeColor = (type: string) => {
   switch (type) {
@@ -29,8 +26,8 @@ const getMessagePreview = (message: string) => {
 }
 
 const showFullMessage = (message: string) => {
-  ElMessageBox.alert(message, 'Log Message', {
-    confirmButtonText: 'OK'
+  ElMessageBox.alert(message, t('logs.messageTitle'), {
+    confirmButtonText: t('users.confirm')
   })
 }
 </script>
@@ -41,25 +38,25 @@ const showFullMessage = (message: string) => {
       <h1 class="text-2xl font-bold text-gray-800">{{ t('menu.logs') }}</h1>
       <el-button type="danger" @click="logStore.clearLogs">
         <el-icon class="mr-1"><Delete /></el-icon>
-        Clear Logs
+        {{ t('logs.clear') }}
       </el-button>
     </div>
 
-    <el-card shadow="never">
+    <el-card shadow="never" class="border border-slate-200/70">
       <el-table :data="logStore.logs" style="width: 100%" :default-sort="{ prop: 'timestamp', order: 'descending' }">
-        <el-table-column prop="timestamp" label="Time" width="180" sortable>
+        <el-table-column prop="timestamp" :label="t('logs.time')" width="180" sortable>
           <template #default="{ row }">
-            {{ formatDate(row.timestamp) }}
+            {{ formatDateTime(row.timestamp, false) }}
           </template>
         </el-table-column>
-        <el-table-column prop="type" label="Type" width="100">
+        <el-table-column prop="type" :label="t('logs.type')" width="100">
           <template #default="{ row }">
             <el-tag :type="getTypeColor(row.type)" size="small">
               {{ row.type.toUpperCase() }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="message" label="Message" min-width="300">
+        <el-table-column prop="message" :label="t('logs.message')" min-width="300">
           <template #default="{ row }">
             <span
               class="block truncate cursor-pointer hover:text-blue-500"
@@ -71,7 +68,7 @@ const showFullMessage = (message: string) => {
           </template>
         </el-table-column>
         <template #empty>
-          <el-empty description="No logs for this session" />
+          <el-empty :description="t('logs.empty')" />
         </template>
       </el-table>
     </el-card>

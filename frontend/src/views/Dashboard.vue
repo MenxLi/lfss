@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useUserStore } from '@/store/user'
+import { useLogStore } from '@/store/logs'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
 import { sha256 } from 'js-sha256'
 import type { UserRecord } from '@/api'
 import { createConnector, formatBytes } from '@/utils'
 
 const userStore = useUserStore()
+const logStore = useLogStore()
 const { t } = useI18n()
 
 const storageInfo = ref({
@@ -54,15 +55,15 @@ const copyCurrentToken = async () => {
   if (!userStore.token) return
   try {
     await navigator.clipboard.writeText(userStore.token)
-    ElMessage.success(t('users.tokenCopied'))
+    logStore.logMessage('success', t('users.tokenCopied'))
   } catch {
-    ElMessage.error(t('users.copyTokenFailed'))
+    logStore.logMessage('error', t('users.copyTokenFailed'))
   }
 }
 
 const updateMyPassword = async () => {
   if (!passwordForm.value.password) {
-    ElMessage.warning(t('dashboard.passwordRequired'))
+    logStore.logMessage('warning', t('dashboard.passwordRequired'))
     return
   }
   accountLoading.value = true
@@ -71,10 +72,10 @@ const updateMyPassword = async () => {
     const result = await conn.updateMyPassword(passwordForm.value.password)
     userStore.setToken(result.token)
     passwordForm.value.password = ''
-    ElMessage.success(t('dashboard.passwordUpdated'))
+    logStore.logMessage('success', t('dashboard.passwordUpdated'))
   } catch (e: unknown) {
     const err = e as Error
-    ElMessage.error(err.message || t('dashboard.passwordUpdateFailed'))
+    logStore.logMessage('error', err.message || t('dashboard.passwordUpdateFailed'))
   } finally {
     accountLoading.value = false
   }
@@ -113,7 +114,7 @@ const loadPeers = async () => {
     peers.value = [...peerMap.values()].sort((a, b) => a.username.localeCompare(b.username))
   } catch (e: unknown) {
     const err = e as Error
-    ElMessage.error(err.message || t('dashboard.failedToLoadCollaborators'))
+    logStore.logMessage('error', err.message || t('dashboard.failedToLoadCollaborators'))
   } finally {
     peerLoading.value = false
   }
@@ -128,7 +129,7 @@ onMounted(async () => {
     await loadStorage()
   } catch (e: unknown) {
     const err = e as Error
-    ElMessage.error(err.message || t('dashboard.failedToLoadStorage'))
+    logStore.logMessage('error', err.message || t('dashboard.failedToLoadStorage'))
   }
 
   await loadPeers()

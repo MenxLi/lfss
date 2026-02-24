@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
 import { sha256 } from 'js-sha256'
 import type { UserRecord } from '@/api'
 import { useUserStore } from '@/store/user'
+import { useLogStore } from '@/store/logs'
 import UserToolbar from '@/components/users/UserToolbar.vue'
 import UserTable from '@/components/users/UserTable.vue'
 import PeerAccessDialog from '@/components/users/PeerAccessDialog.vue'
@@ -12,6 +13,7 @@ import { createConnector } from '@/utils'
 
 const { t } = useI18n()
 const userStore = useUserStore()
+const logStore = useLogStore()
 
 const conn = createConnector(userStore.token)
 
@@ -65,7 +67,7 @@ const loadUsers = async () => {
     userExpireMap.value = Object.fromEntries(entries)
   } catch (e: unknown) {
     const err = e as Error
-    ElMessage.error(err.message || t('users.loadFailed'))
+    logStore.logMessage('error', err.message || t('users.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -130,9 +132,9 @@ const generateRandomPassword = () => {
 const copyToken = async () => {
   try {
     await navigator.clipboard.writeText(userToken.value)
-    ElMessage.success(t('users.tokenCopied'))
+    logStore.logMessage('success', t('users.tokenCopied'))
   } catch {
-    ElMessage.error(t('users.copyTokenFailed'))
+    logStore.logMessage('error', t('users.copyTokenFailed'))
   }
 }
 
@@ -142,12 +144,12 @@ const handleDelete = async (user: UserRecord) => {
       type: 'warning'
     })
     await conn.deleteUser(user.username)
-    ElMessage.success(t('users.success'))
+    logStore.logMessage('success', t('users.success'))
     loadUsers()
   } catch (e: unknown) {
     if (e !== 'cancel') {
       const err = e as Error
-      ElMessage.error(err.message || t('users.failed'))
+      logStore.logMessage('error', err.message || t('users.failed'))
     }
   }
 }
@@ -171,11 +173,11 @@ const handleSetExpire = async (user: UserRecord) => {
     const input = String(value || '').trim()
     const result = await conn.setUserExpire(user.username, input || undefined)
     userExpireMap.value[user.username] = result.expire_seconds
-    ElMessage.success(t('users.expireUpdated', { username: user.username }))
+    logStore.logMessage('success', t('users.expireUpdated', { username: user.username }))
   } catch (e: unknown) {
     if (e !== 'cancel') {
       const err = e as Error
-      ElMessage.error(err.message || t('users.failed'))
+      logStore.logMessage('error', err.message || t('users.failed'))
     }
   }
 }
@@ -193,7 +195,7 @@ const handleSubmit = async () => {
         params.password = form.value.password
       }
       await conn.updateUser(params)
-      ElMessage.success(t('users.success'))
+      logStore.logMessage('success', t('users.success'))
     } else if (form.value.virtual) {
       const created = await conn.addVirtualUser({
         tag: form.value.tag,
@@ -203,7 +205,7 @@ const handleSubmit = async () => {
       includeVirtual.value = true
       peerTargetUsername.value = created.username
       peerDialogVisible.value = true
-      ElMessage.success(t('users.virtualCreated', { username: created.username }))
+      logStore.logMessage('success', t('users.virtualCreated', { username: created.username }))
     } else {
       const params: { username: string, password?: string, admin?: boolean, max_storage?: string, permission?: string } = {
         username: form.value.username,
@@ -215,13 +217,13 @@ const handleSubmit = async () => {
         params.password = form.value.password
       }
       await conn.addUser(params)
-      ElMessage.success(t('users.success'))
+      logStore.logMessage('success', t('users.success'))
     }
     dialogVisible.value = false
     loadUsers()
   } catch (e: unknown) {
     const err = e as Error
-    ElMessage.error(err.message || t('users.failed'))
+    logStore.logMessage('error', err.message || t('users.failed'))
   }
 }
 </script>

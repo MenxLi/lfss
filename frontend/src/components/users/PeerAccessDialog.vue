@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
 import type { UserRecord } from '@/api'
 import { useUserStore } from '@/store/user'
+import { useLogStore } from '@/store/logs'
 import { useI18n } from 'vue-i18n'
 import { createConnector } from '@/utils'
 
@@ -21,6 +21,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const userStore = useUserStore()
+const logStore = useLogStore()
 
 const conn = createConnector(userStore.token)
 
@@ -71,7 +72,7 @@ const refreshCurrentPeers = async () => {
     peers.value = [...map.entries()].map(([username, level]) => ({ username, level }))
   } catch (e: unknown) {
     const err = e as Error
-    ElMessage.error(err.message || t('users.loadPeersFailed'))
+    logStore.logMessage('error', err.message || t('users.loadPeersFailed'))
   } finally {
     loading.value = false
   }
@@ -92,7 +93,7 @@ const searchUsers = async (query?: string) => {
     )
   } catch (e: unknown) {
     const err = e as Error
-    ElMessage.error(err.message || t('users.searchUsersFailed'))
+    logStore.logMessage('error', err.message || t('users.searchUsersFailed'))
   } finally {
     optionsLoading.value = false
   }
@@ -142,12 +143,12 @@ const savePeers = async () => {
     }
 
     initialPeerMap.value = new Map(currentMap)
-    ElMessage.success(t('users.peersSaved'))
+    logStore.logMessage('success', t('users.peersSaved'))
     emit('saved')
     visibleProxy.value = false
   } catch (e: unknown) {
     const err = e as Error
-    ElMessage.error(err.message || t('users.savePeersFailed'))
+    logStore.logMessage('error', err.message || t('users.savePeersFailed'))
   } finally {
     saving.value = false
   }

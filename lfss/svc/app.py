@@ -11,11 +11,10 @@ class SPAStaticFiles(StaticFiles):
         try:
             response = await super().get_response(path, scope)
         except StarletteHTTPException as exc:
-            if exc.status_code == 404 and '.' not in Path(path).name:
+            if exc.status_code == 404:
                 return await super().get_response("index.html", scope)
             raise
-
-        if response.status_code == 404 and '.' not in Path(path).name:
+        if response.status_code == 404:
             return await super().get_response("index.html", scope)
         return response
 

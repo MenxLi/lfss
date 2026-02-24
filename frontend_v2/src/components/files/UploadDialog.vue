@@ -112,9 +112,10 @@ const triggerFileInput = () => {
 
 const handleFileInputChange = (e: Event) => {
   const target = e.target as HTMLInputElement
-  if (target.files && target.files.length > 0) {
-    uploadFileObj.value = target.files[0]
-    uploadFileName.value = target.files[0].name
+  const file = target.files?.item(0)
+  if (file) {
+    uploadFileObj.value = file
+    uploadFileName.value = file.name
     isMultiple.value = false
     checkFileExists()
   }
@@ -122,8 +123,9 @@ const handleFileInputChange = (e: Event) => {
 
 const handleDrop = async (e: DragEvent) => {
   const items = e.dataTransfer?.items
-  if (items && items.length === 1 && items[0].kind === 'file' && items[0].webkitGetAsEntry()?.isFile) {
-    const file = items[0].getAsFile()
+  const firstItem = items?.[0]
+  if (items && items.length === 1 && firstItem?.kind === 'file' && firstItem.webkitGetAsEntry()?.isFile) {
+    const file = firstItem.getAsFile()
     if (file) {
       uploadFileObj.value = file
       uploadFileName.value = file.name
@@ -140,6 +142,12 @@ const handleDrop = async (e: DragEvent) => {
       const file = await filePromiseFn()
       files.push({ relPath, file })
     })
+
+    if (files.length === 0) {
+      resetState()
+      logStore.logMessage('error', 'No files detected from drop payload')
+      return
+    }
     
     multipleFiles.value = files
     isMultiple.value = true
@@ -147,9 +155,9 @@ const handleDrop = async (e: DragEvent) => {
     uploadFileName.value = ''
 
     uploadPath.value = ensureDirPath(props.currentPath)
-    if (items && items.length === 1 && items[0].kind === 'file' && items[0].webkitGetAsEntry()?.isDirectory) {
-      const dirNameFromEntry = normalizeSubdirName(items[0].webkitGetAsEntry()?.name || '')
-      const dirNameFromRelPath = files.length > 0 ? getRootDirFromRelPath(files[0].relPath) : ''
+    if (items && items.length === 1 && firstItem?.kind === 'file' && firstItem.webkitGetAsEntry()?.isDirectory) {
+      const dirNameFromEntry = normalizeSubdirName(firstItem.webkitGetAsEntry()?.name || '')
+      const dirNameFromRelPath = files.length > 0 ? getRootDirFromRelPath(files[0]!.relPath) : ''
       const dirName = dirNameFromEntry || dirNameFromRelPath
       if (dirName) {
         multipleBaseDir.value = `${dirName}/`

@@ -210,9 +210,13 @@ watch(incoming, async () => {
             <el-option value="READ" :label="t('dashboard.accessRead')" />
             <el-option value="WRITE" :label="t('dashboard.accessWrite')" />
           </el-select>
-          <el-checkbox v-model="incoming">
+          <!-- <el-checkbox v-model="incoming">
             {{ t('users.incomingAccess') }}
-          </el-checkbox>
+          </el-checkbox> -->
+          <el-switch v-model="incoming"
+            :active-text="t('dashboard.incomingAccess')" 
+            :inactive-text="t('dashboard.outcomingAccess')" 
+            inline-prompt/>
         </div>
 
 
@@ -239,7 +243,8 @@ watch(incoming, async () => {
           </template>
         </el-table-column>
         <template #empty>
-          <el-empty :description="t('users.noPeers')" />
+          <el-empty :description="t('users.noPeers')" >
+          </el-empty> 
         </template>
       </el-table>
     </div>

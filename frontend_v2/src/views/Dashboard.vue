@@ -144,9 +144,10 @@ onMounted(async () => {
               <el-checkbox v-model="includeAdmin" @change="loadPeers">
                 {{ t('dashboard.includeAdmin') }}
               </el-checkbox>
-              <el-checkbox v-model="incoming" @change="loadPeers">
-                {{ t('dashboard.incomingAccess') }}
-              </el-checkbox>
+              <el-switch v-model="incoming" @change="loadPeers" 
+                :active-text="t('dashboard.incomingAccess')" 
+                :inactive-text="t('dashboard.outcomingAccess')" 
+                inline-prompt/>
             </div>
           </div>
         </template>

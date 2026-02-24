@@ -18,7 +18,7 @@ const props = defineProps<{
 
 const extension = computed(() => {
   if (!props.url) return ''
-  const cleanUrl = props.url.split('?')[0]
+  const cleanUrl = props.url.split('?')[0] ?? ''
   return cleanUrl.split('.').pop()?.toLowerCase() || ''
 })
 

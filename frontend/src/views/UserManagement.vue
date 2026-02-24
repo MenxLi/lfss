@@ -19,12 +19,16 @@ const conn = createConnector(userStore.token)
 
 const users = ref<UserRecord[]>([])
 const userExpireMap = ref<Record<string, number | null>>({})
+const userStorageUsedMap = ref<Record<string, number>>({})
 const loading = ref(false)
 const searchQuery = ref('')
 const includeVirtual = ref(false)
 const sortBy = ref<'username' | 'create_time' | 'is_admin' | 'last_active'>('create_time')
 const sortDesc = ref(false)
 const sortableProps = ['username', 'create_time', 'is_admin', 'last_active'] as const
+const currentPage = ref(1)
+const pageSize = ref(20)
+const totalUsers = ref(0)
 
 const dialogVisible = ref(false)
 const isEdit = ref(false)
@@ -50,12 +54,24 @@ const userToken = computed(() => {
 const loadUsers = async () => {
   loading.value = true
   try {
+    const offset = (currentPage.value - 1) * pageSize.value
     users.value = await conn.listUsers({
       username_filter: searchQuery.value || undefined,
       include_virtual: includeVirtual.value,
       order_by: sortBy.value,
-      order_desc: sortDesc.value
+      order_desc: sortDesc.value,
+      offset,
+      limit: pageSize.value
     })
+    const allMatched = await conn.listUsers({
+      username_filter: searchQuery.value || undefined,
+      include_virtual: includeVirtual.value,
+      order_by: sortBy.value,
+      order_desc: sortDesc.value,
+      offset: 0,
+      limit: 100000
+    })
+    totalUsers.value = allMatched.length
     const entries = await Promise.all(users.value.map(async (user) => {
       try {
         const info = await conn.queryUserExpire({ username: user.username })
@@ -65,6 +81,16 @@ const loadUsers = async () => {
       }
     }))
     userExpireMap.value = Object.fromEntries(entries)
+
+    const storageEntries = await Promise.all(users.value.map(async (user) => {
+      try {
+        const info = await conn.getUserStorage(user.username)
+        return [user.username, info.used] as const
+      } catch {
+        return [user.username, 0] as const
+      }
+    }))
+    userStorageUsedMap.value = Object.fromEntries(storageEntries)
   } catch (e: unknown) {
     const err = e as Error
     logStore.logMessage('error', err.message || t('users.loadFailed'))
@@ -73,8 +99,14 @@ const loadUsers = async () => {
   }
 }
 
-watch(searchQuery, loadUsers)
-watch(includeVirtual, loadUsers)
+watch(searchQuery, () => {
+  currentPage.value = 1
+  loadUsers()
+})
+watch(includeVirtual, () => {
+  currentPage.value = 1
+  loadUsers()
+})
 
 onMounted(loadUsers)
 
@@ -82,6 +114,18 @@ const handleSortChange = ({ prop, order }: { prop: string, order: string }) => {
   if (!prop || !sortableProps.includes(prop as typeof sortableProps[number])) return
   sortBy.value = prop as typeof sortableProps[number]
   sortDesc.value = order === 'descending'
+  currentPage.value = 1
+  loadUsers()
+}
+
+const handlePageChange = (page: number) => {
+  currentPage.value = page
+  loadUsers()
+}
+
+const handlePageSizeChange = (size: number) => {
+  pageSize.value = size
+  currentPage.value = 1
   loadUsers()
 }
 
@@ -170,7 +214,9 @@ const handleSetExpire = async (user: UserRecord) => {
         inputValue: defaultValue,
       }
     )) as any
-    const input = String(value || '').trim()
+    let input = String(value || '').trim()
+    // if input is pure number, treat it as seconds
+    if (/^\d+$/.test(input)) { input += 's' }
     const result = await conn.setUserExpire(user.username, input || undefined)
     userExpireMap.value[user.username] = result.expire_seconds
     logStore.logMessage('success', t('users.expireUpdated', { username: user.username }))
@@ -244,12 +290,25 @@ const handleSubmit = async () => {
       :loading="loading"
       :current-username="userStore.userInfo?.username"
       :expire-map="userExpireMap"
+      :user-storage-used-map="userStorageUsedMap"
       @sort="handleSortChange"
       @edit="handleEdit"
       @delete="handleDelete"
       @peers="openPeerDialog"
       @expire="handleSetExpire"
     />
+
+    <div class="mt-4 flex justify-end">
+      <el-pagination
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :total="totalUsers"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next"
+        @current-change="handlePageChange"
+        @size-change="handlePageSizeChange"
+      />
+    </div>
 
     <el-dialog
       v-model="dialogVisible"

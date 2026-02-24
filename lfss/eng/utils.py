@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TypeVar, Callable, Awaitable
 from functools import wraps, partial
 from uuid import uuid4
+from . import error as lfss_error
 try:
     # optional dependency for client-side
     import aiofiles     
@@ -142,7 +143,7 @@ def parse_sec_time(s: str) -> int:
             num_str += c
         else:
             if not num_str:
-                raise ValueError(f"Invalid time duration string: {s}")
+                raise lfss_error.InvalidInputError(f"Invalid time duration string: {s}")
             num = int(num_str)
             match c.lower():
                 case 's': total_seconds += num
@@ -151,10 +152,10 @@ def parse_sec_time(s: str) -> int:
                 case 'd': total_seconds += num * 86400
                 case 'w': total_seconds += num * 604800
                 case 'y': total_seconds += num * 31536000
-                case _: raise ValueError(f"Invalid time duration string: {s}")
+                case _: raise lfss_error.InvalidInputError(f"Invalid time duration string: {s}")
             num_str = ''
     if num_str:
-        raise ValueError(f"Invalid time duration string: {s}")
+        raise lfss_error.InvalidInputError(f"Invalid time duration string: {s}")
     return total_seconds
 def fmt_sec_time(seconds: int) -> str:
     """ Format seconds to a time duration string, i.e. 5400 -> '1h30m' """

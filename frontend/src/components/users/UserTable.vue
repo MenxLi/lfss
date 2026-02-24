@@ -10,6 +10,7 @@ defineProps<{
   loading: boolean
   currentUsername?: string
   expireMap: Record<string, number | null | undefined>
+  userStorageUsedMap: Record<string, number | undefined>
 }>()
 
 const emit = defineEmits<{
@@ -45,7 +46,10 @@ const formatExpire = (seconds?: number | null) => {
       </el-table-column>
       <el-table-column :label="t('users.storage')" min-width="140">
         <template #default="{ row }">
-          {{ row.max_storage ? formatBytes(row.max_storage) : t('dashboard.unlimited') }}
+          <span>
+            {{ row.max_storage ? formatBytes(row.max_storage) : t('dashboard.unlimited') }}
+            <span class="text-gray-500"> ({{ t('users.usedStorage') }}: {{ formatBytes(userStorageUsedMap[row.username] ?? 0) }})</span>
+          </span>
         </template>
       </el-table-column>
       <el-table-column prop="create_time" :label="t('users.createdAt')" sortable="custom" min-width="180">
@@ -60,23 +64,25 @@ const formatExpire = (seconds?: number | null) => {
       </el-table-column>
       <el-table-column :label="t('users.expireIn')" min-width="150">
         <template #default="{ row }">
-          {{ formatExpire(expireMap[row.username]) }}
+          <span :class="expireMap[row.username] !== null && expireMap[row.username] as any <= 0 ? 'text-red-500' : ''">
+            {{ formatExpire(expireMap[row.username]) }}
+          </span>
         </template>
       </el-table-column>
-      <el-table-column :label="t('users.actions')" width="220" fixed="right">
+      <el-table-column :label="t('users.actions')" width="260" fixed="right">
         <template #default="{ row }">
-          <div class="flex items-center gap-1">
-            <el-button size="small" @click="emit('edit', row)">
+          <div class="flex items-center gap-0">
+            <el-button size="medium" @click="emit('edit', row)">
               <el-icon><Edit /></el-icon>
             </el-button>
-            <el-button size="small" type="warning" plain @click="emit('expire', row)">
-              <el-icon><Clock /></el-icon>
-            </el-button>
-            <el-button size="small" type="primary" plain @click="emit('peers', row)">
+            <el-button size="medium" type="primary" plain @click="emit('peers', row)">
               <el-icon><Connection /></el-icon>
             </el-button>
+            <el-button size="medium" type="warning" plain @click="emit('expire', row)">
+              <el-icon><Clock /></el-icon>
+            </el-button>
             <el-button
-              size="small"
+              size="medium"
               type="danger"
               @click="emit('delete', row)"
               :disabled="row.username === currentUsername"

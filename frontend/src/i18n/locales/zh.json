@@ -107,6 +107,7 @@
         "username": "用户名",
         "role": "角色",
         "storage": "最大存储",
+        "usedStorage": "已用",
         "actions": "操作",
         "edit": "编辑",
         "delete": "删除",

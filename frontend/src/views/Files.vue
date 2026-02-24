@@ -491,7 +491,8 @@ const getItemName = (url: string) => {
                 <el-image 
                   :src="ApiUtils.getThumbUrl(conn, row.url)" 
                   lazy 
-                  class="w-8 h-8 rounded object-cover cursor-pointer bg-gray-50"
+                  class="w-8 h-8 rounded cursor-pointer bg-gray-50"
+                  fit="cover"
                   :preview-src-list="[ApiUtils.getDownloadUrl(conn, row.url)]"
                   preview-teleported
                   @click.stop

@@ -107,6 +107,7 @@
         "username": "Username",
         "role": "Role",
         "storage": "Max Storage",
+        "usedStorage": "Used",
         "actions": "Actions",
         "edit": "Edit",
         "delete": "Delete",

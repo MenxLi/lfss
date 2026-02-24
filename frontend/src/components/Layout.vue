@@ -66,7 +66,7 @@ const toggleLocale = () => {
 
 <template>
   <el-container class="h-screen bg-slate-100">
-    <el-aside :width="isCollapse ? '64px' : '220px'" class="bg-slate-900 text-white flex flex-col transition-all duration-300">
+    <el-aside :width="isCollapse ? '64px' : '220px'" class="bg-slate-900 text-white flex flex-col transition-all duration-200">
       <div class="p-4 text-xl font-bold text-center border-b border-slate-700/80 flex items-center justify-center h-[60px]">
         <span v-if="!isCollapse">LFSS</span>
         <el-icon v-else><Monitor /></el-icon>

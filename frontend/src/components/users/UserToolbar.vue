@@ -18,12 +18,12 @@ const emit = defineEmits<{
       <el-icon><User /></el-icon>
       {{ t('menu.users') }}
     </div>
-    <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+    <div class="flex flex-wrap lg:flex-nowrap items-center gap-2 w-full sm:w-auto">
       <el-input
         v-model="searchQuery"
         :placeholder="t('users.searchPlaceholder')"
         clearable
-        class="w-full sm:w-56"
+        class="w-full sm:w-44 lg:w-40 xl:w-44"
       >
         <template #prefix>
           <el-icon><Search /></el-icon>

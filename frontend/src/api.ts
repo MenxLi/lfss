@@ -25,6 +25,11 @@ export interface UserPasswordUpdateInfo {
     token: string;
 }
 
+export interface UserStorageInfo {
+    quota: number;
+    used: number;
+}
+
 export interface FileRecord {
     url: string;        // full path of the file, e.g. "user1/dir1/file.txt"
     owner_id: number;
@@ -427,6 +432,16 @@ export default class Connector {
         });
         if (res.status != 200) {
             throw new Error('Failed to query user, status code: ' + res.status);
+        }
+        return await res.json();
+    }
+
+    async getUserStorage(as_user?: string): Promise<UserStorageInfo> {
+        const res = await this.fetcher.get('_api/user/storage', {
+            params: { as_user }
+        });
+        if (res.status != 200) {
+            throw new Error(`Failed to get user storage, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
         }
         return await res.json();
     }

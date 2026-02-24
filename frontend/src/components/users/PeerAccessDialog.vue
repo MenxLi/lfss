@@ -33,7 +33,7 @@ const candidateOptions = ref<UserRecord[]>([])
 const selectedCandidate = ref('')
 const selectedLevel = ref<PeerLevel>('READ')
 const peers = ref<PeerItem[]>([])
-const incoming = ref(true)
+const incoming = ref(false)
 
 const initialPeerMap = ref<Map<string, PeerLevel>>(new Map())
 
@@ -161,7 +161,7 @@ watch(
       candidateQuery.value = ''
       selectedCandidate.value = ''
       selectedLevel.value = 'READ'
-      incoming.value = true
+      incoming.value = false
       await refreshCurrentPeers()
       await searchUsers('')
     }

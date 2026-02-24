@@ -1,3 +1,12 @@
+## 0.17
+### 0.17.0
+- New frontend based on Vue3 and Element Plus.
+- Stricter path validation.
+- Add database ID.
+- Typescript API refactor.
+- Allow underscore in vuser tag.
+- CLI list users with wildcard match.
+
 ## 0.16
 ### 0.16.1
 - Add systemd file generation tool.

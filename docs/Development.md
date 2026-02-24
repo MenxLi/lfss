@@ -4,8 +4,7 @@
 ## Installation from Source
 
 ```sh
-npm install
-npm run docs:build
+make
 python collect_static.py
 pip install ".[all]"
 ```

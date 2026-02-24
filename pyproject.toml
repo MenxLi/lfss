@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "lfss"
-version = "0.16.1"
+version = "0.17.0"
 description = "Lite file storage service"
 authors = ["Li, Mengxun <mengxunli@whu.edu.cn>"]
 readme = "Readme.md"
@@ -8,24 +8,38 @@ homepage = "https://github.com/MenxLi/lfss"
 repository = "https://github.com/MenxLi/lfss"
 packages = [{ include = "lfss" }]
 include = [
-    "readme.md", 
-    { path = "lfss/sql/*", format = ["sdist", "wheel"] },
-    { path = "lfss/svc/static/**/*", format = ["sdist", "wheel"] },
-    ]
+    "readme.md",
+    { path = "lfss/sql/*", format = [
+        "sdist",
+        "wheel",
+    ] },
+    { path = "lfss/svc/static/**/*", format = [
+        "sdist",
+        "wheel",
+    ] },
+]
 
 [tool.poetry.dependencies]
-python = ">=3.10"   # PEP-622
+python = ">=3.10"                                                           # PEP-622
 requests = "2.*"
-aiosqlite = {"version" = "0.*", "optional" = true}
-aiofiles = {"version" = "25.*", "optional" = true}
-mimesniff = {"version" = "1.*", "optional" = true}
-stream-zip = {"version" = "0.*", "optional" = true}
-pillow = {"version" = "*", "optional" = true}
-rich = {"version" = "*", "optional" = true}
-fastapi = {"version" = "0.*", "optional" = true, "extras" = ["standard"]}
+aiosqlite = { "version" = "0.*", "optional" = true }
+aiofiles = { "version" = "25.*", "optional" = true }
+mimesniff = { "version" = "1.*", "optional" = true }
+stream-zip = { "version" = "0.*", "optional" = true }
+pillow = { "version" = "*", "optional" = true }
+rich = { "version" = "*", "optional" = true }
+fastapi = { "version" = "0.*", "optional" = true, "extras" = ["standard"] }
 
 [tool.poetry.extras]
-all = ["aiosqlite", "aiofiles", "mimesniff", "fastapi", "stream-zip", "pillow", "rich"]
+all = [
+    "aiosqlite",
+    "aiofiles",
+    "mimesniff",
+    "fastapi",
+    "stream-zip",
+    "pillow",
+    "rich",
+]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "*"

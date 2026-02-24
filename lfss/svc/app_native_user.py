@@ -13,6 +13,11 @@ class UserExpireInfo(BaseModel):
     username: str
     expire_seconds: Optional[int]
 
+
+class UserPasswordUpdateInfo(BaseModel):
+    username: str
+    token: str
+
 @router_user.get("/whoami")
 @handle_exception
 async def whoami(user: UserRecord = Depends(registered_user)):
@@ -64,6 +69,21 @@ async def list_peers(
             peer_users.update(all_users)
 
     return [u.desensitize() for u in peer_users if u.id != user.id]     # exclude self
+
+
+@router_user.post("/password", response_model=UserPasswordUpdateInfo)
+@handle_exception
+async def update_my_password(
+    password: str,
+    user: UserRecord = Depends(registered_user),
+):
+    if not password:
+        raise HTTPException(status_code=400, detail="Password cannot be empty")
+    updated_user = await UserCtl.update(username=user.username, password=password)
+    return {
+        "username": updated_user.username,
+        "token": updated_user.credential,
+    }
 
 
 # ========================== Admin APIs ==========================

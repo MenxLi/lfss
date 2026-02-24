@@ -109,3 +109,20 @@ def test_user_expire_nonadmin_restricted(server):
         c1.query_user_expire('u3')
     with pytest.raises(Exception, match="403"):
         c1.set_user_expire('u3', '1h')
+
+
+def test_self_password_update_returns_new_token(server):
+    c0 = get_conn('u0')
+    c0.add_user('u5', 'test')
+
+    old_token = get_conn('u5').config.token
+    c5 = get_conn('u5')
+    new_token = c5.set_password('new-test-pass')
+
+    assert isinstance(new_token, str) and new_token
+    assert new_token != old_token
+
+    with pytest.raises(Exception, match="401"):
+        get_conn('u5', 'test').whoami()
+
+    assert get_conn('u5', 'new-test-pass').whoami().username == 'u5'

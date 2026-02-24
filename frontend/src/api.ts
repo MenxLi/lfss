@@ -20,6 +20,11 @@ export interface UserExpireInfo {
     expire_seconds: number | null;
 }
 
+export interface UserPasswordUpdateInfo {
+    username: string;
+    token: string;
+}
+
 export interface FileRecord {
     url: string;        // full path of the file, e.g. "user1/dir1/file.txt"
     owner_id: number;
@@ -542,6 +547,16 @@ export default class Connector {
         const res = await this.fetcher.get('_api/user/expire', { params });
         if (!res.ok) {
             throw new Error(`Failed to query user expiry, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
+        }
+        return await res.json();
+    }
+
+    async updateMyPassword(password: string): Promise<UserPasswordUpdateInfo> {
+        const res = await this.fetcher.post('_api/user/password', null, {
+            params: { password }
+        });
+        if (!res.ok) {
+            throw new Error(`Failed to update password, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
         }
         return await res.json();
     }

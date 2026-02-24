@@ -25,7 +25,7 @@ You can change storage directory using the `LFSS_DATA` environment variable.
 
 There is a simple frontend at `http://localhost:8000/.panel/`.
 
-![Frontend Screenshot](https://limengxun-imagebed.oss-cn-wuhan-lr.aliyuncs.com/github/lfss-panel-20260224.png)
+![Frontend Screenshot](https://limengxun-imagebed.oss-cn-wuhan-lr.aliyuncs.com/github/lfss-panel-20260224v1.png)
 
 
 The API usage is simple, just `GET`, `PUT`, `DELETE` to the `/<username>/file/url` path.  

@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useUserStore } from '@/store/user'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
+import { sha256 } from 'js-sha256'
 import type { UserRecord } from '@/api'
 import { createConnector, formatBytes } from '@/utils'
 
@@ -20,6 +21,14 @@ const peers = ref<CollaboratorRecord[]>([])
 const peerLoading = ref(false)
 const includeAdmin = ref(false)
 const incoming = ref(true)
+const accountDialogVisible = ref(false)
+const accountLoading = ref(false)
+const passwordForm = ref({ password: '' })
+const newTokenPreview = computed(() => {
+  const username = userStore.userInfo?.username || ''
+  if (!username || !passwordForm.value.password) return ''
+  return sha256(`${username}:${passwordForm.value.password}`)
+})
 
 const filteredPeers = computed(() => {
   if (includeAdmin.value) {
@@ -30,6 +39,45 @@ const filteredPeers = computed(() => {
 
 const getConnector = () => {
   return createConnector(userStore.token)
+}
+
+const generateRandomPassword = () => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_'
+  let password = ''
+  for (let i = 0; i < 32; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  passwordForm.value.password = password
+}
+
+const copyCurrentToken = async () => {
+  if (!userStore.token) return
+  try {
+    await navigator.clipboard.writeText(userStore.token)
+    ElMessage.success(t('users.tokenCopied'))
+  } catch {
+    ElMessage.error(t('users.copyTokenFailed'))
+  }
+}
+
+const updateMyPassword = async () => {
+  if (!passwordForm.value.password) {
+    ElMessage.warning(t('dashboard.passwordRequired'))
+    return
+  }
+  accountLoading.value = true
+  try {
+    const conn = getConnector()
+    const result = await conn.updateMyPassword(passwordForm.value.password)
+    userStore.setToken(result.token)
+    passwordForm.value.password = ''
+    ElMessage.success(t('dashboard.passwordUpdated'))
+  } catch (e: unknown) {
+    const err = e as Error
+    ElMessage.error(err.message || t('dashboard.passwordUpdateFailed'))
+  } finally {
+    accountLoading.value = false
+  }
 }
 
 const loadStorage = async () => {
@@ -89,9 +137,15 @@ onMounted(async () => {
 
 <template>
   <div class="space-y-6">
-    <h1 class="text-2xl font-bold text-gray-800">
-      {{ t('dashboard.welcome', { name: userStore.userInfo?.username }) }}
-    </h1>
+    <div class="flex items-center justify-between gap-3 flex-wrap">
+      <h1 class="text-2xl font-bold text-gray-800">
+        {{ t('dashboard.welcome', { name: userStore.userInfo?.username }) }}
+      </h1>
+      <el-button plain @click="accountDialogVisible = true">
+        <el-icon class="mr-1"><Key /></el-icon>
+        {{ t('dashboard.accountSecurity') }}
+      </el-button>
+    </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <el-card shadow="hover">
@@ -161,5 +215,38 @@ onMounted(async () => {
         </div>
       </el-card>
     </div>
+
+    <el-dialog
+      v-model="accountDialogVisible"
+      :title="t('dashboard.accountSecurity')"
+      width="480px"
+    >
+      <div class="space-y-4">
+        <div class="p-3 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
+          <span class="text-sm text-slate-600">{{ t('dashboard.currentToken') }}</span>
+          <el-button link type="primary" @click="copyCurrentToken">{{ t('users.copyToken') }}</el-button>
+        </div>
+
+        <el-form :model="passwordForm" label-position="top">
+          <el-form-item :label="t('dashboard.newPassword')">
+            <div class="flex gap-2 w-full">
+              <el-input v-model="passwordForm.password" type="password" show-password />
+              <el-button @click="generateRandomPassword" :title="t('users.randomPassword')">
+                <el-icon><Refresh /></el-icon>
+              </el-button>
+            </div>
+          </el-form-item>
+          <el-form-item v-if="newTokenPreview" :label="t('dashboard.newTokenPreview')">
+            <div class="w-full text-xs text-slate-500 break-all">{{ newTokenPreview }}</div>
+          </el-form-item>
+        </el-form>
+      </div>
+      <template #footer>
+        <el-button @click="accountDialogVisible = false">{{ t('users.cancel') }}</el-button>
+        <el-button type="primary" :loading="accountLoading" @click="updateMyPassword">
+          {{ t('dashboard.updatePassword') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>

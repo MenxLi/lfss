@@ -87,9 +87,6 @@ const toggleLocale = () => {
         </el-menu-item>
       </el-menu>
       <div class="p-4 border-t border-slate-700/80 flex flex-col gap-2 items-center">
-        <el-button link @click="toggleLocale" class="text-slate-300 hover:text-white w-full">
-          {{ locale === 'en' ? '中文' : 'EN' }}
-        </el-button>
         <el-button link @click="handleLogout" class="text-slate-300 hover:text-white w-full">
           <el-icon><SwitchButton /></el-icon>
           <span v-if="!isCollapse" class="ml-2">{{ t('menu.logout') }}</span>
@@ -98,9 +95,14 @@ const toggleLocale = () => {
     </el-aside>
     <el-container>
       <el-header class="bg-white flex items-center px-4 h-[60px] border-b border-slate-200/80">
-        <el-button link @click="isCollapse = !isCollapse">
-          <el-icon size="20"><Fold v-if="!isCollapse" /><Expand v-else /></el-icon>
-        </el-button>
+        <div class="w-full flex items-center justify-between">
+          <el-button link @click="isCollapse = !isCollapse">
+            <el-icon size="20"><Fold v-if="!isCollapse" /><Expand v-else /></el-icon>
+          </el-button>
+          <el-button link @click="toggleLocale" class="text-slate-600 hover:text-slate-900">
+            {{ locale === 'en' ? '中文' : 'EN' }}
+          </el-button>
+        </div>
       </el-header>
       <el-main class="p-4 md:p-6 overflow-auto">
         <router-view />

@@ -14,7 +14,7 @@ you can open the panel at `http://localhost:8000/.panel/`.
 > The panel is pretty basic at the moment, and is not planned to be a full-featured, good-looking file manager. 
 If you want a more advanced file manager, please consider building your own with the APIs.  -->
 
-![Panel Screenshot](https://limengxun-imagebed.oss-cn-wuhan-lr.aliyuncs.com/github/lfss-panel-20260224.png)
+![Panel Screenshot](https://limengxun-imagebed.oss-cn-wuhan-lr.aliyuncs.com/github/lfss-panel-20260224v1.png)
 
 Alongside the web server, a JavaScript API client is also provided at the `http://your-server-endpoint/.panel/api/` endpoint, which can be used to interact with the LFSS server in your own frontend projects.
 ```txt

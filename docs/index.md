@@ -8,8 +8,8 @@ using sqlite and filesystem as the backend storage.
 
 **Highlights:**
 
-- User storage limit and access control.
+- User storage limit and multi-level access control.
 - Pagination and sorted file listing for vast number of files.  
-- High performance: high concurrency, near-native speed on stress tests.
 - Support range requests, so you can stream large files / resume download.
+- User-friendly web panel for management.
 - WebDAV compatible ([NOTE](./webdav.md)).

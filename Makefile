@@ -2,7 +2,7 @@ all: front doc js-api
 	python3 collect_static.py
 
 js-api:
-	cd frontend_v2/ && \
+	cd frontend/ && \
 	mkdir -p dist/api/ && \
 	cp src/api.ts dist/api/api.ts && \
 	npx tsc dist/api/api.ts \
@@ -12,7 +12,7 @@ js-api:
 		--declaration
 
 front:
-	cd frontend_v2 && npm i && npm run build
+	cd frontend && npm i && npm run build
 
 doc:
 	npm i && npm run docs:build

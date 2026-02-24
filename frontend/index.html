@@ -1,91 +1,13 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LFSS</title>
-    <link rel="stylesheet" href="./styles.css">
-</head>
-<body>
-
-    <div class="container header">
-        <div class="input-group">
-            <span id='back-btn'>⬅️</span>
-            <input type="text" id="path" placeholder="path/to/files/" autocomplete="off">
-        </div>
-        <div id="settings-bar">
-            <div id="position-hint" class='disconnected'>
-                <span></span>
-                <label></label>
-            </div>
-            <div style="color: #999; font-size: small; display: flex; align-items: center; gap: .75rem;">
-                <div class="page-config">
-                    <span>Limit</span>
-                    <select id="page-limit-sel">
-                        <option value="10">10</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                        <option value="500">500</option>
-                        <option value="1000">1000</option>
-                        <option value="5000">5000</option>
-                    </select>
-                </div>
-
-                <div class="page-config">
-                    <span>Page</span>
-                    <input type="number" id="page-num-input" value="1" min="1" style="width: 50px;">
-                    /
-                    <label id="page-count-lbl">1</label>
-                </div>
-
-                <div class="page-config">
-                    <span style="white-space: nowrap;">Sort by</span>
-                    <select id="sort-by-sel">
-                        <option value="none">None</option>
-                        <option value="url">Name</option>
-                        <option value="file_size">Size</option>
-                        <option value="access_time">Accessed</option>
-                        <option value="create_time">Created</option>
-                        <option value="mime_type">Type</option>
-                    </select>
-                    <select id="sort-order-sel">
-                        <option value="asc">Ascending</option>
-                        <option value="desc">Descending</option>
-                    </select>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="container content" id="view">
-        <table id="files">
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Size</th>
-                    <th>Accessed</th>
-                    <th>Read access</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody id="files-table-body">
-            </tbody>
-        </table>
-    </div>
-
-    <div class="container footer" id="upload">
-        <div class="input-group">
-            <input type="file" id="file-selector" accept="*">
-            <label for="file-name" id="upload-file-prefix"></label>
-            <div class="input-group">
-                <input type="text" id="file-name" placeholder="Destination file path" autocomplete="off">
-                <span id='randomize-fname-btn'>🎲</span>
-                <button id="upload-btn">Upload</button>
-            </div>
-        </div>
-    </div>
-
-</body>
-
-<script src="./scripts.js" type="module" async defer></script>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vite + Vue + TS</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
 </html>

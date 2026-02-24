@@ -11,7 +11,7 @@ static_dir = this_dir / "lfss" / "svc" / "static"
 doc_src = this_dir / "docs" / ".vitepress" / "dist"
 doc_dst = static_dir / "docs"
 
-front_src = this_dir / "frontend_v2" / "dist"
+front_src = this_dir / "frontend" / "dist"
 front_dst = static_dir / "panel"
 
 if front_src.exists():

@@ -3,12 +3,11 @@ import { ref } from 'vue'
 import type { UserRecord } from '@/api'
 
 export const useUserStore = defineStore('user', () => {
-    const token = ref(localStorage.getItem('token') || '')
+    const token = ref('')
     const userInfo = ref<UserRecord | null>(null)
 
     function setToken(newToken: string) {
         token.value = newToken
-        localStorage.setItem('token', newToken)
     }
 
     function setUserInfo(info: UserRecord | null) {
@@ -18,8 +17,12 @@ export const useUserStore = defineStore('user', () => {
     function logout() {
         token.value = ''
         userInfo.value = null
-        localStorage.removeItem('token')
     }
 
     return { token, userInfo, setToken, setUserInfo, logout }
+}, {
+    persist: {
+        key: 'lfss-user',
+        pick: ['token']
+    }
 })

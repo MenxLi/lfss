@@ -7,6 +7,12 @@ from ..eng.datatype import UserRecord, AccessLevel, FileReadPermission
 from ..eng.database import unique_cursor, UserConn, FileConn
 from ..eng.userman import UserCtl
 
+
+class UserExpireInfo(BaseModel):
+    user_id: int
+    username: str
+    expire_seconds: Optional[int]
+
 @router_user.get("/whoami")
 @handle_exception
 async def whoami(user: UserRecord = Depends(registered_user)):
@@ -97,6 +103,31 @@ async def query_user(
     if op_user.is_admin: return user                    # not desensitized
     else: return user.desensitize()
 
+
+@router_user.get("/expire", response_model=UserExpireInfo)
+@handle_exception
+async def query_user_expire(
+    username: Optional[str] = None,
+    userid: Optional[int] = None,
+    op_user: UserRecord = Depends(registered_user),
+):
+    if username is None and userid is None:
+        target_user = op_user
+    else:
+        if not op_user.is_admin:
+            raise HTTPException(status_code=403, detail="Admin permission required to query other user's expiry")
+        target_user = await UserCtl.get_user(username or userid, check_expire=False)  # type: ignore[arg-type]
+
+    async with unique_cursor() as conn:
+        uconn = UserConn(conn)
+        expire_seconds = await uconn.query_user_expire(target_user.id)
+
+    return {
+        "user_id": target_user.id,
+        "username": target_user.username,
+        "expire_seconds": expire_seconds,
+    }
+
 @router_user.post("/add")
 @handle_exception
 async def add_user(
@@ -172,3 +203,22 @@ async def set_peer(
     return {"detail": "Success, now '{}' has '{}' access to '{}'".format(
         src_username, level, dst_username
     )}
+
+
+@router_user.post("/set-expire", response_model=UserExpireInfo)
+@handle_exception
+async def set_user_expire(
+    username: str,
+    expire: Optional[int | str] = None,
+    _: UserRecord = Depends(admin_user),
+):
+    await UserCtl.set_expire(username, expire)
+    user = await UserCtl.get_user(username, check_expire=False)
+    async with unique_cursor() as conn:
+        uconn = UserConn(conn)
+        expire_seconds = await uconn.query_user_expire(user.id)
+    return {
+        "user_id": user.id,
+        "username": user.username,
+        "expire_seconds": expire_seconds,
+    }

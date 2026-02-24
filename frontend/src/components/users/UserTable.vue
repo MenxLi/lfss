@@ -9,6 +9,7 @@ defineProps<{
   users: UserRecord[]
   loading: boolean
   currentUsername?: string
+  expireMap: Record<string, number | null | undefined>
 }>()
 
 const emit = defineEmits<{
@@ -16,7 +17,19 @@ const emit = defineEmits<{
   (e: 'edit', user: UserRecord): void
   (e: 'delete', user: UserRecord): void
   (e: 'peers', user: UserRecord): void
+  (e: 'expire', user: UserRecord): void
 }>()
+
+const formatExpire = (seconds?: number | null) => {
+  if (seconds === null || seconds === undefined) return t('users.never')
+  if (seconds <= 0) return t('users.expired')
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  if (days > 0) return t('users.expireFmtDay', { days, hours })
+  if (hours > 0) return t('users.expireFmtHour', { hours, minutes })
+  return t('users.expireFmtMin', { minutes: Math.max(minutes, 1) })
+}
 </script>
 
 <template>
@@ -45,11 +58,19 @@ const emit = defineEmits<{
           {{ row.last_active ? formatDateTime(row.last_active) : t('users.never') }}
         </template>
       </el-table-column>
+      <el-table-column :label="t('users.expireIn')" min-width="150">
+        <template #default="{ row }">
+          {{ formatExpire(expireMap[row.username]) }}
+        </template>
+      </el-table-column>
       <el-table-column :label="t('users.actions')" width="220" fixed="right">
         <template #default="{ row }">
           <div class="flex items-center gap-1">
             <el-button size="small" @click="emit('edit', row)">
               <el-icon><Edit /></el-icon>
+            </el-button>
+            <el-button size="small" type="warning" plain @click="emit('expire', row)">
+              <el-icon><Clock /></el-icon>
             </el-button>
             <el-button size="small" type="primary" plain @click="emit('peers', row)">
               <el-icon><Connection /></el-icon>

@@ -7,6 +7,7 @@ import { ApiUtils, permMap } from '@/api'
 import type { DirectoryRecord, FileRecord } from '@/api'
 import { useUserStore } from '@/store/user'
 import { useLogStore } from '@/store/logs'
+import { usePreferenceStore } from '@/store/preferences'
 import {
   Document,
   Folder,
@@ -16,7 +17,8 @@ import {
   CopyDocument,
   Rank,
   InfoFilled,
-  Back
+  Back,
+  Setting
 } from '@element-plus/icons-vue'
 import UploadDialog from '@/components/files/UploadDialog.vue'
 import DetailsDialog from '@/components/files/DetailsDialog.vue'
@@ -35,6 +37,7 @@ const router = useRouter()
 const { t } = useI18n()
 const userStore = useUserStore()
 const logStore = useLogStore()
+const preferenceStore = usePreferenceStore()
 
 const currentPath = computed(() => {
   const path = route.params.path as string | string[]
@@ -55,18 +58,20 @@ const loading = ref(false)
 
 // Pagination & Sorting
 const currentPage = ref(1)
-const pageSize = ref(50)
+const pageSize = ref(preferenceStore.filePageSize)
 const totalItems = ref(0)
-const sortBy = ref<string>('')
-const sortDesc = ref<boolean>(false)
+const sortBy = ref<string>(preferenceStore.fileSortBy)
+const sortDesc = ref<boolean>(preferenceStore.fileSortDesc)
 const manualPathInput = ref('')
 const isDropActive = ref(false)
 const showManualPathControls = ref(false)
 const manualPathInputRef = ref<any>(null)
+const displayConfigVisible = ref(false)
 const tableRows = computed(() => [
   ...dirs.value.map((d) => ({ ...d, isDir: true })),
   ...files.value.map((f) => ({ ...f, isDir: false }))
 ])
+const fileColumns = computed(() => preferenceStore.fileColumns)
 
 type PathSelectMode = 'last-filename' | 'last-pathname'
 
@@ -101,9 +106,17 @@ const loadData = async () => {
   }
 }
 
-onMounted(loadData)
+onMounted(() => {
+  manualPathInput.value = currentPath.value
+  if (!currentPath.value && preferenceStore.fileLastPath) {
+    router.replace(`/files/${preferenceStore.fileLastPath}`)
+    return
+  }
+  loadData()
+})
 watch(currentPath, () => {
   manualPathInput.value = currentPath.value
+  preferenceStore.fileLastPath = currentPath.value
   currentPage.value = 1
   loadData()
 })
@@ -116,6 +129,8 @@ const handleSortChange = ({ prop, order }: { prop: string, order: string }) => {
     sortBy.value = prop;
     sortDesc.value = order === 'descending'
   }
+  preferenceStore.fileSortBy = sortBy.value as any
+  preferenceStore.fileSortDesc = sortDesc.value
   currentPage.value = 1
   loadData()
 }
@@ -140,6 +155,7 @@ const toggleManualPathControls = async () => {
 
 const handleSizeChange = (val: number) => {
   pageSize.value = val
+  preferenceStore.filePageSize = val
   currentPage.value = 1
   loadData()
 }
@@ -189,7 +205,11 @@ const promptPath = async (
 
 const handleDelete = async (item: DirectoryRecord | FileRecord, isDir: boolean) => {
   try {
-    await ElMessageBox.confirm(t('files.confirmDelete'), 'Warning', {
+    const displayName = getItemName(item.url) || ApiUtils.decodePath(item.url)
+    await ElMessageBox.confirm(t('files.confirmDeleteNamed', {
+      type: isDir ? t('files.directory') : t('files.file'),
+      name: displayName
+    }), t('files.warningTitle'), {
       type: 'warning'
     })
     const path = item.url
@@ -367,8 +387,6 @@ const handleDetails = (row: DirectoryRecord | FileRecord, isDir: boolean) => {
 const getItemName = (url: string) => {
   return ApiUtils.decodePath(url).split('/').filter(Boolean).pop() || ''
 }
-
-manualPathInput.value = currentPath.value
 </script>
 
 <template>
@@ -407,7 +425,28 @@ manualPathInput.value = currentPath.value
           </el-breadcrumb-item>
         </el-breadcrumb>
       </div>
-      <div class="flex gap-2">
+      <div class="flex gap-2 items-center">
+        <el-popover
+          v-model:visible="displayConfigVisible"
+          placement="bottom-end"
+          trigger="click"
+          :width="260"
+        >
+          <template #reference>
+            <el-button>
+              <el-icon class="mr-1"><Setting /></el-icon>
+              {{ t('files.display') }}
+            </el-button>
+          </template>
+          <div class="flex flex-col gap-2">
+            <span class="text-sm font-medium text-slate-700">{{ t('files.columns') }}</span>
+            <el-checkbox v-model="fileColumns.size">{{ t('files.size') }}</el-checkbox>
+            <el-checkbox v-model="fileColumns.created">{{ t('files.created') }}</el-checkbox>
+            <el-checkbox v-model="fileColumns.accessed">{{ t('files.accessed') }}</el-checkbox>
+            <el-checkbox v-model="fileColumns.permission">{{ t('files.permission') }}</el-checkbox>
+            <el-checkbox v-model="fileColumns.ownerId">{{ t('files.ownerId') }}</el-checkbox>
+          </div>
+        </el-popover>
         <el-dropdown @command="handleNewCommand" :disabled="!currentPath">
           <el-button type="success">
             <el-icon class="mr-1"><Document /></el-icon>
@@ -481,22 +520,27 @@ manualPathInput.value = currentPath.value
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="file_size" :label="t('files.size')" width="120" sortable="custom">
+        <el-table-column v-if="fileColumns.size" prop="file_size" :label="t('files.size')" width="120" sortable="custom">
           <template #default="{ row }">
             {{ row.isDir ? '-' : formatBytes(row.file_size) }}
           </template>
         </el-table-column>
-        <el-table-column prop="create_time" :label="t('files.created')" width="180" sortable="custom">
+        <el-table-column v-if="fileColumns.created" prop="create_time" :label="t('files.created')" width="180" sortable="custom">
           <template #default="{ row }">
             {{ formatDateTime(row.create_time) }}
           </template>
         </el-table-column>
-        <el-table-column prop="access_time" :label="t('files.accessed')" width="180" sortable="custom">
+        <el-table-column v-if="fileColumns.accessed" prop="access_time" :label="t('files.accessed')" width="180" sortable="custom">
           <template #default="{ row }">
             {{ formatDateTime(row.access_time) }}
           </template>
         </el-table-column>
-        <el-table-column :label="t('files.permission')" width="150">
+        <el-table-column v-if="fileColumns.ownerId" :label="t('files.ownerId')" width="120">
+          <template #default="{ row }">
+            {{ row.isDir ? '-' : row.owner_id }}
+          </template>
+        </el-table-column>
+        <el-table-column v-if="fileColumns.permission" :label="t('files.permission')" width="150">
           <template #default="{ row }">
             <el-select 
               v-if="canManagePermission(row)" 

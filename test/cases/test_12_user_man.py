@@ -84,3 +84,28 @@ def test_list_users(server):
     assert len(users_with_virtual) > len(users_without_virtual)
     assert any(u.username.startswith('.v-') for u in users_with_virtual)
     assert not any(u.username.startswith('.v-') for u in users_without_virtual)
+
+
+def test_user_expire_admin_flow(server):
+    c0 = get_conn('u0')
+    c0.add_user('u4', 'test')
+
+    assert c0.query_user_expire('u4') is None
+
+    updated = c0.set_user_expire('u4', '2h')
+    assert updated is not None and updated > 0
+
+    queried = c0.query_user_expire('u4')
+    assert queried is not None and queried > 0
+
+    cleared = c0.set_user_expire('u4', None)
+    assert cleared is None
+    assert c0.query_user_expire('u4') is None
+
+
+def test_user_expire_nonadmin_restricted(server):
+    c1 = get_conn('u2')
+    with pytest.raises(Exception, match="403"):
+        c1.query_user_expire('u3')
+    with pytest.raises(Exception, match="403"):
+        c1.set_user_expire('u3', '1h')

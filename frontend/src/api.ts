@@ -14,6 +14,12 @@ export interface UserRecord {
     permission: number;
 }
 
+export interface UserExpireInfo {
+    user_id: number;
+    username: string;
+    expire_seconds: number | null;
+}
+
 export interface FileRecord {
     url: string;        // full path of the file, e.g. "user1/dir1/file.txt"
     owner_id: number;
@@ -495,6 +501,14 @@ export default class Connector {
         return await res.json();
     }
 
+    async addVirtualUser(params: { tag?: string, peers?: string, max_storage?: string, expire?: string | number }): Promise<UserRecord> {
+        const res = await this.fetcher.post('_api/user/add-virtual', null, { params });
+        if (!res.ok) {
+            throw new Error(`Failed to add virtual user, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
+        }
+        return await res.json();
+    }
+
     async updateUser(params: { username: string, password?: string, admin?: boolean, max_storage?: string, permission?: string }): Promise<UserRecord> {
         const res = await this.fetcher.post('_api/user/update', null, { params });
         if (!res.ok) {
@@ -522,6 +536,26 @@ export default class Connector {
         if (!res.ok) {
             throw new Error(`Failed to set peer access, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
         }
+    }
+
+    async queryUserExpire(params: { username?: string, userid?: number } = {}): Promise<UserExpireInfo> {
+        const res = await this.fetcher.get('_api/user/expire', { params });
+        if (!res.ok) {
+            throw new Error(`Failed to query user expiry, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
+        }
+        return await res.json();
+    }
+
+    async setUserExpire(username: string, expire?: string | number): Promise<UserExpireInfo> {
+        const params: Record<string, string | number> = { username };
+        if (expire !== undefined && expire !== null && String(expire).trim() !== '') {
+            params.expire = expire;
+        }
+        const res = await this.fetcher.post('_api/user/set-expire', null, { params });
+        if (!res.ok) {
+            throw new Error(`Failed to set user expiry, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
+        }
+        return await res.json();
     }
 }
 

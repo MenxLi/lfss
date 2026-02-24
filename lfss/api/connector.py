@@ -539,6 +539,21 @@ class Client:
         response = self._fetch_factory('GET', '_api/user/query', params)()
         return UserRecord(**response.json())
 
+    def query_user_expire(self, u: Optional[int | str] = None) -> Optional[int]:
+        """
+        Query user expire seconds.
+        - If `u` is None, query current user's expiry.
+        - If `u` is provided, caller must be admin.
+        Returns remaining seconds, or None if never expires.
+        """
+        params = {}
+        if isinstance(u, int):
+            params['userid'] = u
+        elif isinstance(u, str):
+            params['username'] = u
+        response = self._fetch_factory('GET', '_api/user/expire', params)()
+        return response.json()['expire_seconds']
+
     # ========================== Admin APIs ==========================
     def list_users(
         self,
@@ -630,6 +645,18 @@ class Client:
                 if isinstance(permission, FileReadPermission) else permission
         response = self._fetch_factory('POST', '_api/user/update', search_params=data)()
         return UserRecord(**response.json())
+
+    def set_user_expire(self, username: str, expire: Optional[int | str] = None) -> Optional[int]:
+        """
+        Admin API: set user expire.
+        - `expire` can be seconds (int), duration string like '1d2h', or None (never expire).
+        Returns remaining seconds after update, or None.
+        """
+        data = {'username': username}
+        if expire is not None:
+            data['expire'] = str(expire)
+        response = self._fetch_factory('POST', '_api/user/set-expire', search_params=data)()
+        return response.json()['expire_seconds']
     
     def delete_user(self, username: str) -> UserRecord:
         """ Admin API: Delete a user from the system. """

@@ -16,6 +16,7 @@ const userStore = useUserStore()
 const conn = createConnector(userStore.token)
 
 const users = ref<UserRecord[]>([])
+const userExpireMap = ref<Record<string, number | null>>({})
 const loading = ref(false)
 const searchQuery = ref('')
 const includeVirtual = ref(false)
@@ -26,6 +27,9 @@ const sortableProps = ['username', 'create_time', 'is_admin', 'last_active'] as 
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 const form = ref({
+  virtual: false,
+  tag: '',
+  expire: '',
   username: '',
   password: '',
   admin: false,
@@ -50,6 +54,15 @@ const loadUsers = async () => {
       order_by: sortBy.value,
       order_desc: sortDesc.value
     })
+    const entries = await Promise.all(users.value.map(async (user) => {
+      try {
+        const info = await conn.queryUserExpire({ username: user.username })
+        return [user.username, info.expire_seconds] as const
+      } catch {
+        return [user.username, null] as const
+      }
+    }))
+    userExpireMap.value = Object.fromEntries(entries)
   } catch (e: unknown) {
     const err = e as Error
     ElMessage.error(err.message || t('users.loadFailed'))
@@ -73,6 +86,9 @@ const handleSortChange = ({ prop, order }: { prop: string, order: string }) => {
 const handleAdd = () => {
   isEdit.value = false
   form.value = {
+    virtual: false,
+    tag: '',
+    expire: '',
     username: '',
     password: '',
     admin: false,
@@ -85,6 +101,9 @@ const handleAdd = () => {
 const handleEdit = (user: UserRecord) => {
   isEdit.value = true
   form.value = {
+    virtual: false,
+    tag: '',
+    expire: '',
     username: user.username,
     password: '',
     admin: Boolean(user.is_admin),
@@ -119,7 +138,7 @@ const copyToken = async () => {
 
 const handleDelete = async (user: UserRecord) => {
   try {
-    await ElMessageBox.confirm(t('users.confirmDelete'), t('users.warningTitle'), {
+    await ElMessageBox.confirm(t('users.confirmDeleteNamed', { username: user.username }), t('users.warningTitle'), {
       type: 'warning'
     })
     await conn.deleteUser(user.username)
@@ -133,25 +152,71 @@ const handleDelete = async (user: UserRecord) => {
   }
 }
 
+const handleSetExpire = async (user: UserRecord) => {
+  try {
+    const currentExpire = userExpireMap.value[user.username]
+    const defaultValue = currentExpire !== null && currentExpire !== undefined && currentExpire > 0
+      ? String(currentExpire)
+      : ''
+    const { value } = (await ElMessageBox.prompt(
+      t('users.expirePrompt', { username: user.username }),
+      t('users.expireTitle', { username: user.username }),
+      {
+        confirmButtonText: t('users.confirm'),
+        cancelButtonText: t('users.cancel'),
+        inputPlaceholder: t('users.expirePlaceholder'),
+        inputValue: defaultValue,
+      }
+    )) as any
+    const input = String(value || '').trim()
+    const result = await conn.setUserExpire(user.username, input || undefined)
+    userExpireMap.value[user.username] = result.expire_seconds
+    ElMessage.success(t('users.expireUpdated', { username: user.username }))
+  } catch (e: unknown) {
+    if (e !== 'cancel') {
+      const err = e as Error
+      ElMessage.error(err.message || t('users.failed'))
+    }
+  }
+}
+
 const handleSubmit = async () => {
   try {
-    const params: { username: string, password?: string, admin?: boolean, max_storage?: string, permission?: string } = {
-      username: form.value.username,
-      admin: form.value.admin,
-      max_storage: form.value.max_storage,
-      permission: form.value.permission
-    }
-    if (form.value.password) {
-      params.password = form.value.password
-    }
-
     if (isEdit.value) {
+      const params: { username: string, password?: string, admin?: boolean, max_storage?: string, permission?: string } = {
+        username: form.value.username,
+        admin: form.value.admin,
+        max_storage: form.value.max_storage,
+        permission: form.value.permission
+      }
+      if (form.value.password) {
+        params.password = form.value.password
+      }
       await conn.updateUser(params)
+      ElMessage.success(t('users.success'))
+    } else if (form.value.virtual) {
+      const created = await conn.addVirtualUser({
+        tag: form.value.tag,
+        max_storage: form.value.max_storage,
+        expire: form.value.expire || undefined,
+      })
+      includeVirtual.value = true
+      peerTargetUsername.value = created.username
+      peerDialogVisible.value = true
+      ElMessage.success(t('users.virtualCreated', { username: created.username }))
     } else {
+      const params: { username: string, password?: string, admin?: boolean, max_storage?: string, permission?: string } = {
+        username: form.value.username,
+        admin: form.value.admin,
+        max_storage: form.value.max_storage,
+        permission: form.value.permission
+      }
+      if (form.value.password) {
+        params.password = form.value.password
+      }
       await conn.addUser(params)
+      ElMessage.success(t('users.success'))
     }
-
-    ElMessage.success(t('users.success'))
     dialogVisible.value = false
     loadUsers()
   } catch (e: unknown) {
@@ -176,10 +241,12 @@ const handleSubmit = async () => {
       :users="users"
       :loading="loading"
       :current-username="userStore.userInfo?.username"
+      :expire-map="userExpireMap"
       @sort="handleSortChange"
       @edit="handleEdit"
       @delete="handleDelete"
       @peers="openPeerDialog"
+      @expire="handleSetExpire"
     />
 
     <el-dialog
@@ -188,10 +255,16 @@ const handleSubmit = async () => {
       width="500px"
     >
       <el-form :model="form" label-width="120px">
-        <el-form-item :label="t('users.username')">
+        <el-form-item v-if="!isEdit" :label="t('users.virtualUser')">
+          <el-switch v-model="form.virtual" />
+        </el-form-item>
+        <el-form-item v-if="!form.virtual || isEdit" :label="t('users.username')">
           <el-input v-model="form.username" :disabled="isEdit" />
         </el-form-item>
-        <el-form-item :label="t('users.password')">
+        <el-form-item v-if="form.virtual && !isEdit" :label="t('users.virtualTag')">
+          <el-input v-model="form.tag" :placeholder="t('users.virtualTagPlaceholder')" />
+        </el-form-item>
+        <el-form-item v-if="!form.virtual || isEdit" :label="t('users.password')">
           <div class="flex flex-col w-full gap-2">
             <div class="flex gap-2">
               <el-input v-model="form.password" type="password" show-password :placeholder="isEdit ? t('users.leaveBlank') : ''" />
@@ -207,11 +280,14 @@ const handleSubmit = async () => {
             </div>
           </div>
         </el-form-item>
-        <el-form-item :label="t('users.role')">
+        <el-form-item v-if="!form.virtual || isEdit" :label="t('users.role')">
           <el-switch v-model="form.admin" :active-text="t('dashboard.admin')" :inactive-text="t('dashboard.user')" />
         </el-form-item>
         <el-form-item :label="t('users.storage')">
           <el-input v-model="form.max_storage" :placeholder="t('users.storagePlaceholder')" />
+        </el-form-item>
+        <el-form-item v-if="form.virtual && !isEdit" :label="t('users.expireIn')">
+          <el-input v-model="form.expire" :placeholder="t('users.expirePlaceholder')" />
         </el-form-item>
       </el-form>
       <template #footer>

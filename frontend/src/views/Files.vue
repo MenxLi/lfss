@@ -441,6 +441,8 @@ manualPathInput.value = currentPath.value
         :data="tableRows" 
         style="width: 100%"
         height="100%"
+        :row-style="{ height: '52px' }"
+        :cell-style="{ paddingTop: '10px', paddingBottom: '10px' }"
         @sort-change="handleSortChange"
       >
         <el-table-column prop="url" :label="t('files.name')" min-width="200" sortable="custom">
@@ -450,7 +452,7 @@ manualPathInput.value = currentPath.value
                 <el-image 
                   :src="ApiUtils.getThumbUrl(conn, row.url)" 
                   lazy 
-                  class="w-6 h-6 rounded object-cover cursor-pointer bg-gray-50"
+                  class="w-8 h-8 rounded object-cover cursor-pointer bg-gray-50"
                   :preview-src-list="[ApiUtils.getDownloadUrl(conn, row.url)]"
                   preview-teleported
                   @click.stop
@@ -461,7 +463,7 @@ manualPathInput.value = currentPath.value
                 </el-image>
               </template>
               <el-icon v-else 
-                size="25"
+                size="30"
                 :color="row.isDir ? '#e6a23c' : '#909399'" 
                 class="cursor-pointer rounded p-0.5 bg-gray-50" 
                 @click="row.isDir ? handleDirClick(row) : handleFileIconClick(row)
@@ -499,7 +501,7 @@ manualPathInput.value = currentPath.value
             <el-select 
               v-if="canManagePermission(row)" 
               v-model="row.permission" 
-              size="small"
+              size="medium"
               @change="(val: number) => handlePermissionChange(row, val)"
             >
               <el-option v-for="(label, value) in permMap" :key="value" :label="t(`files.permissions.${label}`)" :value="Number(value)" />
@@ -508,22 +510,22 @@ manualPathInput.value = currentPath.value
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column :label="t('files.actions')" width="220" fixed="right">
+        <el-table-column :label="t('files.actions')" width="260" fixed="right">
           <template #default="{ row }">
             <el-button-group>
-              <el-button size="small" @click="handleDetails(row, row.isDir)" title="Details">
+              <el-button size="medium" @click="handleDetails(row, row.isDir)" title="Details">
                 <el-icon><InfoFilled /></el-icon>
               </el-button>
-              <el-button size="small" @click="handleDownload(row, row.isDir)" title="Download">
+              <el-button size="medium" @click="handleDownload(row, row.isDir)" title="Download">
                 <el-icon><Download /></el-icon>
               </el-button>
-              <el-button size="small" @click="handleCopy(row, row.isDir)" title="Copy">
+              <el-button size="medium" @click="handleCopy(row, row.isDir)" title="Copy">
                 <el-icon><CopyDocument /></el-icon>
               </el-button>
-              <el-button size="small" @click="handleMove(row, row.isDir)" title="Move">
+              <el-button size="medium" @click="handleMove(row, row.isDir)" title="Move">
                 <el-icon><Rank /></el-icon>
               </el-button>
-              <el-button size="small" type="danger" @click="handleDelete(row, row.isDir)" title="Delete">
+              <el-button size="medium" type="danger" @click="handleDelete(row, row.isDir)" title="Delete">
                 <el-icon><Delete /></el-icon>
               </el-button>
             </el-button-group>

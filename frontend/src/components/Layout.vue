@@ -25,7 +25,7 @@ const menuItems = computed(() => {
 })
 
 const checkMobile = () => {
-  isMobile.value = window.innerWidth < 768
+  isMobile.value = window.innerWidth < 1024
   isCollapse.value = isMobile.value
 }
 

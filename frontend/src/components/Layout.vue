@@ -68,6 +68,7 @@ const toggleLocale = () => {
         :default-active="activeMenu"
         class="flex-1 border-none"
         background-color="#1f2937"
+        style="border-right: none"
         text-color="#fff"
         active-text-color="#409eff"
         :collapse="isCollapse"
@@ -101,7 +102,7 @@ const toggleLocale = () => {
       </div>
     </el-aside>
     <el-container>
-      <el-header class="bg-white border-b flex items-center px-4 h-[60px]">
+      <el-header class="bg-white flex items-center px-4 h-[60px]">
         <el-button link @click="isCollapse = !isCollapse">
           <el-icon size="20"><Fold v-if="!isCollapse" /><Expand v-else /></el-icon>
         </el-button>

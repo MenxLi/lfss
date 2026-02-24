@@ -79,8 +79,9 @@ const open = async () => {
 }
 
 const openWithDrop = async (e: DragEvent) => {
-  await open()
+  const openPromise = open()
   await handleDrop(e)
+  await openPromise
 }
 
 defineExpose({ open, openWithDrop })

@@ -20,6 +20,7 @@ import {
 } from '@element-plus/icons-vue'
 import UploadDialog from '@/components/files/UploadDialog.vue'
 import DetailsDialog from '@/components/files/DetailsDialog.vue'
+import FileTypeIcon from '@/components/files/FileTypeIcon.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -369,7 +370,7 @@ const getItemName = (url: string) => {
                 @click="row.isDir ? handleDirClick(row) : handleFileIconClick(row)
                 ">
                 <Folder v-if="row.isDir" />
-                <Document v-else />
+                <FileTypeIcon v-else :url="row.url" :mime-type="row.mime_type" />
               </el-icon>
               <span
                 class="cursor-pointer truncate block flex-1 min-w-0"

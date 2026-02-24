@@ -1,4 +1,11 @@
 ## 0.17
+### 0.17.1
+- Add router to query user storage usage and expire time.
+- Add user expire time settings.
+- Allow user change its own password. 
+- Add virtual user support in frontend.
+- Frontend improvements.
+
 ### 0.17.0
 - New frontend based on Vue3 and Element Plus.
 - Stricter path validation.

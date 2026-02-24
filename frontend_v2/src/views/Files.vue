@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, watch, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
@@ -21,6 +21,7 @@ import {
 import UploadDialog from '@/components/files/UploadDialog.vue'
 import DetailsDialog from '@/components/files/DetailsDialog.vue'
 import FileTypeIcon from '@/components/files/FileTypeIcon.vue'
+import { getLastFilenameStemRange, getLastPathComponentRange, selectInputRange } from '@/utils'
 
 const route = useRoute()
 const router = useRouter()
@@ -51,6 +52,20 @@ const pageSize = ref(50)
 const totalItems = ref(0)
 const sortBy = ref<string>('')
 const sortDesc = ref<boolean>(false)
+const manualPathInput = ref('')
+const isDropActive = ref(false)
+const showManualPathControls = ref(false)
+const manualPathInputRef = ref<any>(null)
+
+type PathSelectMode = 'last-filename' | 'last-pathname'
+
+const normalizeDirPath = (path: string) => {
+  let normalized = path.trim()
+  if (!normalized || normalized === '/') return ''
+  normalized = normalized.replace(/^\/+/, '')
+  if (!normalized.endsWith('/')) normalized += '/'
+  return normalized
+}
 
 const conn = new Connector()
 conn.config = { 
@@ -81,6 +96,7 @@ const loadData = async () => {
 
 onMounted(loadData)
 watch(currentPath, () => {
+  manualPathInput.value = currentPath.value
   currentPage.value = 1
   loadData()
 })
@@ -91,10 +107,28 @@ const handleSortChange = ({ prop, order }: { prop: string, order: string }) => {
     sortDesc.value = false
   } else {
     sortBy.value = prop;
-    sortDesc.value = order === 'ascending'
+    sortDesc.value = order === 'descending'
   }
   currentPage.value = 1
   loadData()
+}
+
+const goToManualPath = () => {
+  const normalized = normalizeDirPath(manualPathInput.value)
+  if (!normalized) {
+    router.push('/files')
+    return
+  }
+  router.push(`/files/${normalized}`)
+}
+
+const toggleManualPathControls = async () => {
+  showManualPathControls.value = !showManualPathControls.value
+  if (showManualPathControls.value) {
+    await nextTick()
+    const input = manualPathInputRef.value?.input as HTMLInputElement | undefined
+    input?.focus()
+  }
 }
 
 const handleSizeChange = (val: number) => {
@@ -143,6 +177,33 @@ const handleBack = () => {
   router.push(`/files/${parts.join('/')}`)
 }
 
+const focusMessageBoxInputSelection = async (sourcePath: string, selectMode: PathSelectMode) => {
+  await nextTick()
+  const input = document.querySelector('.el-message-box__input .el-input__inner') as HTMLInputElement | null
+  if (!input) return
+  const [start, end] = selectMode === 'last-filename'
+    ? getLastFilenameStemRange(sourcePath)
+    : getLastPathComponentRange(sourcePath)
+  selectInputRange(input, start, end)
+}
+
+const promptPath = async (
+  title: string,
+  confirmButtonText: string,
+  sourcePath: string,
+  selectMode: PathSelectMode,
+) => {
+  const promptInput = ApiUtils.decodePath(sourcePath)
+  const promptTask = ElMessageBox.prompt(t('files.enterDestPath'), title, {
+    inputValue: promptInput,
+    confirmButtonText,
+    cancelButtonText: t('users.cancel'),
+  })
+  void focusMessageBoxInputSelection(promptInput, selectMode)
+  const { value } = (await promptTask) as any
+  return String(value || '').trim()
+}
+
 const handleDelete = async (item: DirectoryRecord | FileRecord, isDir: boolean) => {
   try {
     await ElMessageBox.confirm(t('files.confirmDelete'), 'Warning', {
@@ -161,10 +222,34 @@ const handleDelete = async (item: DirectoryRecord | FileRecord, isDir: boolean) 
 }
 
 // Upload Modal State
-const uploadDialogRef = ref<InstanceType<typeof UploadDialog> | null>(null)
+const uploadDialogRef = ref<{
+  open: () => void
+  openWithDrop: (e: DragEvent) => Promise<void>
+} | null>(null)
 
 const openUploadDialog = () => {
   uploadDialogRef.value?.open()
+}
+
+const handleViewDragOver = (e: DragEvent) => {
+  if (!currentPath.value) return
+  e.preventDefault()
+  isDropActive.value = true
+}
+
+const handleViewDragLeave = (e: DragEvent) => {
+  const current = e.currentTarget as HTMLElement | null
+  const related = e.relatedTarget as Node | null
+  if (!current || !related || !current.contains(related)) {
+    isDropActive.value = false
+  }
+}
+
+const handleViewDrop = async (e: DragEvent) => {
+  if (!currentPath.value) return
+  e.preventDefault()
+  isDropActive.value = false
+  await uploadDialogRef.value?.openWithDrop(e)
 }
 
 const handleDownload = (item: DirectoryRecord | FileRecord, isDir: boolean) => {
@@ -181,21 +266,24 @@ const handleMove = async (item: DirectoryRecord | FileRecord, isDir: boolean) =>
   try {
     let srcPath = item.url
     if (isDir && !srcPath.endsWith('/')) srcPath += '/'
-    
-    const { value } = (await ElMessageBox.prompt('Enter destination path:', 'Move', {
-      inputValue: srcPath,
-      confirmButtonText: 'Move',
-      cancelButtonText: 'Cancel',
-    })) as any
+
+    const value = await promptPath(
+      t('files.moveTitle'),
+      t('files.moveAction'),
+      srcPath,
+      isDir ? 'last-pathname' : 'last-filename'
+    )
     if (value) {
-      await conn.move(srcPath, value)
-      logStore.logMessage('success', 'Moved successfully')
+      let dstPath = ApiUtils.encodePath(value)
+      if (isDir && !dstPath.endsWith('/')) dstPath += '/'
+      await conn.move(srcPath, dstPath)
+      logStore.logMessage('success', t('files.moveSuccess'))
       loadData()
     }
   } catch (e: unknown) {
     if (e !== 'cancel') {
       const err = e as Error
-      logStore.logMessage('error', err.message || 'Failed to move')
+      logStore.logMessage('error', err.message || t('files.moveFailed'))
     }
   }
 }
@@ -204,21 +292,24 @@ const handleCopy = async (item: DirectoryRecord | FileRecord, isDir: boolean) =>
   try {
     let srcPath = item.url
     if (isDir && !srcPath.endsWith('/')) srcPath += '/'
-    
-    const { value } = (await ElMessageBox.prompt('Enter destination path:', 'Copy', {
-      inputValue: srcPath,
-      confirmButtonText: 'Copy',
-      cancelButtonText: 'Cancel',
-    })) as any
+
+    const value = await promptPath(
+      t('files.copyTitle'),
+      t('files.copyAction'),
+      srcPath,
+      isDir ? 'last-pathname' : 'last-filename'
+    )
     if (value) {
-      await conn.copy(srcPath, value)
-      logStore.logMessage('success', 'Copied successfully')
+      let dstPath = ApiUtils.encodePath(value)
+      if (isDir && !dstPath.endsWith('/')) dstPath += '/'
+      await conn.copy(srcPath, dstPath)
+      logStore.logMessage('success', t('files.copySuccess'))
       loadData()
     }
   } catch (e: unknown) {
     if (e !== 'cancel') {
       const err = e as Error
-      logStore.logMessage('error', err.message || 'Failed to copy')
+      logStore.logMessage('error', err.message || t('files.copyFailed'))
     }
   }
 }
@@ -237,7 +328,6 @@ const handlePermissionChange = async (file: FileRecord, perm: number) => {
 const canManagePermission = (row: DirectoryRecord | FileRecord) => {
   if (row.url.endsWith('/')) return false
   const fileRow = row as FileRecord
-  console.log('Checking permission for file:', fileRow.url, 'owner:', fileRow.owner_id, 'current user:', userStore.userInfo)
   return userStore.userInfo?.is_admin || fileRow.owner_id === userStore.userInfo?.id
 }
 
@@ -294,15 +384,35 @@ const handleDetails = (row: DirectoryRecord | FileRecord, isDir: boolean) => {
 const getItemName = (url: string) => {
   return ApiUtils.decodePath(url).split('/').filter(Boolean).pop() || ''
 }
+
+manualPathInput.value = currentPath.value
 </script>
 
 <template>
   <div class="h-full min-h-0 flex flex-col gap-4">
-    <div class="flex justify-between items-center">
-      <div class="flex items-center gap-2">
+    <div class="flex justify-between items-center gap-3">
+      <div class="flex items-center gap-2 min-w-0 flex-1">
         <el-button @click="handleBack" :disabled="!currentPath">
           <el-icon><Back /></el-icon>
         </el-button>
+        <el-button @click="toggleManualPathControls">
+          {{ t('files.pathNav') }}
+        </el-button>
+        <el-collapse-transition>
+          <div v-show="showManualPathControls" class="flex items-center gap-2">
+            <el-input
+              ref="manualPathInputRef"
+              v-model="manualPathInput"
+              :placeholder="t('files.pathPlaceholder')"
+              class="max-w-md"
+              clearable
+              @keyup.enter="goToManualPath"
+            >
+              <template #prepend>/</template>
+            </el-input>
+            <el-button @click="goToManualPath">{{ t('files.goPath') }}</el-button>
+          </div>
+        </el-collapse-transition>
         <el-breadcrumb separator="/">
           <el-breadcrumb-item :to="{ path: '/files' }">Root</el-breadcrumb-item>
           <el-breadcrumb-item 
@@ -336,8 +446,12 @@ const getItemName = (url: string) => {
     <el-card
       shadow="never"
       v-loading="loading"
-      class="flex-1 min-h-0"
+      class="flex-1 min-h-0 transition-colors"
+      :class="isDropActive ? 'ring-2 ring-blue-400 bg-blue-50/40' : ''"
       :body-style="{ height: '100%', display: 'flex', flexDirection: 'column' }"
+      @dragover="handleViewDragOver"
+      @dragleave="handleViewDragLeave"
+      @drop="handleViewDrop"
     >
       <div class="flex-1 min-h-0">
       <el-table 

@@ -17,6 +17,41 @@ export function copyToClipboard(text: string) {
     }
 }
 
+export function ensureDirPath(path: string): string {
+    if (!path) return '';
+    return path.endsWith('/') ? path : `${path}/`;
+}
+
+export function stripTrailingSlash(path: string): string {
+    if (!path || path === '/') return path;
+    return path.endsWith('/') ? path.slice(0, -1) : path;
+}
+
+export function getLastPathComponentRange(path: string): [number, number] {
+    if (!path) return [0, 0];
+    const normalized = stripTrailingSlash(path);
+    const lastSlash = normalized.lastIndexOf('/');
+    return [Math.max(lastSlash + 1, 0), normalized.length];
+}
+
+export function getLastFilenameStemRange(path: string): [number, number] {
+    if (!path) return [0, 0];
+    const normalized = stripTrailingSlash(path);
+    const lastSlash = normalized.lastIndexOf('/');
+    const start = Math.max(lastSlash + 1, 0);
+    const fname = normalized.slice(start);
+    const lastDot = fname.lastIndexOf('.');
+    if (lastDot <= 0) {
+        return [start, normalized.length];
+    }
+    return [start, start + lastDot];
+}
+
+export function selectInputRange(input: HTMLInputElement, start: number, end: number) {
+    input.focus();
+    input.setSelectionRange(Math.max(start, 0), Math.max(end, 0));
+}
+
 export async function forEachFile(e: DragEvent, callback: (relPath: string, filePromiseFn: () => Promise<File>) => Promise<void>, maxConcurrent = 8) {
     const results: Promise<void>[] = [];
 

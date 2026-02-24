@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Connector, { ApiUtils } from '@/api'
-import { forEachFile } from '@/utils'
+import { ensureDirPath, forEachFile, getLastPathComponentRange, selectInputRange } from '@/utils'
 import { UploadFilled, Refresh } from '@element-plus/icons-vue'
 import { useLogStore } from '@/store/logs'
 
@@ -26,31 +26,64 @@ const uploadFileName = ref('')
 const isUploading = ref(false)
 const fileExists = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const uploadPathInputRef = ref<any>(null)
+const multipleDestDirInputRef = ref<any>(null)
 
 const isMultiple = ref(false)
 const multipleFiles = ref<{ relPath: string, file: File }[]>([])
 const multipleBaseDir = ref('')
+const multipleDestDirName = ref('')
 
 const joinPath = (base: string, name: string) => {
   if (!base) return name
   return base.endsWith('/') ? `${base}${name}` : `${base}/${name}`
 }
 
-const open = () => {
-  uploadPath.value = props.currentPath
-  if (uploadPath.value && !uploadPath.value.endsWith('/')) {
-    uploadPath.value += '/'
-  }
+const normalizeSubdirName = (name: string) => name.trim().replace(/^\/+|\/+$/g, '')
+
+const getRootDirFromRelPath = (relPath: string) => {
+  const firstPart = relPath.split('/').filter(Boolean)[0] || ''
+  return normalizeSubdirName(firstPart)
+}
+
+const focusAndSelectLastPathComponent = async () => {
+  await nextTick()
+  const input = uploadPathInputRef.value?.input as HTMLInputElement | undefined
+  if (!input) return
+  const [start, end] = getLastPathComponentRange(uploadPath.value)
+  selectInputRange(input, start, end)
+}
+
+const focusAndSelectDestDirName = async () => {
+  await nextTick()
+  const input = multipleDestDirInputRef.value?.input as HTMLInputElement | undefined
+  if (!input) return
+  selectInputRange(input, 0, input.value.length)
+}
+
+const resetState = () => {
   uploadFileObj.value = null
   uploadFileName.value = ''
   fileExists.value = false
   isMultiple.value = false
   multipleFiles.value = []
   multipleBaseDir.value = ''
-  uploadDialogVisible.value = true
+  multipleDestDirName.value = ''
 }
 
-defineExpose({ open })
+const open = async () => {
+  uploadPath.value = ensureDirPath(props.currentPath)
+  resetState()
+  uploadDialogVisible.value = true
+  await focusAndSelectLastPathComponent()
+}
+
+const openWithDrop = async (e: DragEvent) => {
+  await open()
+  await handleDrop(e)
+}
+
+defineExpose({ open, openWithDrop })
 
 const checkFileExists = async () => {
   if (!uploadFileName.value || uploadFileName.value.endsWith('/')) {
@@ -113,21 +146,26 @@ const handleDrop = async (e: DragEvent) => {
     uploadFileObj.value = null
     uploadFileName.value = ''
 
+    uploadPath.value = ensureDirPath(props.currentPath)
     if (items && items.length === 1 && items[0].kind === 'file' && items[0].webkitGetAsEntry()?.isDirectory) {
-      const dirName = items[0].webkitGetAsEntry()?.name
+      const dirNameFromEntry = normalizeSubdirName(items[0].webkitGetAsEntry()?.name || '')
+      const dirNameFromRelPath = files.length > 0 ? getRootDirFromRelPath(files[0].relPath) : ''
+      const dirName = dirNameFromEntry || dirNameFromRelPath
       if (dirName) {
-        multipleBaseDir.value = dirName + '/'
-        uploadPath.value = joinPath(props.currentPath, dirName)
-        if (!uploadPath.value.endsWith('/')) {
-          uploadPath.value += '/'
-        }
+        multipleBaseDir.value = `${dirName}/`
+        multipleDestDirName.value = dirName
       }
     } else {
       multipleBaseDir.value = ''
-      uploadPath.value = props.currentPath
-      if (uploadPath.value && !uploadPath.value.endsWith('/')) {
-        uploadPath.value += '/'
-      }
+      multipleDestDirName.value = ''
+    }
+
+    if (multipleDestDirName.value) {
+      await focusAndSelectDestDirName()
+    } else {
+      await nextTick()
+      const input = multipleDestDirInputRef.value?.input as HTMLInputElement | undefined
+      if (input) { input.focus() }
     }
   } catch (err: any) {
     logStore.logMessage('error', 'Failed to read files: ' + err.message)
@@ -140,6 +178,9 @@ const confirmUpload = async () => {
   if (isMultiple.value) {
     isUploading.value = true
     try {
+      const dstBasePath = ensureDirPath(uploadPath.value)
+      const destDirName = normalizeSubdirName(multipleDestDirName.value)
+
       let activeCount = 0
       const queue: (() => void)[] = []
       const runWithLimit = async (task: () => Promise<void>) => {
@@ -160,10 +201,19 @@ const confirmUpload = async () => {
 
       const uploadTasks = multipleFiles.value.map(({ relPath, file }) => async () => {
         let finalRelPath = relPath
-        if (multipleBaseDir.value && relPath.startsWith(multipleBaseDir.value)) {
-          finalRelPath = relPath.substring(multipleBaseDir.value.length)
+        if (multipleBaseDir.value) {
+          if (relPath.startsWith(multipleBaseDir.value)) {
+            finalRelPath = relPath.substring(multipleBaseDir.value.length)
+          } else {
+            const rootDir = getRootDirFromRelPath(relPath)
+            if (rootDir) {
+              const pathParts = relPath.split('/').filter(Boolean)
+              finalRelPath = pathParts.slice(1).join('/')
+            }
+          }
         }
-        const fullPath = joinPath(uploadPath.value, finalRelPath)
+        const prefixedRelPath = destDirName ? `${destDirName}/${finalRelPath}` : finalRelPath
+        const fullPath = joinPath(dstBasePath, prefixedRelPath)
         await ApiUtils.uploadFile(props.conn, fullPath, file, { conflict: 'overwrite' })
       })
 
@@ -225,8 +275,16 @@ const confirmUpload = async () => {
       </div>
 
       <div v-if="uploadFileObj || isMultiple" class="space-y-2">
-        <el-input v-model="uploadPath" placeholder="Upload directory" @input="checkFileExists">
+        <el-input ref="uploadPathInputRef" v-model="uploadPath" placeholder="Upload directory" @input="checkFileExists">
           <template #prepend>Directory</template>
+        </el-input>
+        <el-input
+          v-if="isMultiple"
+          ref="multipleDestDirInputRef"
+          v-model="multipleDestDirName"
+          placeholder="Destination subdirectory"
+        >
+          <template #prepend>Subdirectory</template>
         </el-input>
         <div v-if="!isMultiple" class="flex items-center gap-2">
           <el-input v-model="uploadFileName" placeholder="File name" @input="checkFileExists">
@@ -240,7 +298,9 @@ const confirmUpload = async () => {
           Warning: File already exists and will be overwritten.
         </div>
         <div v-if="isMultiple" class="text-gray-600 text-sm">
-          Note: Same name files will be overwritten.
+          Note: Same name files will be overwritten. 
+          Filename will be preserved with the relative path. 
+          Set subdirectory to place files under a custom folder.
         </div>
       </div>
     </div>

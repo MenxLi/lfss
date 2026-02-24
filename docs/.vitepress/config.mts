@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitepress'
 
-const {BASE: base = '/.docs/'} = process.env
+const { BASE: base = './' } = process.env
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
@@ -19,9 +19,9 @@ export default defineConfig({
         items: [
           { text: 'Server Setup', link: '/server-intro' },
           { text: 'Start on Boot', link: '/start-on-boot' },
-          { text: 'Client Intro', link: '/client-intro' }, 
+          { text: 'Client Intro', link: '/client-intro' },
         ]
-      }, 
+      },
       {
         text: 'Documentation',
         items: [
@@ -34,7 +34,7 @@ export default defineConfig({
           { text: 'WebDAV', link: '/webdav' },
           { text: 'Development', link: '/Development' },
         ]
-      }, 
+      },
       {
         text: 'About',
         items: [

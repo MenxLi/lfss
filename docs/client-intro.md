@@ -2,28 +2,28 @@
 # Connect to LFSS
 
 ## WebUI and JavaScript API
-A simple web-based file manager is provided in the package.  
+A web-based file manager is provided in the package.  
 The web app can be accessed at the `/.panel/` path after starting the LFSS server.
 
 *e.g.*
 if your server is running at `http://localhost:8000`,
 you can open the panel at `http://localhost:8000/.panel/`.
 
-Or, you can open a static web server at the `/frontend` directory ([source](https://github.com/MenxLi/lfss/tree/main/frontend)).
+<!-- Or, you can open a static web server at the `/frontend` directory ([source](https://github.com/MenxLi/lfss/tree/main/frontend)).
 
 > The panel is pretty basic at the moment, and is not planned to be a full-featured, good-looking file manager. 
-If you want a more advanced file manager, please consider building your own with the APIs. 
+If you want a more advanced file manager, please consider building your own with the APIs.  -->
 
-Alongside the web server, a JavaScript API client is also provided in the `frontend` directory. 
-Simply include the [`api.js`](https://github.com/MenxLi/lfss/blob/main/frontend/api.js) file in your project to easily interact with the LFSS server.
+Alongside the web server, a JavaScript API client is also provided at the `http://your-server-endpoint/.panel/api/` endpoint, which can be used to interact with the LFSS server in your own frontend projects.
+```txt
+http://your-server-endpoint/.panel/api/
+├──  api.ts
+├──  api.js
+└──  api.d.ts
 
-:::tip
-If you see a blank page when opening the panel, or you want to change the server endpoint, 
-please click on this button to configure the endpoint and token.
+```
 
-<!-- ![Set Endpoint](./imgs/set-endpoint.png) -->
-<img src="./imgs/set-endpoint.png" alt="Set Endpoint" style='border: 1px solid #ccc; margin-block: 1em;' />
-:::
+Simply include the files in your project to easily interact with the LFSS server.
 
 ## Python Tools
 

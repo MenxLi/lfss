@@ -391,7 +391,7 @@ const getItemName = (url: string) => {
 
 <template>
   <div class="h-full min-h-0 flex flex-col gap-4">
-    <div class="flex justify-between items-center gap-3">
+    <div class="flex justify-between items-start gap-3 flex-wrap">
       <div class="flex items-center gap-2 min-w-0 flex-1">
         <el-button @click="handleBack" :disabled="!currentPath">
           <el-icon><Back /></el-icon>
@@ -414,7 +414,7 @@ const getItemName = (url: string) => {
             <el-button @click="goToManualPath">{{ t('files.goPath') }}</el-button>
           </div>
         </el-collapse-transition>
-        <el-breadcrumb separator="/">
+        <el-breadcrumb separator="/" class="flex">
           <el-breadcrumb-item :to="{ path: '/files' }">Root</el-breadcrumb-item>
           <el-breadcrumb-item 
             v-for="(part, index) in currentPath.split('/').filter(Boolean)" 
@@ -425,7 +425,7 @@ const getItemName = (url: string) => {
           </el-breadcrumb-item>
         </el-breadcrumb>
       </div>
-      <div class="flex gap-2 items-center">
+      <div class="flex gap-2 items-center flex-wrap w-full sm:w-auto sm:justify-end">
         <el-popover
           v-model:visible="displayConfigVisible"
           placement="bottom-end"

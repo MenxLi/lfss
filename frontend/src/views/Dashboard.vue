@@ -200,7 +200,7 @@ onMounted(async () => {
           <div v-else class="space-y-2">
             <div v-for="peer in filteredPeers" :key="peer.username" class="flex items-center justify-between p-2 bg-gray-50 rounded">
               <div class="flex items-center gap-2">
-                <el-avatar :size="32" class="bg-blue-500">{{ peer.username.charAt(0).toUpperCase() }}</el-avatar>
+                <el-avatar :size="32" class="bg-blue-500 shrink-0">{{ peer.username.charAt(0).toUpperCase() }}</el-avatar>
                 <span class="font-medium">{{ peer.username }}</span>
               </div>
               <div class="flex items-center gap-2">

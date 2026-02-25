@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import Connector, { ApiUtils } from '@/api'
 import type { DirectoryRecord, FileRecord } from '@/api'
 import { copyToClipboard } from '@/utils'
@@ -13,6 +14,7 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
+const { t } = useI18n()
 const logStore = useLogStore()
 
 const detailsDialogVisible = ref(false)
@@ -28,7 +30,7 @@ const open = async (row: DirectoryRecord | FileRecord, isDir: boolean) => {
       detailsData.value = { ...res as DirectoryRecord, isDir: true }
     }).catch((e) => {
       console.error('Failed to fetch directory details', e)
-      logStore.logMessage('error', 'Failed to load directory details')
+      logStore.logMessage('error', t('files.details.loadDirFailed'))
     })
   }
 
@@ -63,72 +65,83 @@ const copyUrl = () => {
   if (!detailsData.value) return
   const url = ApiUtils.getFullUrl(props.conn, detailsData.value.url, false)
   copyToClipboard(url)
-  logStore.logMessage('success', 'URL copied to clipboard')
+  logStore.logMessage('success', t('files.details.urlCopied'))
 }
 const copyUrlRaw = () => {
   if (!detailsData.value) return
   copyToClipboard(detailsData.value.url)
-  logStore.logMessage('success', 'Path copied to clipboard')
+  logStore.logMessage('success', t('files.details.pathCopied'))
 }
 </script>
 
 <template>
   <el-dialog
     v-model="detailsDialogVisible"
-    title="Details"
+    :title="t('files.details.title')"
     width="500px"
     @close="emit('close')"
   >
     <div v-if="detailsData" class="space-y-4">
-      <div class="grid grid-cols-3 gap-2">
-        <div class="font-bold text-gray-600">Name:</div>
-        <div class="col-span-2 break-all">{{ ApiUtils.decodePath(detailsData.url).split('/').filter(Boolean).pop() }}</div>
-        
-        <div class="font-bold text-gray-600">Path:</div>
-        <div class="col-span-2 break-all">{{ ApiUtils.decodePath(detailsData.url) }}</div>
-        
-        <div class="font-bold text-gray-600">Type:</div>
-        <div class="col-span-2">{{ detailsData.isDir ? 'Directory' : 'File' }}</div>
-        
-        <template v-if="!detailsData.isDir">
-          <div class="font-bold text-gray-600">Owner:</div>
-          <div class="col-span-2">{{ ownerUsername || (detailsData as FileRecord).owner_id }}</div>
+      <div class="border border-gray-200">
+        <el-descriptions :column="1" border size="small">
+          <el-descriptions-item :label="t('files.details.name')">
+            <span class="break-all">{{ ApiUtils.decodePath(detailsData.url).split('/').filter(Boolean).pop() || '/' }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('files.details.path')">
+            <span class="break-all">{{ ApiUtils.decodePath(detailsData.url) }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('files.details.type')">
+            {{ detailsData.isDir ? t('files.directory') : t('files.file') }}
+          </el-descriptions-item>
 
-          <div class="font-bold text-gray-600">Size:</div>
-          <div class="col-span-2">{{ formatSize((detailsData as FileRecord).file_size) }}</div>
-          
-          <div class="font-bold text-gray-600">MIME Type:</div>
-          <div class="col-span-2">{{ (detailsData as FileRecord).mime_type || '-' }}</div>
-        </template>
-        
-        <div class="font-bold text-gray-600">Created:</div>
-        <div class="col-span-2">{{ formatDate(detailsData.create_time) }}</div>
-        
-        <div class="font-bold text-gray-600">Accessed:</div>
-        <div class="col-span-2">{{ formatDate(detailsData.access_time) }}</div>
+          <template v-if="!detailsData.isDir">
+            <el-descriptions-item :label="t('files.details.owner')">
+              {{ ownerUsername || (detailsData as FileRecord).owner_id }}
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('files.details.size')">
+              {{ formatSize((detailsData as FileRecord).file_size) }}
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('files.details.mimeType')">
+              {{ (detailsData as FileRecord).mime_type || '-' }}
+            </el-descriptions-item>
+          </template>
 
-        <template v-if="detailsData.isDir">
-          <div class="font-bold text-gray-600">Modified:</div>
-          <div class="col-span-2">{{ formatDate((detailsData as DirectoryRecord).update_time) }}</div>
+          <el-descriptions-item :label="t('files.details.created')">
+            {{ formatDate(detailsData.create_time) }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('files.details.accessed')">
+            {{ formatDate(detailsData.access_time) }}
+          </el-descriptions-item>
 
-          <div class="font-bold text-gray-600">Size:</div>
-          <div class="col-span-2">{{ formatSize((detailsData as DirectoryRecord).size) }}</div>
+          <template v-if="detailsData.isDir">
+            <el-descriptions-item :label="t('files.details.modified')">
+              {{ formatDate((detailsData as DirectoryRecord).update_time) }}
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('files.details.fileCount')">
+              {{ (detailsData as DirectoryRecord).n_files }}
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('files.details.size')">
+              {{ formatSize((detailsData as DirectoryRecord).size) }}
+            </el-descriptions-item>
+          </template>
+        </el-descriptions>
+      </div>
 
-          <div class="font-bold text-gray-600">File Count:</div>
-          <div class="col-span-2">{{ (detailsData as DirectoryRecord).n_files }}</div>
-
-        </template>
-        
-        <div class="col-span-3 flex items-center gap-2">
-          <el-input :value="detailsData.url" readonly size="small" />
-          <el-button size="small" @click="copyUrlRaw" title="Copy Path">
+      <div class="space-y-2">
+        <div class="text-xs text-gray-500">{{ t('files.details.path') }}</div>
+        <div class="flex items-center gap-2">
+          <el-input :value="detailsData.url" readonly />
+          <el-button @click="copyUrlRaw" :title="t('files.details.copyPath')">
             <el-icon><CopyDocument /></el-icon>
           </el-button>
         </div>
+      </div>
 
-        <div class="col-span-3 flex items-center gap-2">
-          <el-input :value="ApiUtils.getFullUrl(props.conn, detailsData.url, false)" readonly size="small" />
-          <el-button size="small" @click="copyUrl" title="Copy URL">
+      <div class="space-y-2">
+        <div class="text-xs text-gray-500">{{ t('files.details.fullUrl') }}</div>
+        <div class="flex items-center gap-2">
+          <el-input :value="ApiUtils.getFullUrl(props.conn, detailsData.url, false)" readonly />
+          <el-button @click="copyUrl" :title="t('files.details.copyUrl')">
             <el-icon><CopyDocument /></el-icon>
           </el-button>
         </div>

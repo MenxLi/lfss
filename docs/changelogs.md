@@ -1,4 +1,7 @@
 ## 0.17
+### 0.17.2
+- Fix several frontend UI issues.
+
 ### 0.17.1
 - Add router to query user storage usage and expire time.
 - Add user expire time settings.

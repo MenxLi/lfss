@@ -6,6 +6,7 @@ js-api:
 	mkdir -p dist/api/ && \
 	cp src/api.ts dist/api/api.ts && \
 	npx tsc dist/api/api.ts \
+		--moduleResolution bundler \
 		--target ES2020 \
 		--module ESNext \
 		--outDir dist/api/ \

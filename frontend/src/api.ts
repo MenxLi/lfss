@@ -1,6 +1,7 @@
 export interface Config {
     endpoint: string;
     token: string;
+    cachingStrategy?: 'default' | 'no-store' | 'no-cache' | 'force-cache' | 'only-if-cached';
 }
 
 export interface UserRecord {
@@ -117,7 +118,8 @@ export class Fetcher {
                 "Authorization": 'Bearer ' + this.config.token,
                 ...headers
             },
-            body
+            body, 
+            cache: this.config.cachingStrategy || 'no-cache'
         });
     }
 

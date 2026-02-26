@@ -3,6 +3,7 @@ import { ref, onMounted, watch, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
+import type { TableInstance } from 'element-plus'
 import { ApiUtils, permMap } from '@/api'
 import type { DirectoryRecord, FileRecord } from '@/api'
 import { useUserStore } from '@/store/user'
@@ -67,6 +68,7 @@ const isDropActive = ref(false)
 const showManualPathControls = ref(false)
 const manualPathInputRef = ref<any>(null)
 const displayConfigVisible = ref(false)
+const fileTableRef = ref<TableInstance>()
 const tableRows = computed(() => [
   ...dirs.value.map((d) => ({ ...d, isDir: true })),
   ...files.value.map((f) => ({ ...f, isDir: false }))
@@ -84,6 +86,11 @@ const normalizeDirPath = (path: string) => {
 }
 
 const conn = createConnector(userStore.token)
+
+const scrollTableToTop = async () => {
+  await nextTick()
+  fileTableRef.value?.setScrollTop(0)
+}
 
 const loadData = async () => {
   loading.value = true
@@ -158,11 +165,13 @@ const handleSizeChange = (val: number) => {
   preferenceStore.filePageSize = val
   currentPage.value = 1
   loadData()
+  void scrollTableToTop()
 }
 
 const handleCurrentChange = (val: number) => {
   currentPage.value = val
   loadData()
+  void scrollTableToTop()
 }
 
 const handleDirClick = (dir: DirectoryRecord) => {
@@ -448,7 +457,7 @@ const getItemName = (url: string) => {
           </div>
         </el-popover>
         <el-dropdown @command="handleNewCommand" :disabled="!currentPath">
-          <el-button type="success">
+          <el-button type="success" :disabled="!currentPath">
             <el-icon class="mr-1"><Document /></el-icon>
             {{ t('files.new') }}
           </el-button>
@@ -477,6 +486,7 @@ const getItemName = (url: string) => {
     >
       <div class="flex-1 min-h-0">
       <el-table 
+        ref="fileTableRef"
         :data="tableRows" 
         style="width: 100%"
         height="100%"

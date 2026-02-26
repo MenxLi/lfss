@@ -90,8 +90,9 @@ export function selectInputRange(input: HTMLInputElement, start: number, end: nu
     input.setSelectionRange(Math.max(start, 0), Math.max(end, 0));
 }
 
-export async function forEachFile(e: DragEvent, callback: (relPath: string, filePromiseFn: () => Promise<File>) => Promise<void>, maxConcurrent = 8) {
+export async function forEachFile(e: DragEvent, callback: (relPath: string, filePromiseFn: () => Promise<File>) => Promise<void>, maxConcurrent = 4) {
     const results: Promise<void>[] = [];
+    const seenRelPaths = new Set<string>();
 
     let activeCount = 0;
     const queue: (() => void)[] = [];
@@ -114,9 +115,12 @@ export async function forEachFile(e: DragEvent, callback: (relPath: string, file
 
     async function traverse(entry: any, path: string) {
         if (entry.isFile) {
+            const relPath = path + entry.name;
+            if (seenRelPaths.has(relPath)) return;
+            seenRelPaths.add(relPath);
             const filePromiseFn = () =>
                 new Promise<File>((resolve, reject) => entry.file(resolve, reject));
-            results.push(runWithLimit(() => callback(path + entry.name, filePromiseFn)));
+            results.push(runWithLimit(() => callback(relPath, filePromiseFn)));
         } else if (entry.isDirectory) {
             const reader = entry.createReader();
 
@@ -139,19 +143,30 @@ export async function forEachFile(e: DragEvent, callback: (relPath: string, file
         }
     }
 
+    let discoveredAnyFromItems = false;
     if (e.dataTransfer && e.dataTransfer.items) {
         await Promise.all(
             Array.from(e.dataTransfer.items).map(async item => {
+                if (item.kind !== 'file') {
+                    return;
+                }
                 const entry = item.webkitGetAsEntry && item.webkitGetAsEntry();
                 if (entry) {
+                    discoveredAnyFromItems = true;
                     await traverse(entry, '');
                 }
             })
         );
-    } else if (e.dataTransfer && e.dataTransfer.files) {
+    }
+
+    if (e.dataTransfer && e.dataTransfer.files && (!discoveredAnyFromItems || results.length === 0)) {
         Array.from(e.dataTransfer.files).forEach(file => {
-            results.push(runWithLimit(() => callback(file.name, () => Promise.resolve(file))));
+            const relPath = file.webkitRelativePath || file.name;
+            if (seenRelPaths.has(relPath)) return;
+            seenRelPaths.add(relPath);
+            results.push(runWithLimit(() => callback(relPath, () => Promise.resolve(file))));
         });
     }
-    return results;
+
+    await Promise.all(results);
 }

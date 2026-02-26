@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Connector, { ApiUtils } from '@/api'
 import type { DirectoryRecord, FileRecord } from '@/api'
-import { copyToClipboard } from '@/utils'
+import { copyToClipboard, formatBytes, formatDateTime } from '@/utils'
 import { useLogStore } from '@/store/logs'
 
 const props = defineProps<{
@@ -47,20 +47,6 @@ const open = async (row: DirectoryRecord | FileRecord, isDir: boolean) => {
 
 defineExpose({ open })
 
-const formatSize = (bytes: number) => {
-  if (bytes === -1) return '-'
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
-
-const formatDate = (dateStr: string) => {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString()
-}
-
 const copyUrl = () => {
   if (!detailsData.value) return
   const url = ApiUtils.getFullUrl(props.conn, detailsData.value.url, false)
@@ -99,7 +85,7 @@ const copyUrlRaw = () => {
               {{ ownerUsername || (detailsData as FileRecord).owner_id }}
             </el-descriptions-item>
             <el-descriptions-item :label="t('files.details.size')">
-              {{ formatSize((detailsData as FileRecord).file_size) }}
+              {{ formatBytes((detailsData as FileRecord).file_size) }}
             </el-descriptions-item>
             <el-descriptions-item :label="t('files.details.mimeType')">
               {{ (detailsData as FileRecord).mime_type || '-' }}
@@ -107,21 +93,21 @@ const copyUrlRaw = () => {
           </template>
 
           <el-descriptions-item :label="t('files.details.created')">
-            {{ formatDate(detailsData.create_time) }}
+            {{ formatDateTime(detailsData.create_time) }}
           </el-descriptions-item>
           <el-descriptions-item :label="t('files.details.accessed')">
-            {{ formatDate(detailsData.access_time) }}
+            {{ formatDateTime(detailsData.access_time) }}
           </el-descriptions-item>
 
           <template v-if="detailsData.isDir">
             <el-descriptions-item :label="t('files.details.modified')">
-              {{ formatDate((detailsData as DirectoryRecord).update_time) }}
+              {{ formatDateTime((detailsData as DirectoryRecord).update_time) }}
             </el-descriptions-item>
             <el-descriptions-item :label="t('files.details.fileCount')">
               {{ (detailsData as DirectoryRecord).n_files }}
             </el-descriptions-item>
             <el-descriptions-item :label="t('files.details.size')">
-              {{ formatSize((detailsData as DirectoryRecord).size) }}
+              {{ formatBytes((detailsData as DirectoryRecord).size) }}
             </el-descriptions-item>
           </template>
         </el-descriptions>

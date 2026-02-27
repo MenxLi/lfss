@@ -268,9 +268,9 @@ const handleDownload = (item: DirectoryRecord | FileRecord, isDir: boolean) => {
   let path = item.url
   if (isDir) {
     if (!path.endsWith('/')) path += '/'
-    window.open(ApiUtils.getBundleUrl(conn, path), '_blank')
+    window.open(ApiUtils.getBundleUrl(conn, path))
   } else {
-    window.open(ApiUtils.getDownloadUrl(conn, path), '_blank')
+    window.open(ApiUtils.getDownloadUrl(conn, path))
   }
 }
 
@@ -343,19 +343,21 @@ const canManagePermission = (row: DirectoryRecord | FileRecord) => {
   return userStore.userInfo?.is_admin || fileRow.owner_id === userStore.userInfo?.id
 }
 
-const isImage = (url: string) => {
-  const ext = url.split('.').pop()?.toLowerCase()
-  return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext || '')
+const isImage = (row: FileRecord) => {
+  const ext = row.url.split('.').pop()?.toLowerCase()
+  const imgFromExt = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext || '')
+  return imgFromExt || (row.mime_type ? row.mime_type.startsWith('image/') : false)
 }
 
 const isTextFile = (row: FileRecord) => {
   if (row.mime_type && row.mime_type.startsWith('text/')) return true
   const ext = row.url.split('.').pop()?.toLowerCase()
-  return ['txt', 'md', 'json', 'js', 'ts', 'vue', 'html', 'css', 'py', 'sh', 'csv', 'xml'].includes(ext || '')
+  const txtFromExt = ['txt', 'md', 'json', 'js', 'ts', 'vue', 'html', 'css', 'py', 'sh', 'csv', 'xml'].includes(ext || '')
+  return txtFromExt || (row.mime_type ? row.mime_type.startsWith('text/') : false)
 }
 
 const handleFileIconClick = (row: FileRecord) => {
-  if (isImage(row.url)) return // Handled by el-image preview
+  if (isImage(row)) return // Handled by el-image preview
   window.location.href = ApiUtils.getDownloadUrl(conn, row.url)
 }
 
@@ -497,7 +499,7 @@ const getItemName = (url: string) => {
         <el-table-column prop="url" :label="t('files.name')" min-width="200" sortable="custom">
           <template #default="{ row }">
             <div class="flex items-center gap-2 hover:text-blue-500 min-w-0">
-              <template v-if="!row.isDir && isImage(row.url)">
+              <template v-if="!row.isDir && isImage(row)">
                 <el-image 
                   :src="ApiUtils.getThumbUrl(conn, row.url)" 
                   lazy 

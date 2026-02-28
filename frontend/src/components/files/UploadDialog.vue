@@ -5,6 +5,7 @@ import Connector, { ApiUtils } from '@/api'
 import { ensureDirPath, forEachFile, getLastPathComponentRange, selectInputRange } from '@/utils'
 import { UploadFilled, Refresh } from '@element-plus/icons-vue'
 import { useLogStore } from '@/store/logs'
+import { debounce } from '@/utils'
 
 const props = defineProps<{
   conn: Connector
@@ -99,6 +100,7 @@ const checkFileExists = async () => {
     fileExists.value = false
   }
 }
+const checkFileExistsDebounced = debounce(checkFileExists, 300)
 
 const randomizeFileName = () => {
   const ext = uploadFileName.value.split('.').pop() || ''
@@ -284,7 +286,7 @@ const confirmUpload = async () => {
       </div>
 
       <div v-if="uploadFileObj || isMultiple" class="space-y-2">
-        <el-input ref="uploadPathInputRef" v-model="uploadPath" placeholder="Upload directory" @input="checkFileExists">
+        <el-input ref="uploadPathInputRef" v-model="uploadPath" placeholder="Upload directory" @input="checkFileExistsDebounced">
           <template #prepend>Directory</template>
         </el-input>
         <el-input
@@ -296,7 +298,7 @@ const confirmUpload = async () => {
           <template #prepend>Subdirectory</template>
         </el-input>
         <div v-if="!isMultiple" class="flex items-center gap-2">
-          <el-input v-model="uploadFileName" placeholder="File name" @input="checkFileExists">
+          <el-input v-model="uploadFileName" placeholder="File name" @input="checkFileExistsDebounced">
             <template #prepend>File Name</template>
           </el-input>
           <el-button @click="randomizeFileName" title="Randomize name">

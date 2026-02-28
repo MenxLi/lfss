@@ -9,7 +9,7 @@ import { useLogStore } from '@/store/logs'
 import UserToolbar from '@/components/users/UserToolbar.vue'
 import UserTable from '@/components/users/UserTable.vue'
 import PeerAccessDialog from '@/components/users/PeerAccessDialog.vue'
-import { createConnector } from '@/utils'
+import { createConnector, debounce } from '@/utils'
 
 const { t } = useI18n()
 const userStore = useUserStore()
@@ -99,10 +99,11 @@ const loadUsers = async () => {
   }
 }
 
-watch(searchQuery, () => {
+watch(searchQuery, debounce(async () => {
   currentPage.value = 1
-  loadUsers()
-})
+  await loadUsers()
+}, 300))
+
 watch(includeVirtual, () => {
   currentPage.value = 1
   loadUsers()

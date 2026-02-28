@@ -5,7 +5,10 @@ import { useLogStore } from '@/store/logs'
 import { useI18n } from 'vue-i18n'
 import { sha256 } from 'js-sha256'
 import type { UserRecord } from '@/api'
-import { createConnector, formatBytes } from '@/utils'
+import { createConnector } from '@/utils'
+import DashboardMetricsPanel from '@/components/dashboard/DashboardMetricsPanel.vue'
+import DashboardStorageCard from '@/components/dashboard/DashboardStorageCard.vue'
+import DashboardCollaboratorsCard from '@/components/dashboard/DashboardCollaboratorsCard.vue'
 
 const userStore = useUserStore()
 const logStore = useLogStore()
@@ -83,11 +86,7 @@ const updateMyPassword = async () => {
 
 const loadStorage = async () => {
   const conn = getConnector()
-  const res = await conn.fetcher.get('_api/user/storage')
-  if (!res.ok) {
-    throw new Error(`Failed to load storage, status code: ${res.status}`)
-  }
-  const data = await res.json()
+  const data = await conn.getUserStorage()
   storageInfo.value.used = data.used ?? 0
   storageInfo.value.total = data.quota ?? 0
 }
@@ -149,73 +148,20 @@ onMounted(async () => {
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <el-card shadow="hover">
-        <template #header>
-          <div class="font-bold flex items-center gap-2">
-            <el-icon><DataLine /></el-icon>
-            {{ t('dashboard.storage') }}
-          </div>
-        </template>
-        <div class="flex flex-col gap-4">
-          <div class="flex justify-between items-center">
-            <span class="text-gray-500">{{ t('dashboard.used') }}</span>
-            <span class="font-medium text-lg">{{ formatBytes(storageInfo.used) }}</span>
-          </div>
-          <div class="flex justify-between items-center">
-            <span class="text-gray-500">{{ t('dashboard.total') }}</span>
-            <span class="font-medium text-lg">
-              {{ storageInfo.total > 0 ? formatBytes(storageInfo.total) : t('dashboard.unlimited') }}
-            </span>
-          </div>
-          <el-progress 
-            v-if="storageInfo.total > 0"
-            :percentage="Math.min(100, Math.round((storageInfo.used / storageInfo.total) * 100))" 
-            :status="storageInfo.used > storageInfo.total * 0.9 ? 'exception' : ''"
-          />
-        </div>
-      </el-card>
+      <DashboardStorageCard :used="storageInfo.used" :total="storageInfo.total" />
 
-      <el-card shadow="hover">
-        <template #header>
-          <div class="font-bold flex items-center justify-between gap-4 flex-wrap">
-            <span class="flex items-center gap-2">
-              <el-icon><User /></el-icon>
-              {{ t('dashboard.collaborators') }}
-            </span>
-            <div class="flex items-center gap-2">
-              <el-checkbox v-model="includeAdmin" @change="loadPeers">
-                {{ t('dashboard.includeAdmin') }}
-              </el-checkbox>
-              <el-switch v-model="incoming" @change="loadPeers" 
-                :active-text="t('dashboard.incomingAccess')" 
-                :inactive-text="t('dashboard.outcomingAccess')" 
-                inline-prompt/>
-            </div>
-          </div>
-        </template>
-        <div class="flex flex-col gap-2" v-loading="peerLoading">
-          <div v-if="filteredPeers.length === 0" class="text-gray-500 text-center py-4">
-            {{ t('dashboard.noCollaborators') }}
-          </div>
-          <div v-else class="space-y-2">
-            <div v-for="peer in filteredPeers" :key="peer.username" class="flex items-center justify-between p-2 bg-gray-50 rounded">
-              <div class="flex items-center gap-2">
-                <el-avatar :size="32" class="bg-blue-500 shrink-0">{{ peer.username.charAt(0).toUpperCase() }}</el-avatar>
-                <span class="font-medium">{{ peer.username }}</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <el-tag size="small" type="info">
-                  {{ peer.accessLevel === 2 ? t('dashboard.accessWrite') : t('dashboard.accessRead') }}
-                </el-tag>
-                <el-tag size="small" :type="peer.is_admin ? 'danger' : 'success'">
-                  {{ peer.is_admin ? t('dashboard.admin') : t('dashboard.user') }}
-                </el-tag>
-              </div>
-            </div>
-          </div>
-        </div>
-      </el-card>
+      <DashboardCollaboratorsCard
+        :peers="filteredPeers"
+        :loading="peerLoading"
+        :include-admin="includeAdmin"
+        :incoming="incoming"
+        @update:include-admin="includeAdmin = $event"
+        @update:incoming="incoming = $event"
+        @reload="loadPeers"
+      />
     </div>
+
+    <DashboardMetricsPanel />
 
     <el-dialog
       v-model="accountDialogVisible"

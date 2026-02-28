@@ -11,6 +11,9 @@ export interface FileColumnPrefs {
     ownerId: boolean
 }
 
+export type DashboardMetricWindow = 'hour' | 'day' | 'week'
+export type DashboardMetricMode = 'requests' | 'throughput'
+
 export const usePreferenceStore = defineStore('preferences', () => {
     const filePageSize = ref(50)
     const fileSortBy = ref<FileSortField>('')
@@ -23,6 +26,10 @@ export const usePreferenceStore = defineStore('preferences', () => {
         permission: true,
         ownerId: false,
     })
+    const dashboardMetricWindow = ref<DashboardMetricWindow>('day')
+    const dashboardMetricMode = ref<DashboardMetricMode>('requests')
+    const dashboardHiddenRequestSeries = ref<string[]>([])
+    const dashboardHiddenThroughputSeries = ref<string[]>([])
 
     return {
         filePageSize,
@@ -30,6 +37,10 @@ export const usePreferenceStore = defineStore('preferences', () => {
         fileSortDesc,
         fileLastPath,
         fileColumns,
+        dashboardMetricWindow,
+        dashboardMetricMode,
+        dashboardHiddenRequestSeries,
+        dashboardHiddenThroughputSeries,
     }
 }, {
     persist: {

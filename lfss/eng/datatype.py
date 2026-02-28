@@ -1,9 +1,82 @@
+from __future__ import annotations
 from enum import IntEnum
 import dataclasses, typing
 import urllib.parse
 from typing import Optional
 import json
 from .utils import fmt_storage_size
+
+@dataclasses.dataclass
+class HttpRecord:
+    method: str
+    path: str
+    headers: str
+    query: str
+    client: str
+    duration: float
+    request_size: int
+    response_size: int
+    status: int
+
+@dataclasses.dataclass
+class HttpTraffic:
+    code_100_count: int
+    code_200_count: int
+    code_300_count: int
+    code_400_count: int
+    code_500_count: int
+    total_count: int
+    bytes_in: int
+    bytes_out: int
+    response_time_sum: float
+
+    def desensitize(self):
+        self.code_100_count = 0
+        self.code_200_count = 0
+        self.code_300_count = 0
+        self.code_400_count = 0
+        self.code_500_count = 0
+        return self
+
+    @staticmethod
+    def zeros():
+        return HttpTraffic(
+            code_100_count=0,
+            code_200_count=0,
+            code_300_count=0,
+            code_400_count=0,
+            code_500_count=0,
+            total_count=0,
+            bytes_in=0,
+            bytes_out=0,
+            response_time_sum=0
+        )
+    
+    def add_inplace(self, other: HttpTraffic | HttpRecord):
+        if isinstance(other, HttpRecord):
+            status = other.status
+            self.code_100_count += (1 if 100 <= status < 200 else 0)
+            self.code_200_count += (1 if 200 <= status < 300 else 0)
+            self.code_300_count += (1 if 300 <= status < 400 else 0)
+            self.code_400_count += (1 if 400 <= status < 500 else 0)
+            self.code_500_count += (1 if 500 <= status < 600 else 0)
+            self.total_count += 1
+            self.bytes_in += other.request_size
+            self.bytes_out += other.response_size
+            self.response_time_sum += other.duration
+        elif isinstance(other, HttpTraffic):
+            self.code_100_count += other.code_100_count
+            self.code_200_count += other.code_200_count
+            self.code_300_count += other.code_300_count
+            self.code_400_count += other.code_400_count
+            self.code_500_count += other.code_500_count
+            self.total_count += other.total_count
+            self.bytes_in += other.bytes_in
+            self.bytes_out += other.bytes_out
+            self.response_time_sum += other.response_time_sum
+        else:
+            raise ValueError("Unsupported type for addition")
+        return self
 
 class FileReadPermission(IntEnum):
     UNSET = 0           # not set

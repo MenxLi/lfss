@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import Optional, Literal
 
 from .app_base import *
-from ..eng.datatype import UserRecord, AccessLevel, FileReadPermission
+from ..eng.datatype import UserRecord, AccessLevel
 from ..eng.database import unique_cursor, UserConn, FileConn
 from ..eng.userman import UserCtl
 

@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, HTTPBasic, HTTPBasicCredentials
 
 from ..eng.log import get_logger
-from ..eng.datatype import UserRecord
+from ..eng.datatype import UserRecord, HttpRecord
 from ..eng.datatype import DECOY_USER
 from ..eng.database_conn import delayed_log_activity
 from ..eng.userman import UserCtl
@@ -25,6 +25,37 @@ logger_failed_request = get_logger("failed_requests", term_level="INFO")
 db = Database()
 req_conn = RequestDB()
 
+
+class ByteCountMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request_size_actual = 0
+        response_size_actual = 0
+        state = scope.setdefault("state", {})
+
+        async def counted_receive():
+            nonlocal request_size_actual
+            message = await receive()
+            if message["type"] == "http.request":
+                request_size_actual += len(message.get("body", b""))
+                state["request_size_actual"] = request_size_actual
+            return message
+
+        async def counted_send(message):
+            nonlocal response_size_actual
+            if message["type"] == "http.response.body":
+                response_size_actual += len(message.get("body", b""))
+                state["response_size_actual"] = response_size_actual
+            await send(message)
+
+        await self.app(scope, counted_receive, counted_send)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db
@@ -32,10 +63,10 @@ async def lifespan(app: FastAPI):
         await global_connection_init(n_read = 8 if not DEBUG_MODE else 1)
         await asyncio.gather(db.init(), req_conn.init())
         yield
-        await req_conn.commit()
+        await req_conn.flush()
     finally:
         await wait_for_debounce_tasks()
-        await asyncio.gather(req_conn.close(), global_connection_close())
+        await global_connection_close()
 
 def handle_exception(fn):
     @wraps(fn)
@@ -67,6 +98,7 @@ env_origins = os.environ.get("LFSS_ORIGIN", "*")
 logger.debug(f"LFSS_ORIGIN: {env_origins}")
 origins = [x.strip() for x in env_origins.split(",") if x.strip()]
 app = FastAPI(docs_url=None, redoc_url=None, lifespan=lifespan)
+app.add_middleware(ByteCountMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -74,6 +106,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _safe_int(value, default=0):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -95,14 +134,19 @@ async def log_requests(request: Request, call_next):
         print(f"Request headers: {dict(request.headers)}")
     await req_conn.log_request(
         request_time_stamp, 
-        request.method, request.url.path, response.status_code, response_time,
-        headers = dict(request.headers), 
-        query = dict(request.query_params), 
-        client = request.client, 
-        request_size = int(request.headers.get("Content-Length", 0)),
-        response_size = int(response.headers.get("Content-Length", 0))
+        HttpRecord(
+            method = request.method, 
+            path = request.url.path, 
+            status = response.status_code, 
+            duration = response_time,
+            headers = str(dict(request.headers)), 
+            query = str(dict(request.query_params)), 
+            client = str(request.client),
+            request_size = getattr(request.state, "request_size_actual", _safe_int(request.headers.get("Content-Length", 0))),
+            response_size = getattr(request.state, "response_size_actual", _safe_int(response.headers.get("Content-Length", 0)))
+        )
     )
-    await req_conn.ensure_commit_once()
+    await req_conn.ensure_flush_once()
     return response
 
 def skip_request_log(fn):
@@ -155,6 +199,7 @@ router_api = APIRouter()
 router_user = APIRouter()
 router_dav = APIRouter()
 router_fs = APIRouter()
+router_metric = APIRouter()
 
 __all__ = [
     "app", "db", "logger", 
@@ -164,4 +209,5 @@ __all__ = [
     "router_user", 
     "router_fs", 
     "router_dav", 
+    "router_metric",
     ]

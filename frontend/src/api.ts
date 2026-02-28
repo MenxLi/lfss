@@ -57,6 +57,18 @@ export interface PathListResponse {
     files: FileRecord[];
 }
 
+export interface HttpTraffic {
+    code_100_count: number;
+    code_200_count: number;
+    code_300_count: number;
+    code_400_count: number;
+    code_500_count: number;
+    total_count: number;
+    bytes_in: number;
+    bytes_out: number;
+    response_time_sum: number;
+}
+
 export type FileSortKey = "" | "url" | "file_size" | "create_time" | "access_time" | "mime_type";
 export type DirectorySortKey = "" | "dirname";
 
@@ -118,7 +130,7 @@ export class Fetcher {
                 "Authorization": 'Bearer ' + this.config.token,
                 ...headers
             },
-            body, 
+            body,
             cache: this.config.cachingStrategy || 'no-cache'
         });
     }
@@ -490,7 +502,37 @@ export default class Connector {
         }
     }
 
-    // admin only APIs below =========
+    async setPassword(password: string): Promise<UserPasswordUpdateInfo> {
+        const res = await this.fetcher.post('_api/user/password', null, {
+            params: { password }
+        });
+        if (!res.ok) {
+            throw new Error(`Failed to update password, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
+        }
+        const r = await res.json();
+        this.fetcher.config.token = r.token;
+        return r
+    }
+
+    // http status code counts will be 0 if non-admin queries this API
+    // - time is the start of the time window in unix timestamp, will be caculated as [time//resolution*resolution, time//resolution*resolution+resolution)
+    // - count is the number of time windows to query, default is 1, e.g. if resolution is 'minute', time is 10:05:30, count is 3, it will return the traffic data for [10:05:00-10:06:00), [10:06:00-10:07:00), [10:07:00-10:08:00)
+    // return an array of HttpTraffic, the length of the array is equal to count
+    async queryHttpTraffic(
+        resolution: 'minute' | 'hour' | 'day',
+        time: number,
+        count: number = 1
+    ): Promise<HttpTraffic[]> {
+        const res = await this.fetcher.get('_api/metric/http-traffic', {
+            params: { resolution, time, count }
+        });
+        if (!res.ok) {
+            throw new Error(`Failed to query HTTP traffic, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
+        }
+        return await res.json();
+    }
+
+    // ============= admin only APIs below ===========
     async listUsers({
         username_filter,
         include_virtual = false,
@@ -568,18 +610,7 @@ export default class Connector {
         return await res.json();
     }
 
-    async setPassword(password: string): Promise<UserPasswordUpdateInfo> {
-        const res = await this.fetcher.post('_api/user/password', null, {
-            params: { password }
-        });
-        if (!res.ok) {
-            throw new Error(`Failed to update password, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
-        }
-        const r = await res.json();
-        this.fetcher.config.token = r.token;
-        return r
-    }
-
+    // admin only
     async setUserExpire(username: string, expire?: string | number): Promise<UserExpireInfo> {
         const params: Record<string, string | number> = { username };
         if (expire !== undefined && expire !== null && String(expire).trim() !== '') {

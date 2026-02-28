@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from .app_base import ENABLE_WEBDAV
 from .app_native import *
 from .app_native_user import *
+from .app_native_metric import *
 
 
 class SPAStaticFiles(StaticFiles):
@@ -51,6 +52,8 @@ if __panel_path.exists():
 # order matters
 app.include_router(router_user, prefix="/_api/user")
 app.include_router(router_user, prefix="/.api/user")
+app.include_router(router_metric, prefix="/_api/metric")
+app.include_router(router_metric, prefix="/.api/metric")
 app.include_router(router_api, prefix="/_api")
 app.include_router(router_api, prefix="/.api")
 if ENABLE_WEBDAV:

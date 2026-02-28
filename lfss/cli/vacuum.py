@@ -119,9 +119,8 @@ async def vacuum_main(index: bool = False, blobs: bool = False, thumbs: bool = F
 
 async def vacuum_requests():
     with indicator("VACUUM-requests"):
-        async with RequestDB().connect() as req_db:
-            await req_db.shrink(max_rows=1_000_000, time_before=now_stamp() - 7*24*60*60)
-            await req_db.conn.execute("VACUUM")
+        async with RequestDB() as req_db:
+            await req_db.shrink(max_rows=1_000_000, time_before=now_stamp() - 7*24*60*60, vacuum=True)
             
 def main():
     global sem

@@ -11,7 +11,7 @@ import asyncio
 from contextlib import contextmanager
 from lfss.eng.connection_pool import transaction, unique_cursor
 from lfss.eng.database import DeferredFileTrash
-from lfss.svc.request_log import RequestDB
+from lfss.eng.request_log import RequestDB
 from lfss.eng.utils import now_stamp
 from lfss.eng.connection_pool import global_entrance
 from lfss.cli.log import trim

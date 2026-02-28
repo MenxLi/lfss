@@ -17,7 +17,7 @@ from ..eng.connection_pool import global_connection_init, global_connection_clos
 from ..eng.utils import wait_for_debounce_tasks, now_stamp, hash_credential
 from ..eng.error import *
 from ..eng.config import DEBUG_MODE
-from .request_log import RequestDB
+from ..eng.request_log import RequestDB
 
 ENABLE_WEBDAV = os.environ.get("LFSS_WEBDAV", "0") == "1"
 logger = get_logger("server")

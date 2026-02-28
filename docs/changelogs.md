@@ -1,3 +1,14 @@
+## 0.18
+### 0.18.0
+- Add statistics for server traffic.
+- Improve request log performance.
+- Frontend improvements:
+    - Add traffic plot to dashboard.
+    - Debounce input triggered api calls.
+    - Improve file type check by mime-type.
+    - Allow user change account path permission.
+    - Fix file details time display
+
 ## 0.17
 ### 0.17.2
 - Fix several frontend UI issues.

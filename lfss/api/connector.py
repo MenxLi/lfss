@@ -554,12 +554,17 @@ class Client:
         response = self._fetch_factory('GET', '_api/user/expire', params)()
         return response.json()['expire_seconds']
 
-    def set_password(self, password: str) -> str:
+    def update_my_password(self, password: str) -> str:
         """Update current authenticated user's password and return new token."""
-        response = self._fetch_factory('POST', '_api/user/password', {'password': password})()
+        response = self._fetch_factory('POST', '_api/user/update-my-password', {'password': password})()
         token = response.json()['token']
         self.config.token = token
         return token
+    
+    def update_my_permission(self, permission: FileReadPermission):
+        """Update current authenticated user's default file permission."""
+        self._fetch_factory('POST', '_api/user/update-my-permission', {'permission': int(permission)})()
+        return
 
     # ========================== Admin APIs ==========================
     def list_users(

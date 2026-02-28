@@ -348,6 +348,14 @@ const handleSubmit = async () => {
         <el-form-item v-if="!form.virtual || isEdit" :label="t('users.role')">
           <el-switch v-model="form.admin" :active-text="t('dashboard.admin')" :inactive-text="t('dashboard.user')" />
         </el-form-item>
+        <el-form-item v-if="!form.virtual || isEdit" :label="t('users.permission')">
+          <el-select v-model="form.permission" class="w-full">
+            <el-option :label="t('files.permissions.unset')" value="UNSET" />
+            <el-option :label="t('files.permissions.public')" value="PUBLIC" />
+            <el-option :label="t('files.permissions.protected')" value="PROTECTED" />
+            <el-option :label="t('files.permissions.private')" value="PRIVATE" />
+          </el-select>
+        </el-form-item>
         <el-form-item :label="t('users.storage')">
           <el-input v-model="form.max_storage" :placeholder="t('users.storagePlaceholder')" />
         </el-form-item>

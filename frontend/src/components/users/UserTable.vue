@@ -44,6 +44,19 @@ const formatExpire = (seconds?: number | null) => {
           </el-tag>
         </template>
       </el-table-column>
+      <el-table-column :label="t('users.permission')" width="120">
+        <template #default="{ row }">
+          {{
+            row.permission === 1
+              ? t('files.permissions.public')
+              : row.permission === 2
+                ? t('files.permissions.protected')
+                : row.permission === 3
+                  ? t('files.permissions.private')
+                  : t('files.permissions.unset')
+          }}
+        </template>
+      </el-table-column>
       <el-table-column :label="t('users.storage')" min-width="140">
         <template #default="{ row }">
           <span>

@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import Optional, Literal
 
 from .app_base import *
-from ..eng.datatype import UserRecord, AccessLevel
+from ..eng.datatype import UserRecord, AccessLevel, parse_read_permission
 from ..eng.database import unique_cursor, UserConn, FileConn
 from ..eng.userman import UserCtl
 
@@ -70,8 +70,7 @@ async def list_peers(
 
     return [u.desensitize() for u in peer_users if u.id != user.id]     # exclude self
 
-
-@router_user.post("/password", response_model=UserPasswordUpdateInfo)
+@router_user.post("/update-my-password", response_model=UserPasswordUpdateInfo)
 @handle_exception
 async def update_my_password(
     password: str,
@@ -85,6 +84,21 @@ async def update_my_password(
         "token": updated_user.credential,
     }
 
+@router_user.post("/update-my-permission")
+@handle_exception
+async def update_my_permission(
+    permission: str | int, 
+    user: UserRecord = Depends(registered_user),
+):
+    if not permission:
+        raise HTTPException(status_code=400, detail="Permission cannot be empty")
+    try:
+        permission = int(permission)
+    except ValueError:
+        pass
+    permission = parse_read_permission(permission)
+    await UserCtl.update(username=user.username, permission=permission)
+    return
 
 # ========================== Admin APIs ==========================
 @router_user.get("/list")

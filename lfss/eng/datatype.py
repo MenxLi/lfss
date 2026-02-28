@@ -103,6 +103,7 @@ class UserRecord:
     permission: 'FileReadPermission'
 
     def __post_init__(self):
+        self.is_admin = bool(self.is_admin)
         self.permission = FileReadPermission(self.permission)
 
     def __str__(self):
@@ -142,6 +143,7 @@ class FileRecord:
 
     def __post_init__(self):
         assert not self.url.endswith('/'), "File URL should not end with '/'"
+        self.external = bool(self.external)
         self.permission = FileReadPermission(self.permission)
 
     def __str__(self):

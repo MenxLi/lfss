@@ -117,7 +117,7 @@ def test_self_password_update_returns_new_token(server):
 
     old_token = get_conn('u5').config.token
     c5 = get_conn('u5')
-    new_token = c5.set_password('new-test-pass')
+    new_token = c5.update_my_password('new-test-pass')
 
     assert isinstance(new_token, str) and new_token
     assert new_token != old_token
@@ -126,3 +126,17 @@ def test_self_password_update_returns_new_token(server):
         get_conn('u5', 'test').whoami()
 
     assert get_conn('u5', 'new-test-pass').whoami().username == 'u5'
+
+
+def test_self_permission_update(server):
+    c0 = get_conn('u0')
+    c0.add_user('u6', 'test', permission='private')
+
+    c6 = get_conn('u6')
+    assert c6.whoami().permission == FileReadPermission.PRIVATE
+
+    result = c6.update_my_permission(FileReadPermission.PUBLIC)
+    assert result is None
+
+    assert c6.whoami().permission == FileReadPermission.PUBLIC
+    assert c0.query_user('u6').permission == FileReadPermission.PUBLIC

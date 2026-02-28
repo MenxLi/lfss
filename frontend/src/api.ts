@@ -502,8 +502,8 @@ export default class Connector {
         }
     }
 
-    async setPassword(password: string): Promise<UserPasswordUpdateInfo> {
-        const res = await this.fetcher.post('_api/user/password', null, {
+    async updateMyPassword(password: string): Promise<UserPasswordUpdateInfo> {
+        const res = await this.fetcher.post('_api/user/update-my-password', null, {
             params: { password }
         });
         if (!res.ok) {
@@ -512,6 +512,16 @@ export default class Connector {
         const r = await res.json();
         this.fetcher.config.token = r.token;
         return r
+    }
+
+    async updateMyPermission(permission: number | 'unset' | 'private' | 'protected' | 'public'): Promise<void> {
+        const res = await this.fetcher.post('_api/user/update-my-permission', null, {
+            params: { permission }
+        });
+        if (!res.ok) {
+            throw new Error(`Failed to update permission, status code: ${res.status}, message: ${await fmtFailedResponse(res)}`);
+        }
+        return;
     }
 
     // http status code counts will be 0 if non-admin queries this API

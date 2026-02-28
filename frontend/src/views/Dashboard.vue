@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useUserStore } from '@/store/user'
 import { useLogStore } from '@/store/logs'
 import { useI18n } from 'vue-i18n'
@@ -28,6 +28,7 @@ const incoming = ref(true)
 const accountDialogVisible = ref(false)
 const accountLoading = ref(false)
 const passwordForm = ref({ password: '' })
+const permissionForm = ref<{ permission: 0 | 1 | 2 | 3 }>({ permission: 0 })
 const newTokenPreview = computed(() => {
   const username = userStore.userInfo?.username || ''
   if (!username || !passwordForm.value.password) return ''
@@ -64,25 +65,40 @@ const copyCurrentToken = async () => {
   }
 }
 
-const updateMyPassword = async () => {
-  if (!passwordForm.value.password) {
-    logStore.logMessage('warning', t('dashboard.passwordRequired'))
-    return
-  }
+const updateMySecurity = async () => {
   accountLoading.value = true
   try {
     const conn = getConnector()
-    const result = await conn.setPassword(passwordForm.value.password)
-    userStore.setToken(result.token)
+    await conn.updateMyPermission(permissionForm.value.permission)
+    if (passwordForm.value.password) {
+      const result = await conn.updateMyPassword(passwordForm.value.password)
+      userStore.setToken(result.token)
+    }
+    if (userStore.userInfo) {
+      userStore.setUserInfo({
+        ...userStore.userInfo,
+        permission: permissionForm.value.permission
+      })
+    }
     passwordForm.value.password = ''
-    logStore.logMessage('success', t('dashboard.passwordUpdated'))
+    logStore.logMessage('success', t('dashboard.securityUpdated'))
   } catch (e: unknown) {
     const err = e as Error
-    logStore.logMessage('error', err.message || t('dashboard.passwordUpdateFailed'))
+    logStore.logMessage('error', err.message || t('dashboard.securityUpdateFailed'))
   } finally {
     accountLoading.value = false
   }
 }
+
+watch(accountDialogVisible, (visible) => {
+  if (!visible) return
+  const currentPermission = userStore.userInfo?.permission
+  if (currentPermission === 0 || currentPermission === 1 || currentPermission === 2 || currentPermission === 3) {
+    permissionForm.value.permission = currentPermission
+  } else {
+    permissionForm.value.permission = 0
+  }
+})
 
 const loadStorage = async () => {
   const conn = getConnector()
@@ -183,6 +199,14 @@ onMounted(async () => {
               </el-button>
             </div>
           </el-form-item>
+          <el-form-item :label="t('dashboard.defaultPermission')">
+            <el-select v-model="permissionForm.permission" class="w-full">
+              <el-option :label="t('files.permissions.unset')" :value="0" />
+              <el-option :label="t('files.permissions.public')" :value="1" />
+              <el-option :label="t('files.permissions.protected')" :value="2" />
+              <el-option :label="t('files.permissions.private')" :value="3" />
+            </el-select>
+          </el-form-item>
           <el-form-item v-if="newTokenPreview" :label="t('dashboard.newTokenPreview')">
             <div class="w-full text-xs text-slate-500 break-all">{{ newTokenPreview }}</div>
           </el-form-item>
@@ -190,8 +214,8 @@ onMounted(async () => {
       </div>
       <template #footer>
         <el-button @click="accountDialogVisible = false">{{ t('users.cancel') }}</el-button>
-        <el-button type="primary" :loading="accountLoading" @click="updateMyPassword">
-          {{ t('dashboard.updatePassword') }}
+        <el-button type="primary" :loading="accountLoading" @click="updateMySecurity">
+          {{ t('dashboard.updateSecurity') }}
         </el-button>
       </template>
     </el-dialog>

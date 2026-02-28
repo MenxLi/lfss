@@ -33,11 +33,11 @@
         "accountSecurity": "账户安全",
         "currentToken": "当前 Token",
         "newPassword": "新密码",
+        "defaultPermission": "默认文件权限",
         "newTokenPreview": "新 Token 预览",
-        "updatePassword": "更新密码",
-        "passwordRequired": "密码不能为空",
-        "passwordUpdated": "密码更新成功",
-        "passwordUpdateFailed": "密码更新失败",
+        "updateSecurity": "保存安全设置",
+        "securityUpdated": "安全设置更新成功",
+        "securityUpdateFailed": "安全设置更新失败",
         "failedToLoadStorage": "加载存储信息失败",
         "failedToLoadCollaborators": "加载协作者失败",
         "metrics": {
@@ -150,6 +150,7 @@
     "users": {
         "addUser": "添加用户",
         "username": "用户名",
+        "permission": "权限",
         "role": "角色",
         "storage": "最大存储",
         "usedStorage": "已用",
